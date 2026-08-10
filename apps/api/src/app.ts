@@ -6,6 +6,8 @@ import sensible from "@fastify/sensible";
 import { env } from "./config/env.js";
 import { prisma } from "./db/prisma.js";
 import { registerErrorHandler } from "./core/error-handler.js";
+import { authPlugin } from "./plugins/auth.plugin.js";
+import { authRoutes } from "./modules/auth/auth.routes.js";
 
 const REDACTED_LOG_PATHS = [
   "req.headers.authorization",
@@ -54,6 +56,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   registerErrorHandler(app);
+
+  await app.register(authPlugin);
+  await app.register(authRoutes, { prefix: "/api/v1/auth" });
 
   app.get("/health", async () => ({ status: "ok" }));
 

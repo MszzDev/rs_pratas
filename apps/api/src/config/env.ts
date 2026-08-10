@@ -16,11 +16,17 @@ const envSchema = z.object({
   JWT_REFRESH_TTL: z.string().default("30d"),
   JWT_ISSUER: z.string().default("rs-pratas-api"),
 
+  REFRESH_TOKEN_PEPPER: z
+    .string()
+    .min(32, "REFRESH_TOKEN_PEPPER deve ter ao menos 32 caracteres"),
+
   STEP_UP_TOKEN_TTL: z.string().default("5m"),
 
-  ARGON2_MEMORY_COST: z.coerce.number().int().positive().default(19456),
-  ARGON2_TIME_COST: z.coerce.number().int().positive().default(2),
-  ARGON2_PARALLELISM: z.coerce.number().int().positive().default(1),
+  // Limites exigidos pelo próprio argon2 — validar aqui faz o boot falhar com
+  // mensagem clara em vez de estourar só na primeira tentativa de hash.
+  ARGON2_MEMORY_COST: z.coerce.number().int().min(8192).default(19456),
+  ARGON2_TIME_COST: z.coerce.number().int().min(2).default(2),
+  ARGON2_PARALLELISM: z.coerce.number().int().min(1).default(1),
 
   TOTP_ISSUER: z.string().default("RS Pratas"),
   TOTP_ENCRYPTION_KEY: z.string().min(32, "TOTP_ENCRYPTION_KEY deve ter ao menos 32 caracteres"),
@@ -32,6 +38,8 @@ const envSchema = z.object({
 
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW: z.string().default("1m"),
+  /** Teto por IP nos endpoints de login, por minuto (camada separada do bloqueio por usuário). */
+  LOGIN_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
   PIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),

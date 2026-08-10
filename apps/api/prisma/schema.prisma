@@ -437,14 +437,21 @@ model PaymentTerminal {
 // =====================================================================
 
 model DeviceSession {
-  id       String @id @default(uuid())
-  userId   String
-  user     User   @relation(fields: [userId], references: [id])
-  deviceId String
-  device   Device @relation(fields: [deviceId], references: [id])
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  /// Null em login por senha fora de um tablet da loja (notebook/celular do dono
+  /// ou gerente) — a especificação exige que o sistema também funcione nesses
+  /// aparelhos, e eles não pertencem à cadeia loja→estação→caixa. O login por
+  /// matrícula+PIN, ao contrário, SEMPRE exige um Device pareado e ACTIVE: o PIN
+  /// tem entropia baixa demais para valer sozinho, e o tablet registrado é o
+  /// segundo fator de fato.
+  deviceId String?
+  device   Device? @relation(fields: [deviceId], references: [id])
 
   companyId String
-  storeId   String
+  storeId   String?
 
   ipAddress String?
   userAgent String?
