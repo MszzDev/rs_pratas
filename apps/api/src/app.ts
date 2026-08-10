@@ -8,6 +8,7 @@ import { prisma } from "./db/prisma.js";
 import { registerErrorHandler } from "./core/error-handler.js";
 import { authPlugin } from "./plugins/auth.plugin.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
+import { deviceRoutes } from "./modules/devices/devices.routes.js";
 
 const REDACTED_LOG_PATHS = [
   "req.headers.authorization",
@@ -59,6 +60,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authPlugin);
   await app.register(authRoutes, { prefix: "/api/v1/auth" });
+  await app.register(deviceRoutes, { prefix: "/api/v1" });
 
   app.get("/health", async () => ({ status: "ok" }));
 
