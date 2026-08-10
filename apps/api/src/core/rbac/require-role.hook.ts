@@ -17,23 +17,6 @@ export function requireRole(...allowed: UserRole[]) {
 }
 
 /**
- * Bloqueia escrita para o perfil DESENVOLVEDOR.
- *
- * Redundante de propósito com o catálogo de permissões (que já só concede
- * códigos de visualização a esse perfil): mesmo que alguém conceda por engano
- * uma permissão de escrita, esta guarda barra antes de qualquer handler rodar.
- */
-export async function blockWriteForDeveloper(request: FastifyRequest): Promise<void> {
-  const isWrite = ["POST", "PUT", "PATCH", "DELETE"].includes(request.method);
-  if (isWrite && request.user?.role === "DESENVOLVEDOR") {
-    throw forbidden(
-      "DEVELOPER_READ_ONLY",
-      "O modo desenvolvedor é somente leitura — nenhuma alteração é permitida.",
-    );
-  }
-}
-
-/**
  * Confirma que o usuário pode acessar aquela loja.
  *
  * Responde 404 (e não 403) quando a loja existe mas não é dele: um 403 confirma

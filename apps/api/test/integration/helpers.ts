@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../../src/app.js";
 import { prisma } from "../../src/db/prisma.js";
 import { hashSecret } from "../../src/core/security/password.service.js";
+import { createTotpSetup, encryptSecret } from "../../src/core/security/totp.service.js";
 
 export async function createTestApp(): Promise<FastifyInstance> {
   const app = await buildApp();
@@ -92,9 +93,16 @@ export async function createTestUser(params: {
   status?: UserStatus;
   employeeCode?: string;
   email?: string;
+  /**
+   * O DONO já nasce com 2FA confirmado por padrão, porque é assim que ele
+   * existe em produção — sem isso a sessão dele fica restrita às rotas de
+   * configuração de 2FA. Passe `false` para exercitar justamente esse bloqueio.
+   */
+  withTwoFactor?: boolean;
 }) {
   const password = params.password ?? "senha-de-teste-12345";
   const suffix = crypto.randomUUID().slice(0, 8);
+  const role = params.role ?? "VENDEDOR";
 
   const user = await prisma.user.create({
     data: {
@@ -102,13 +110,26 @@ export async function createTestUser(params: {
       employeeCode: params.employeeCode ?? suffix,
       email: params.email ?? `${suffix}@teste.local`,
       name: "Usuário de Teste",
-      role: params.role ?? "VENDEDOR",
+      role,
       status: params.status ?? "ACTIVE",
       passwordHash: await hashSecret(password),
       mustChangePassword: false,
       mustCreatePin: false,
     },
   });
+
+  const shouldEnableTwoFactor = params.withTwoFactor ?? role === "DONO";
+
+  if (shouldEnableTwoFactor) {
+    await prisma.twoFactorCredential.create({
+      data: {
+        userId: user.id,
+        secretEncrypted: encryptSecret(createTotpSetup(user.email!).secret),
+        confirmedAt: new Date(),
+        recoveryCodesHash: [],
+      },
+    });
+  }
 
   return { user, password };
 }

@@ -6,8 +6,10 @@ import sensible from "@fastify/sensible";
 import { env } from "./config/env.js";
 import { prisma } from "./db/prisma.js";
 import { registerErrorHandler } from "./core/error-handler.js";
+import { maskMoneyDeep } from "./core/security/money-mask.js";
 import { authPlugin } from "./plugins/auth.plugin.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
+import { twoFactorRoutes } from "./modules/auth/two-factor.routes.js";
 import { deviceRoutes } from "./modules/devices/devices.routes.js";
 
 const REDACTED_LOG_PATHS = [
@@ -59,7 +61,28 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerErrorHandler(app);
 
   await app.register(authPlugin);
+
+  /**
+   * Mascaramento monetário do perfil DESENVOLVEDOR, no último ponto antes de a
+   * resposta sair pela rede. Fica em onSend (e não em cada handler) para que uma
+   * rota criada no futuro já nasça coberta, sem depender de alguém lembrar.
+   */
+  app.addHook("onSend", async (request, _reply, payload) => {
+    const role = (request.user as { role?: string } | undefined)?.role;
+
+    if (role !== "DESENVOLVEDOR" || typeof payload !== "string" || payload.length === 0) {
+      return payload;
+    }
+
+    try {
+      return JSON.stringify(maskMoneyDeep(JSON.parse(payload)));
+    } catch {
+      // Resposta não-JSON não carrega valor monetário estruturado.
+      return payload;
+    }
+  });
   await app.register(authRoutes, { prefix: "/api/v1/auth" });
+  await app.register(twoFactorRoutes, { prefix: "/api/v1/auth" });
   await app.register(deviceRoutes, { prefix: "/api/v1" });
 
   app.get("/health", async () => ({ status: "ok" }));

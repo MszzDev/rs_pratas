@@ -6,7 +6,7 @@ import {
   createDeviceSchema,
   createPOSStationSchema,
 } from "@rs-pratas/shared";
-import { blockWriteForDeveloper, requireRole } from "../../core/rbac/require-role.hook.js";
+import { requireRole } from "../../core/rbac/require-role.hook.js";
 import {
   claimDevice,
   createCashRegister,
@@ -17,8 +17,9 @@ import {
 } from "./devices.service.js";
 
 export async function deviceRoutes(app: FastifyInstance) {
-  const managerOrOwner = [app.requireAuth, blockWriteForDeveloper, requireRole("DONO", "GERENTE")];
-  const ownerOnly = [app.requireAuth, blockWriteForDeveloper, requireRole("DONO")];
+  // A guarda de somente-leitura do DESENVOLVEDOR já vive dentro do requireAuth.
+  const managerOrOwner = [app.requireAuth, requireRole("DONO", "GERENTE")];
+  const ownerOnly = [app.requireAuth, requireRole("DONO")];
 
   app.post("/pos-stations", { preHandler: ownerOnly }, async (request, reply) => {
     const input = createPOSStationSchema.parse(request.body);
