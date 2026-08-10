@@ -52,15 +52,21 @@ async function loadStoreIds(userId: string): Promise<string[]> {
 /**
  * Cria a sessão e o primeiro refresh token. `storeId` fica null quando o login
  * não parte de um tablet de loja (notebook do dono, por exemplo).
+ *
+ * `resetCounters` diz quais contadores de bloqueio zerar: um login por PIN
+ * bem-sucedido não deve limpar as tentativas falhas de senha (e vice-versa) —
+ * são credenciais independentes, e zerar a outra daria ao atacante um jeito
+ * fácil de resetar o contador que ele está atacando.
  */
-async function issueSession(params: {
+export async function issueSessionForUser(params: {
   user: User;
   deviceId: string | null;
   storeId: string | null;
   request: FastifyRequest;
   signAccessToken: SignAccessToken;
+  resetCounters: "PASSWORD" | "PIN";
 }): Promise<IssuedSession> {
-  const { user, deviceId, storeId, request, signAccessToken } = params;
+  const { user, deviceId, storeId, request, signAccessToken, resetCounters } = params;
 
   const refreshTtlMs = parseDuration(env.JWT_REFRESH_TTL);
   const accessTtlMs = parseDuration(env.JWT_ACCESS_TTL);
@@ -95,8 +101,9 @@ async function issueSession(params: {
       where: { id: user.id },
       data: {
         lastLoginAt: new Date(),
-        passwordFailedAttempts: 0,
-        passwordLockedUntil: null,
+        ...(resetCounters === "PASSWORD"
+          ? { passwordFailedAttempts: 0, passwordLockedUntil: null }
+          : { pinFailedAttempts: 0, pinLockedUntil: null }),
       },
     });
 
@@ -249,12 +256,13 @@ export async function loginWithPassword(params: {
     throw forbidden("DEVICE_WRONG_COMPANY", "Dispositivo não pertence à sua empresa.");
   }
 
-  const issued = await issueSession({
+  const issued = await issueSessionForUser({
     user,
     deviceId: device?.id ?? null,
     storeId: device?.storeId ?? null,
     request,
     signAccessToken,
+    resetCounters: "PASSWORD",
   });
 
   await audit(request, {
