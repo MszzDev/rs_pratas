@@ -1,0 +1,466 @@
+import type { DeviceSession, User } from "@prisma/client";
+import type { FastifyRequest } from "fastify";
+import type { LoginPasswordInput } from "@rs-pratas/shared";
+import { prisma } from "../../db/prisma.js";
+import { env } from "../../config/env.js";
+import { audit } from "../../core/audit.service.js";
+import { badRequest, forbidden, tooManyRequests, unauthorized } from "../../core/errors.js";
+import { burnVerificationTime, verifySecret } from "../../core/security/password.service.js";
+import {
+  generateRefreshToken,
+  hashRefreshToken,
+  parseDuration,
+} from "../../core/security/token.service.js";
+
+export interface AccessTokenPayload {
+  sub: string;
+  companyId: string;
+  role: string;
+  storeIds: string[];
+  sessionId: string;
+  deviceId: string | null;
+}
+
+export interface IssuedSession {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  user: {
+    id: string;
+    name: string;
+    email: string | null;
+    employeeCode: string;
+    role: string;
+    companyId: string;
+    storeIds: string[];
+    mustChangePassword: boolean;
+    mustCreatePin: boolean;
+  };
+}
+
+/** Assina o access token. Injetado pelas rotas (vem do plugin @fastify/jwt). */
+export type SignAccessToken = (payload: AccessTokenPayload) => string;
+
+async function loadStoreIds(userId: string): Promise<string[]> {
+  const links = await prisma.userStore.findMany({
+    where: { userId },
+    select: { storeId: true },
+  });
+  return links.map((link) => link.storeId);
+}
+
+/**
+ * Cria a sessão e o primeiro refresh token. `storeId` fica null quando o login
+ * não parte de um tablet de loja (notebook do dono, por exemplo).
+ *
+ * `resetCounters` diz quais contadores de bloqueio zerar: um login por PIN
+ * bem-sucedido não deve limpar as tentativas falhas de senha (e vice-versa) —
+ * são credenciais independentes, e zerar a outra daria ao atacante um jeito
+ * fácil de resetar o contador que ele está atacando.
+ */
+export async function issueSessionForUser(params: {
+  user: User;
+  deviceId: string | null;
+  storeId: string | null;
+  request: FastifyRequest;
+  signAccessToken: SignAccessToken;
+  resetCounters: "PASSWORD" | "PIN";
+}): Promise<IssuedSession> {
+  const { user, deviceId, storeId, request, signAccessToken, resetCounters } = params;
+
+  const refreshTtlMs = parseDuration(env.JWT_REFRESH_TTL);
+  const accessTtlMs = parseDuration(env.JWT_ACCESS_TTL);
+  const now = Date.now();
+
+  const plainRefreshToken = generateRefreshToken();
+  const storeIds = await loadStoreIds(user.id);
+
+  const session = await prisma.$transaction(async (tx) => {
+    const created = await tx.deviceSession.create({
+      data: {
+        userId: user.id,
+        deviceId,
+        companyId: user.companyId,
+        storeId,
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+        expiresAt: new Date(now + refreshTtlMs),
+      },
+    });
+
+    await tx.refreshToken.create({
+      data: {
+        sessionId: created.id,
+        tokenHash: hashRefreshToken(plainRefreshToken),
+        expiresAt: new Date(now + refreshTtlMs),
+        createdByIp: request.ip,
+      },
+    });
+
+    await tx.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        ...(resetCounters === "PASSWORD"
+          ? { passwordFailedAttempts: 0, passwordLockedUntil: null }
+          : { pinFailedAttempts: 0, pinLockedUntil: null }),
+      },
+    });
+
+    return created;
+  });
+
+  const accessToken = signAccessToken({
+    sub: user.id,
+    companyId: user.companyId,
+    role: user.role,
+    storeIds,
+    sessionId: session.id,
+    deviceId,
+  });
+
+  return {
+    accessToken,
+    refreshToken: plainRefreshToken,
+    expiresIn: Math.floor(accessTtlMs / 1000),
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      employeeCode: user.employeeCode,
+      role: user.role,
+      companyId: user.companyId,
+      storeIds,
+      mustChangePassword: user.mustChangePassword,
+      mustCreatePin: user.mustCreatePin,
+    },
+  };
+}
+
+async function registerFailedPasswordAttempt(user: User): Promise<void> {
+  const attempts = user.passwordFailedAttempts + 1;
+  const shouldLock = attempts >= env.LOGIN_MAX_ATTEMPTS;
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordFailedAttempts: shouldLock ? 0 : attempts,
+      passwordLockedUntil: shouldLock
+        ? new Date(Date.now() + env.LOGIN_LOCKOUT_MINUTES * 60_000)
+        : user.passwordLockedUntil,
+    },
+  });
+}
+
+export async function loginWithPassword(params: {
+  input: LoginPasswordInput;
+  request: FastifyRequest;
+  signAccessToken: SignAccessToken;
+}): Promise<IssuedSession> {
+  const { input, request, signAccessToken } = params;
+
+  const user = await prisma.user.findFirst({
+    where: {
+      deletedAt: null,
+      OR: [{ email: input.identifier }, { employeeCode: input.identifier }],
+    },
+  });
+
+  // Usuário inexistente: gasta o mesmo tempo de CPU de uma verificação real e
+  // devolve a mesma mensagem de senha errada — não confirma se a conta existe.
+  if (!user || !user.passwordHash) {
+    await burnVerificationTime();
+    await audit(request, {
+      action: "LOGIN_FAILED",
+      result: "FAILURE",
+      reason: "identificador não encontrado",
+      metadata: { identifier: input.identifier },
+    });
+    throw unauthorized("INVALID_CREDENTIALS", "E-mail/matrícula ou senha incorretos.");
+  }
+
+  if (user.passwordLockedUntil && user.passwordLockedUntil > new Date()) {
+    await audit(request, {
+      action: "LOGIN_FAILED",
+      result: "DENIED",
+      userId: user.id,
+      companyId: user.companyId,
+      userRoleSnapshot: user.role,
+      reason: "conta temporariamente bloqueada por tentativas incorretas",
+    });
+    throw tooManyRequests(
+      "ACCOUNT_LOCKED",
+      "Muitas tentativas incorretas. Aguarde alguns minutos e tente novamente.",
+    );
+  }
+
+  const passwordMatches = await verifySecret(user.passwordHash, input.password);
+
+  if (!passwordMatches) {
+    await registerFailedPasswordAttempt(user);
+    await audit(request, {
+      action: "LOGIN_FAILED",
+      result: "FAILURE",
+      userId: user.id,
+      companyId: user.companyId,
+      userRoleSnapshot: user.role,
+      reason: "senha incorreta",
+    });
+    throw unauthorized("INVALID_CREDENTIALS", "E-mail/matrícula ou senha incorretos.");
+  }
+
+  if (user.status === "BLOCKED" || user.status === "INACTIVE") {
+    await audit(request, {
+      action: "LOGIN_FAILED",
+      result: "DENIED",
+      userId: user.id,
+      companyId: user.companyId,
+      userRoleSnapshot: user.role,
+      reason: `usuário com status ${user.status}`,
+    });
+    throw forbidden("USER_BLOCKED", "Seu acesso está bloqueado. Procure o responsável pela loja.");
+  }
+
+  // Senha correta, mas a conta ainda não passou pelo primeiro acesso: o cliente
+  // deve seguir para o fluxo de definir senha própria e PIN.
+  if (user.status === "PENDING_FIRST_ACCESS") {
+    await audit(request, {
+      action: "LOGIN_FAILED",
+      result: "DENIED",
+      userId: user.id,
+      companyId: user.companyId,
+      userRoleSnapshot: user.role,
+      reason: "primeiro acesso pendente",
+    });
+    throw badRequest(
+      "FIRST_ACCESS_REQUIRED",
+      "Primeiro acesso pendente. Você precisa criar sua senha e seu PIN.",
+    );
+  }
+
+  const device = input.deviceId
+    ? await prisma.device.findFirst({
+        where: { id: input.deviceId, deletedAt: null },
+      })
+    : null;
+
+  if (input.deviceId && !device) {
+    throw badRequest("DEVICE_NOT_FOUND", "Dispositivo não encontrado ou não autorizado.");
+  }
+
+  if (device && device.status !== "ACTIVE") {
+    throw forbidden("DEVICE_NOT_ACTIVE", "Este dispositivo não está ativo para uso.");
+  }
+
+  if (device && device.companyId !== user.companyId) {
+    throw forbidden("DEVICE_WRONG_COMPANY", "Dispositivo não pertence à sua empresa.");
+  }
+
+  const issued = await issueSessionForUser({
+    user,
+    deviceId: device?.id ?? null,
+    storeId: device?.storeId ?? null,
+    request,
+    signAccessToken,
+    resetCounters: "PASSWORD",
+  });
+
+  await audit(request, {
+    action: "LOGIN_SUCCESS",
+    result: "SUCCESS",
+    userId: user.id,
+    companyId: user.companyId,
+    storeId: device?.storeId ?? null,
+    deviceId: device?.id ?? null,
+    userRoleSnapshot: user.role,
+    metadata: { method: "PASSWORD" },
+  });
+
+  return issued;
+}
+
+/**
+ * Revoga a sessão inteira e todos os seus refresh tokens.
+ * Usado no logout e, principalmente, quando detectamos reuso de token.
+ */
+async function revokeSession(session: DeviceSession, reason: string): Promise<void> {
+  await prisma.$transaction([
+    prisma.refreshToken.updateMany({
+      where: { sessionId: session.id, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    }),
+    prisma.deviceSession.update({
+      where: { id: session.id },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    }),
+  ]);
+}
+
+export async function refreshSession(params: {
+  refreshToken: string;
+  request: FastifyRequest;
+  signAccessToken: SignAccessToken;
+}): Promise<IssuedSession> {
+  const { refreshToken, request, signAccessToken } = params;
+
+  const stored = await prisma.refreshToken.findUnique({
+    where: { tokenHash: hashRefreshToken(refreshToken) },
+    include: { session: { include: { user: true, device: true } } },
+  });
+
+  if (!stored) {
+    throw unauthorized("INVALID_REFRESH_TOKEN", "Sessão inválida. Entre novamente.");
+  }
+
+  const { session } = stored;
+
+  // Token já rotacionado sendo reapresentado: ou é um cliente com estado velho,
+  // ou alguém roubou o token. Não dá para distinguir, então tratamos como roubo
+  // e derrubamos a sessão inteira — o legítimo refaz o login.
+  if (stored.revokedAt) {
+    await revokeSession(session, "reuso de refresh token detectado");
+    await audit(request, {
+      action: "SESSION_REUSE_DETECTED",
+      result: "FAILURE",
+      userId: session.userId,
+      companyId: session.companyId,
+      storeId: session.storeId,
+      deviceId: session.deviceId,
+      sessionId: session.id,
+      userRoleSnapshot: session.user.role,
+      reason: "refresh token revogado foi reapresentado",
+    });
+    throw unauthorized(
+      "REFRESH_TOKEN_REUSED",
+      "Detectamos um problema de segurança na sua sessão. Entre novamente.",
+    );
+  }
+
+  const now = new Date();
+
+  if (stored.expiresAt < now || session.revokedAt || session.expiresAt < now) {
+    throw unauthorized("SESSION_EXPIRED", "Sua sessão expirou. Entre novamente.");
+  }
+
+  if (session.user.status !== "ACTIVE" || session.user.deletedAt) {
+    await revokeSession(session, "usuário inativo ou removido");
+    throw forbidden("USER_BLOCKED", "Seu acesso está bloqueado. Procure o responsável pela loja.");
+  }
+
+  const refreshTtlMs = parseDuration(env.JWT_REFRESH_TTL);
+  const accessTtlMs = parseDuration(env.JWT_ACCESS_TTL);
+  const newPlainToken = generateRefreshToken();
+
+  await prisma.$transaction([
+    prisma.refreshToken.update({
+      where: { id: stored.id },
+      data: { revokedAt: now, revokedReason: "rotated" },
+    }),
+    prisma.refreshToken.create({
+      data: {
+        sessionId: session.id,
+        tokenHash: hashRefreshToken(newPlainToken),
+        rotatedFromId: stored.id,
+        expiresAt: new Date(now.getTime() + refreshTtlMs),
+        createdByIp: request.ip,
+      },
+    }),
+    prisma.deviceSession.update({
+      where: { id: session.id },
+      data: { lastUsedAt: now },
+    }),
+  ]);
+
+  const storeIds = await loadStoreIds(session.userId);
+
+  const accessToken = signAccessToken({
+    sub: session.userId,
+    companyId: session.companyId,
+    role: session.user.role,
+    storeIds,
+    sessionId: session.id,
+    deviceId: session.deviceId,
+  });
+
+  return {
+    accessToken,
+    refreshToken: newPlainToken,
+    expiresIn: Math.floor(accessTtlMs / 1000),
+    user: {
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+      employeeCode: session.user.employeeCode,
+      role: session.user.role,
+      companyId: session.user.companyId,
+      storeIds,
+      mustChangePassword: session.user.mustChangePassword,
+      mustCreatePin: session.user.mustCreatePin,
+    },
+  };
+}
+
+export async function logout(params: {
+  refreshToken: string;
+  request: FastifyRequest;
+}): Promise<void> {
+  const { refreshToken, request } = params;
+
+  const stored = await prisma.refreshToken.findUnique({
+    where: { tokenHash: hashRefreshToken(refreshToken) },
+    include: { session: { include: { user: true } } },
+  });
+
+  // Logout é idempotente: token desconhecido ou já revogado não é erro.
+  if (!stored || stored.session.revokedAt) {
+    return;
+  }
+
+  await revokeSession(stored.session, "logout");
+
+  await audit(request, {
+    action: "LOGOUT",
+    result: "SUCCESS",
+    userId: stored.session.userId,
+    companyId: stored.session.companyId,
+    storeId: stored.session.storeId,
+    deviceId: stored.session.deviceId,
+    sessionId: stored.session.id,
+    userRoleSnapshot: stored.session.user.role,
+  });
+}
+
+export async function logoutAll(params: {
+  userId: string;
+  request: FastifyRequest;
+}): Promise<number> {
+  const { userId, request } = params;
+
+  const sessions = await prisma.deviceSession.findMany({
+    where: { userId, revokedAt: null },
+    select: { id: true },
+  });
+
+  const sessionIds = sessions.map((session) => session.id);
+  const now = new Date();
+
+  await prisma.$transaction([
+    prisma.refreshToken.updateMany({
+      where: { sessionId: { in: sessionIds }, revokedAt: null },
+      data: { revokedAt: now, revokedReason: "logout-all" },
+    }),
+    prisma.deviceSession.updateMany({
+      where: { id: { in: sessionIds } },
+      data: { revokedAt: now, revokedReason: "logout-all" },
+    }),
+  ]);
+
+  await audit(request, {
+    action: "LOGOUT_ALL",
+    result: "SUCCESS",
+    userId,
+    metadata: { revokedSessions: sessionIds.length },
+  });
+
+  return sessionIds.length;
+}
