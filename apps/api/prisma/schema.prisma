@@ -1,0 +1,701 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================================
+// ENUMS
+// =====================================================================
+
+enum UserRole {
+  VENDEDOR
+  GERENTE
+  DONO
+  DESENVOLVEDOR
+}
+
+enum UserStatus {
+  PENDING_FIRST_ACCESS
+  ACTIVE
+  BLOCKED
+  INACTIVE
+}
+
+enum DeviceType {
+  TABLET
+  DESKTOP
+  MOBILE
+}
+
+enum DeviceStatus {
+  PENDING // criado, aguardando claim do pairingCode
+  ACTIVE
+  BLOCKED
+  UNLINKED
+  RETIRED
+}
+
+enum PaymentTerminalStatus {
+  PENDING
+  ACTIVE
+  BLOCKED
+  RETIRED
+}
+
+enum PermissionEffect {
+  ALLOW
+  DENY
+}
+
+enum StepUpPurpose {
+  CREATE_OR_PROMOTE_OWNER
+  CHANGE_INTEGRATION_CREDENTIAL
+  UNLINK_DEVICE
+  EXIT_KIOSK
+  CHANGE_PERMISSIONS
+  CHANGE_COST
+  REFUND_LARGE
+  DEACTIVATE_STORE
+  EXPORT_SENSITIVE_DATA
+  TWO_FACTOR_DISABLE
+}
+
+enum TimeClockEventType {
+  CLOCK_IN
+  CLOCK_OUT
+  BREAK_START
+  BREAK_END
+}
+
+enum Weekday {
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+  DENIED
+}
+
+enum AuditAction {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  LOGOUT_ALL
+  PASSWORD_CHANGE
+  PIN_SET
+  PIN_CHANGE
+  FIRST_ACCESS_COMPLETED
+  USER_CREATE
+  USER_UPDATE
+  USER_BLOCK
+  USER_UNBLOCK
+  USER_PROMOTE_TO_OWNER
+  USER_ROLE_CHANGE
+  PERMISSION_GRANT
+  PERMISSION_REVOKE
+  DEVICE_PAIR_INITIATED
+  DEVICE_PAIR_CLAIMED
+  DEVICE_UPDATE
+  DEVICE_UNLINK
+  DEVICE_BLOCK
+  DEVICE_KIOSK_EXIT
+  SESSION_REVOKE
+  SESSION_REVOKE_ALL
+  SESSION_REUSE_DETECTED
+  STORE_CREATE
+  STORE_UPDATE
+  STORE_DEACTIVATE
+  COMPANY_UPDATE
+  DATA_EXPORT
+  TIMECLOCK_ENTRY_CREATE
+  TIMECLOCK_CORRECTION
+  WORK_SCHEDULE_CREATE
+  WORK_SCHEDULE_UPDATE
+  TWO_FACTOR_SETUP_STARTED
+  TWO_FACTOR_ENABLE
+  TWO_FACTOR_DISABLE
+  TWO_FACTOR_CHALLENGE_FAILED
+  TWO_FACTOR_RECOVERY_USED
+  STEP_UP_ISSUED
+  STEP_UP_FAILED
+  SETTING_UPDATE
+  PERMISSION_DENIED
+}
+
+// =====================================================================
+// TENANT / IDENTIDADE
+// =====================================================================
+
+model Company {
+  id        String  @id @default(uuid())
+  legalName String
+  tradeName String
+  cnpj      String  @unique
+  email     String?
+  phone     String?
+  isActive  Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  stores      Store[]
+  users       User[]
+  auditLogs   AuditLog[]
+  appSettings AppSetting[]
+
+  @@map("companies")
+}
+
+model Store {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  code        String // código curto interno, ex: "MTZ", "SH01"
+  name        String
+  cnpj        String?
+  timezone    String  @default("America/Sao_Paulo")
+  phone       String?
+  addressJson Json?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  posStations      POSStation[]
+  userStores       UserStore[]
+  devices          Device[]
+  workSchedules    WorkSchedule[]
+  timeClockEntries TimeClockEntry[]
+  storeSettings    StoreSetting[]
+  auditLogs        AuditLog[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@map("stores")
+}
+
+model User {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  employeeCode String // matrícula
+  email        String?
+  name         String
+  role         UserRole
+  status       UserStatus @default(PENDING_FIRST_ACCESS)
+
+  passwordHash       String? // argon2id — null até 1º acesso concluído
+  pinHash            String? // argon2id — null até PIN criado
+  mustChangePassword Boolean @default(true)
+  mustCreatePin      Boolean @default(true)
+
+  passwordFailedAttempts Int       @default(0)
+  passwordLockedUntil    DateTime?
+  pinFailedAttempts      Int       @default(0)
+  pinLockedUntil         DateTime?
+
+  lastLoginAt DateTime?
+
+  createdById  String?
+  createdBy    User?   @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdUsers User[]  @relation("UserCreatedBy")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  userStores           UserStore[]
+  deviceSessions       DeviceSession[]
+  twoFactorCredential  TwoFactorCredential?
+  stepUpTokens         StepUpToken[]
+  workSchedules        WorkSchedule[]        @relation("WorkScheduleUser")
+  workSchedulesCreated WorkSchedule[]        @relation("WorkScheduleCreatedBy")
+  timeClockEntries     TimeClockEntry[]
+  auditLogs            AuditLog[]
+
+  permissionOverrides UserPermission[] @relation("UserPermissionUser")
+  permissionsGranted  UserPermission[] @relation("UserPermissionGrantedBy")
+  permissionsRevoked  UserPermission[] @relation("UserPermissionRevokedBy")
+
+  devicesPaired   Device[]        @relation("DevicePairedBy")
+  sessionsRevoked DeviceSession[] @relation("DeviceSessionRevokedBy")
+
+  appSettingsUpdated    AppSetting[]
+  storeSettingsUpdated  StoreSetting[]
+  deviceSettingsUpdated DeviceSetting[]
+
+  @@unique([companyId, employeeCode])
+  @@unique([companyId, email])
+  @@index([companyId, role])
+  @@map("users")
+}
+
+model UserStore {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, storeId])
+  @@index([storeId])
+  @@map("user_stores")
+}
+
+// =====================================================================
+// RBAC — Role / Permission / UserPermission
+// =====================================================================
+
+model Role {
+  id          String   @id @default(uuid())
+  code        UserRole @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique // ex: "USER_CREATE", "STOCK_ADJUST", "AUDIT_VIEW_ALL"
+  category    String // ex: "USER", "STORE", "DEVICE", "TIMECLOCK", "FINANCE", "SECURITY"
+  description String?
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id])
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  createdAt    DateTime   @default(now())
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserPermission {
+  id           String           @id @default(uuid())
+  userId       String
+  user         User             @relation("UserPermissionUser", fields: [userId], references: [id])
+  permissionId String
+  permission   Permission       @relation(fields: [permissionId], references: [id])
+  effect       PermissionEffect // ALLOW ou DENY — DENY sempre vence sobre Role default
+  reason       String?
+  expiresAt    DateTime?
+
+  grantedById String
+  grantedBy   User   @relation("UserPermissionGrantedBy", fields: [grantedById], references: [id])
+
+  revokedAt   DateTime?
+  revokedById String?
+  revokedBy   User?     @relation("UserPermissionRevokedBy", fields: [revokedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
+}
+
+// =====================================================================
+// HIERARQUIA DE DISPOSITIVOS
+// Company -> Store -> POSStation -> CashRegister -> Device -> PaymentTerminal
+// =====================================================================
+
+model POSStation {
+  id       String @id @default(uuid())
+  storeId  String
+  store    Store  @relation(fields: [storeId], references: [id])
+  code     String
+  name     String
+  isActive Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  cashRegisters CashRegister[]
+
+  @@unique([storeId, code])
+  @@map("pos_stations")
+}
+
+/// Placeholder — abertura/fechamento de caixa vem em fase futura.
+model CashRegister {
+  id           String     @id @default(uuid())
+  posStationId String
+  posStation   POSStation @relation(fields: [posStationId], references: [id])
+  code         String
+  name         String
+  isActive     Boolean    @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  devices Device[]
+
+  @@unique([posStationId, code])
+  @@map("cash_registers")
+}
+
+model Device {
+  id             String       @id @default(uuid())
+  cashRegisterId String
+  cashRegister   CashRegister @relation(fields: [cashRegisterId], references: [id])
+
+  // Denormalizado para performance de query e defesa em profundidade contra IDOR
+  companyId String
+  storeId   String
+  store     Store  @relation(fields: [storeId], references: [id])
+
+  type           DeviceType   @default(TABLET)
+  name           String
+  deviceUuid     String?      @unique // preenchido no claim do pairing
+  model          String?
+  osVersion      String?
+  appVersion     String?
+  status         DeviceStatus @default(PENDING)
+  isKioskEnabled Boolean      @default(true)
+
+  pairingCode          String?   @unique
+  pairingCodeExpiresAt DateTime?
+
+  pairedAt   DateTime?
+  pairedById String?
+  pairedBy   User?     @relation("DevicePairedBy", fields: [pairedById], references: [id])
+  lastSeenAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  deviceSessions   DeviceSession[]
+  timeClockEntries TimeClockEntry[]
+  deviceSettings   DeviceSetting[]
+  paymentTerminals PaymentTerminal[]
+
+  @@index([storeId])
+  @@index([cashRegisterId])
+  @@map("devices")
+}
+
+/// Placeholder de fase futura — o FK chain precisa existir desde já.
+/// Nenhum destes campos pode ser null: toda maquininha pertence obrigatoriamente
+/// a loja + estação + caixa + tablet.
+model PaymentTerminal {
+  id             String                @id @default(uuid())
+  deviceId       String
+  device         Device                @relation(fields: [deviceId], references: [id])
+  cashRegisterId String
+  posStationId   String
+  storeId        String
+  companyId      String
+
+  provider     String?
+  serialNumber String?                @unique
+  status       PaymentTerminalStatus  @default(PENDING)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([deviceId])
+  @@map("payment_terminals")
+}
+
+// =====================================================================
+// AUTENTICAÇÃO / SESSÃO
+// =====================================================================
+
+model DeviceSession {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  deviceId String
+  device   Device @relation(fields: [deviceId], references: [id])
+
+  companyId String
+  storeId   String
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  expiresAt  DateTime
+
+  revokedAt     DateTime?
+  revokedReason String?
+  revokedById   String?
+  revokedBy     User?     @relation("DeviceSessionRevokedBy", fields: [revokedById], references: [id])
+
+  refreshTokens RefreshToken[]
+  stepUpTokens  StepUpToken[]
+
+  @@index([userId])
+  @@index([deviceId])
+  @@index([expiresAt])
+  @@map("device_sessions")
+}
+
+model RefreshToken {
+  id        String        @id @default(uuid())
+  sessionId String
+  session   DeviceSession @relation(fields: [sessionId], references: [id])
+
+  tokenHash     String        @unique // SHA-256(token + pepper)
+  rotatedFromId String?       @unique
+  rotatedFrom   RefreshToken? @relation("RefreshTokenChain", fields: [rotatedFromId], references: [id])
+  rotatedTo     RefreshToken? @relation("RefreshTokenChain")
+
+  issuedAt      DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?
+  createdByIp   String?
+
+  @@index([sessionId])
+  @@map("refresh_tokens")
+}
+
+model TwoFactorCredential {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  secretEncrypted String // AES-256-GCM, chave em TOTP_ENCRYPTION_KEY (secret manager)
+  algorithm       String @default("SHA1") // compat Microsoft/Google Authenticator
+  digits          Int    @default(6)
+  period          Int    @default(30)
+
+  recoveryCodesHash      String[] // cada item: argon2id de um código de recuperação
+  recoveryCodesUsedCount Int      @default(0)
+
+  confirmedAt  DateTime?
+  lastUsedAt   DateTime?
+  lastUsedStep BigInt? // anti-replay dentro da mesma janela de 30s
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("two_factor_credentials")
+}
+
+model StepUpToken {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  sessionId String
+  session   DeviceSession @relation(fields: [sessionId], references: [id])
+
+  purpose   StepUpPurpose
+  method    String // "PASSWORD" | "TOTP" | "RECOVERY_CODE"
+  tokenHash String        @unique
+
+  issuedAt  DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+  ipAddress String?
+
+  @@index([userId, purpose, expiresAt])
+  @@map("step_up_tokens")
+}
+
+// =====================================================================
+// PONTO ELETRÔNICO OFICIAL (REP-P — Portaria MTP 671/2021)
+// =====================================================================
+
+model WorkSchedule {
+  id        String @id @default(uuid())
+  userId    String
+  user      User   @relation("WorkScheduleUser", fields: [userId], references: [id])
+  companyId String
+  storeId   String
+  store     Store  @relation(fields: [storeId], references: [id])
+
+  weekday          Weekday
+  startTime        String // "08:00" (HH:mm, timezone da loja)
+  endTime          String // "18:00"
+  breakStartTime   String?
+  breakEndTime     String?
+  toleranceMinutes Int     @default(10)
+
+  isActive      Boolean   @default(true)
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+
+  createdById String
+  createdBy   User   @relation("WorkScheduleCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, weekday])
+  @@map("work_schedules")
+}
+
+/// IMUTÁVEL — nenhuma linha é jamais alterada ou apagada (nem pelo dono).
+/// Correção = novo registro com correctsEntryId apontando para o original.
+model TimeClockEntry {
+  id  String @id @default(uuid())
+  nsr BigInt @unique @default(autoincrement()) // Número Sequencial de Registro (AFD)
+
+  userId    String
+  user      User   @relation(fields: [userId], references: [id])
+  companyId String
+  storeId   String
+  store     Store  @relation(fields: [storeId], references: [id])
+  deviceId  String
+  device    Device @relation(fields: [deviceId], references: [id])
+
+  type            TimeClockEventType
+  timestamp       DateTime // horário de servidor, autoritativo
+  clientTimestamp DateTime? // horário reportado pelo tablet, só para detecção de deriva
+
+  isWithinTolerance Boolean? // calculado e congelado no momento da criação
+  minutesLate       Int?
+
+  justification       String? // obrigatória (validação de app) para saída durante turno
+  justificationPending Boolean @default(false) // marcado quando type exige justificativa e ela não veio
+
+  correctsEntryId  String?
+  correctsEntry    TimeClockEntry?  @relation("TimeClockCorrection", fields: [correctsEntryId], references: [id])
+  corrections      TimeClockEntry[] @relation("TimeClockCorrection")
+  correctionReason String?
+
+  sourceIp String?
+  geoLat   Float?
+  geoLng   Float?
+
+  createdAt DateTime @default(now()) // único carimbo de tempo de linha — não há updatedAt de propósito
+
+  @@index([userId, timestamp])
+  @@index([storeId, timestamp])
+  @@index([companyId, timestamp])
+  @@map("time_clock_entries")
+}
+
+// =====================================================================
+// AUDITORIA — IMUTÁVEL
+// =====================================================================
+
+/// IMUTÁVEL — ver migração de trava a nível de banco (lock_immutable_tables).
+model AuditLog {
+  id String @id @default(uuid())
+
+  companyId      String?
+  company        Company? @relation(fields: [companyId], references: [id])
+  storeId        String?
+  store          Store?   @relation(fields: [storeId], references: [id])
+  posStationId   String?
+  cashRegisterId String?
+  deviceId       String?
+
+  userId           String?
+  user             User?   @relation(fields: [userId], references: [id])
+  userRoleSnapshot String? // perfil no momento da ação (role pode mudar depois)
+  sessionId        String?
+
+  ipAddress String?
+  userAgent String?
+
+  action       AuditAction
+  entityType   String?
+  entityId     String?
+  previousData Json?
+  newData      Json?
+  reason       String?
+  result       AuditResult
+  metadata     Json?
+
+  createdAt DateTime @default(now()) // único carimbo — sem updatedAt
+
+  @@index([companyId, createdAt])
+  @@index([storeId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// =====================================================================
+// CONFIGURAÇÃO
+// =====================================================================
+
+model AppSetting {
+  id          String  @id @default(uuid())
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id])
+  key         String
+  value       Json
+  description String?
+  updatedById String?
+  updatedBy   User?   @relation(fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, key])
+  @@map("app_settings")
+}
+
+model StoreSetting {
+  id          String @id @default(uuid())
+  storeId     String
+  store       Store  @relation(fields: [storeId], references: [id])
+  key         String
+  value       Json
+  updatedById String?
+  updatedBy   User?   @relation(fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, key])
+  @@map("store_settings")
+}
+
+model DeviceSetting {
+  id          String @id @default(uuid())
+  deviceId    String
+  device      Device @relation(fields: [deviceId], references: [id])
+  key         String
+  value       Json
+  updatedById String?
+  updatedBy   User?   @relation(fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([deviceId, key])
+  @@map("device_settings")
+}
