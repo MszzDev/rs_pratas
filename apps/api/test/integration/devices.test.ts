@@ -25,11 +25,11 @@ beforeEach(async () => {
   await resetDatabase();
 });
 
-async function authenticate(email: string, password: string) {
+async function authenticate(employeeCode: string, password: string) {
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/auth/login/password",
-    payload: { identifier: email, password },
+    payload: { identifier: employeeCode, password },
   });
   return response.json().accessToken as string;
 }
@@ -42,7 +42,7 @@ async function setupStoreWithOwner() {
     companyId: company.id,
     role: "DONO",
   });
-  const token = await authenticate(owner.email!, password);
+  const token = await authenticate(owner.employeeCode, password);
 
   const station = await app
     .inject({
@@ -104,7 +104,7 @@ describe("hierarquia loja → estação → caixa", () => {
       role: "GERENTE",
     });
     await prisma.userStore.create({ data: { userId: manager.id, storeId: store.id } });
-    const token = await authenticate(manager.email!, password);
+    const token = await authenticate(manager.employeeCode, password);
 
     const response = await app.inject({
       method: "POST",
@@ -239,7 +239,7 @@ describe("isolamento entre lojas e empresas (IDOR)", () => {
       role: "GERENTE",
     });
     await prisma.userStore.create({ data: { userId: manager.id, storeId: storeB.id } });
-    const token = await authenticate(manager.email!, password);
+    const token = await authenticate(manager.employeeCode, password);
 
     const response = await app.inject({
       method: "GET",
@@ -276,7 +276,7 @@ describe("isolamento entre lojas e empresas (IDOR)", () => {
       role: "GERENTE",
     });
     await prisma.userStore.create({ data: { userId: manager.id, storeId: storeB.id } });
-    const token = await authenticate(manager.email!, password);
+    const token = await authenticate(manager.employeeCode, password);
 
     const response = await app.inject({
       method: "GET",
@@ -296,7 +296,7 @@ describe("perfil DESENVOLVEDOR", () => {
       companyId: company.id,
       role: "DESENVOLVEDOR",
     });
-    const token = await authenticate(dev.email!, password);
+    const token = await authenticate(dev.employeeCode, password);
 
     const read = await app.inject({
       method: "GET",
@@ -332,7 +332,7 @@ describe("desvínculo de dispositivo", () => {
       method: "POST",
       url: "/api/v1/auth/login/password",
       payload: {
-        identifier: context.owner.email,
+        identifier: context.owner.employeeCode,
         password: context.password,
         deviceId: created.device.id,
       },
@@ -379,7 +379,7 @@ describe("desvínculo de dispositivo", () => {
       role: "GERENTE",
     });
     await prisma.userStore.create({ data: { userId: manager.id, storeId: context.store.id } });
-    const token = await authenticate(manager.email!, password);
+    const token = await authenticate(manager.employeeCode, password);
 
     const response = await app.inject({
       method: "POST",
@@ -401,7 +401,7 @@ describe("login vinculado a dispositivo", () => {
       method: "POST",
       url: "/api/v1/auth/login/password",
       payload: {
-        identifier: context.owner.email,
+        identifier: context.owner.employeeCode,
         password: context.password,
         deviceId: created.device.id,
       },
@@ -424,7 +424,7 @@ describe("login vinculado a dispositivo", () => {
       method: "POST",
       url: "/api/v1/auth/login/password",
       payload: {
-        identifier: context.owner.email,
+        identifier: context.owner.employeeCode,
         password: context.password,
         deviceId: created.device.id,
       },

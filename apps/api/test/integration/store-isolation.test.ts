@@ -37,11 +37,11 @@ beforeEach(async () => {
 
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
-async function authenticate(email: string, password: string) {
+async function authenticate(employeeCode: string, password: string) {
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/auth/login/password",
-    payload: { identifier: email, password },
+    payload: { identifier: employeeCode, password },
   });
   return response.json().accessToken as string;
 }
@@ -126,7 +126,7 @@ describe("login preso à loja do dispositivo", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/login/password",
-      payload: { identifier: sellerA.email, password: passwordA, deviceId: deviceB.id },
+      payload: { identifier: sellerA.employeeCode, password: passwordA, deviceId: deviceB.id },
     });
 
     expect(response.statusCode).toBe(403);
@@ -139,7 +139,7 @@ describe("login preso à loja do dispositivo", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/login/password",
-      payload: { identifier: sellerA.email, password: passwordA, deviceId: deviceA.id },
+      payload: { identifier: sellerA.employeeCode, password: passwordA, deviceId: deviceA.id },
     });
 
     expect(response.statusCode).toBe(200);
@@ -155,7 +155,7 @@ describe("login preso à loja do dispositivo", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/login/password",
-      payload: { identifier: owner.email, password, deviceId: deviceB.id },
+      payload: { identifier: owner.employeeCode, password, deviceId: deviceB.id },
     });
 
     expect(response.statusCode).toBe(200);
@@ -165,7 +165,7 @@ describe("login preso à loja do dispositivo", () => {
 describe("ponto preso à loja do dispositivo", () => {
   it("não registra ponto no tablet de outra loja", async () => {
     const { sellerA, passwordA, deviceB } = await twoStores();
-    const token = await authenticate(sellerA.email!, passwordA);
+    const token = await authenticate(sellerA.employeeCode, passwordA);
 
     const response = await app.inject({
       method: "POST",
@@ -183,7 +183,7 @@ describe("ponto preso à loja do dispositivo", () => {
 
   it("a tentativa negada fica registrada na auditoria", async () => {
     const { sellerA, passwordA, deviceB } = await twoStores();
-    const token = await authenticate(sellerA.email!, passwordA);
+    const token = await authenticate(sellerA.employeeCode, passwordA);
 
     await app.inject({
       method: "POST",
@@ -200,7 +200,7 @@ describe("ponto preso à loja do dispositivo", () => {
 
   it("registra normalmente no tablet da própria loja", async () => {
     const { sellerA, passwordA, deviceA } = await twoStores();
-    const token = await authenticate(sellerA.email!, passwordA);
+    const token = await authenticate(sellerA.employeeCode, passwordA);
 
     const response = await app.inject({
       method: "POST",
@@ -216,7 +216,7 @@ describe("ponto preso à loja do dispositivo", () => {
 describe("espelho de ponto preso à loja do gerente", () => {
   it("gerente não vê o ponto de funcionário de outra loja", async () => {
     const { managerA, managerPasswordA, sellerB } = await twoStores();
-    const token = await authenticate(managerA.email!, managerPasswordA);
+    const token = await authenticate(managerA.employeeCode, managerPasswordA);
 
     const response = await app.inject({
       method: "GET",
@@ -230,7 +230,7 @@ describe("espelho de ponto preso à loja do gerente", () => {
 
   it("gerente vê o ponto de funcionário da própria loja", async () => {
     const { managerA, managerPasswordA, sellerA } = await twoStores();
-    const token = await authenticate(managerA.email!, managerPasswordA);
+    const token = await authenticate(managerA.employeeCode, managerPasswordA);
 
     const response = await app.inject({
       method: "GET",
@@ -248,7 +248,7 @@ describe("espelho de ponto preso à loja do gerente", () => {
       companyId: company.id,
       role: "DONO",
     });
-    const token = await authenticate(owner.email!, password);
+    const token = await authenticate(owner.employeeCode, password);
 
     const response = await app.inject({
       method: "GET",
@@ -268,7 +268,7 @@ describe("rotação de refresh token sob concorrência", () => {
       await app.inject({
         method: "POST",
         url: "/api/v1/auth/login/password",
-        payload: { identifier: sellerA.email, password: passwordA },
+        payload: { identifier: sellerA.employeeCode, password: passwordA },
       })
     ).json();
 
@@ -303,14 +303,14 @@ describe("mudança de perfil encerra as sessões", () => {
       companyId: company.id,
       role: "DONO",
     });
-    const ownerToken = await authenticate(owner.email!, ownerPassword);
+    const ownerToken = await authenticate(owner.employeeCode, ownerPassword);
 
     // O vendedor entra e vira gerente.
     const sellerTokens = (
       await app.inject({
         method: "POST",
         url: "/api/v1/auth/login/password",
-        payload: { identifier: sellerA.email, password: passwordA },
+        payload: { identifier: sellerA.employeeCode, password: passwordA },
       })
     ).json();
 
@@ -327,7 +327,7 @@ describe("mudança de perfil encerra as sessões", () => {
       headers: auth(ownerToken),
       payload: {
         purpose: "CREATE_OR_PROMOTE_OWNER",
-        totpCode: await currentTotpCode(owner.id, owner.email!),
+        totpCode: await currentTotpCode(owner.id, owner.employeeCode),
       },
     });
     expect(stepUp.statusCode).toBe(200);

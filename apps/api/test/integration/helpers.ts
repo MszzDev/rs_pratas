@@ -92,7 +92,6 @@ export async function createTestUser(params: {
   role?: UserRole;
   status?: UserStatus;
   employeeCode?: string;
-  email?: string;
   /**
    * O DONO já nasce com 2FA confirmado por padrão, porque é assim que ele
    * existe em produção — sem isso a sessão dele fica restrita às rotas de
@@ -116,8 +115,7 @@ export async function createTestUser(params: {
   const user = await prisma.user.create({
     data: {
       companyId: params.companyId,
-      employeeCode: params.employeeCode ?? suffix,
-      email: params.email ?? `${suffix}@teste.local`,
+      employeeCode: params.employeeCode ?? `RS${suffix}`,
       name: "Usuário de Teste",
       role,
       status: params.status ?? "ACTIVE",
@@ -133,7 +131,7 @@ export async function createTestUser(params: {
     await prisma.twoFactorCredential.create({
       data: {
         userId: user.id,
-        secretEncrypted: encryptSecret(createTotpSetup(user.email!).secret),
+        secretEncrypted: encryptSecret(createTotpSetup(user.employeeCode).secret),
         confirmedAt: new Date(),
         recoveryCodesHash: [],
       },

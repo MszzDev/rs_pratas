@@ -27,11 +27,11 @@ beforeEach(async () => {
 
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
-async function authenticate(email: string, password: string) {
+async function authenticate(employeeCode: string, password: string) {
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/auth/login/password",
-    payload: { identifier: email, password },
+    payload: { identifier: employeeCode, password },
   });
   return response.json().accessToken as string;
 }
@@ -63,14 +63,14 @@ async function setup() {
     role: "VENDEDOR",
   });
   await prisma.userStore.create({ data: { userId: seller.id, storeId: store.id } });
-  const sellerToken = await authenticate(seller.email!, password);
+  const sellerToken = await authenticate(seller.employeeCode, password);
 
   const { user: manager, password: managerPassword } = await createTestUser({
     companyId: company.id,
     role: "GERENTE",
   });
   await prisma.userStore.create({ data: { userId: manager.id, storeId: store.id } });
-  const managerToken = await authenticate(manager.email!, managerPassword);
+  const managerToken = await authenticate(manager.employeeCode, managerPassword);
 
   return { company, store, device, seller, sellerToken, manager, managerToken };
 }

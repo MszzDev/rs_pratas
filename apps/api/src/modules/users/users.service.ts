@@ -2,13 +2,11 @@ import type { UserRole } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
 import type { ChangeUserRoleInput, CreateUserInput, UpdateUserInput } from "@rs-pratas/shared";
 import { prisma } from "../../db/prisma.js";
-import { env } from "../../config/env.js";
 import { audit } from "../../core/audit.service.js";
-import { badRequest, conflict, forbidden, notFound } from "../../core/errors.js";
+import { badRequest, forbidden, notFound } from "../../core/errors.js";
 import { hashSecret } from "../../core/security/password.service.js";
 import { invalidatePermissionCache } from "../../core/rbac/permissions.engine.js";
 import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
-import { buildWelcomeEmail, type EmailProvider } from "../../core/email/index.js";
 import { generateEmployeeCode, generateTemporaryPassword } from "./credentials.js";
 
 /**
@@ -30,20 +28,11 @@ function assertCanAssignRole(actorRole: string, targetRole: UserRole): void {
 export async function createUser(params: {
   input: CreateUserInput;
   request: FastifyRequest;
-  emailProvider: EmailProvider;
 }) {
-  const { input, request, emailProvider } = params;
+  const { input, request } = params;
   assertCanAssignRole(request.user.role, input.role);
 
   const companyId = request.user.companyId;
-
-  const emailTaken = await prisma.user.findFirst({
-    where: { companyId, email: input.email, deletedAt: null },
-    select: { id: true },
-  });
-  if (emailTaken) {
-    throw conflict("EMAIL_TAKEN", "Já existe um usuário com este e-mail.");
-  }
 
   for (const storeId of input.storeIds) {
     await assertStoreAccess(request, storeId);
@@ -61,7 +50,6 @@ export async function createUser(params: {
       data: {
         companyId,
         employeeCode,
-        email: input.email,
         name: input.name,
         role: input.role,
         status: "PENDING_FIRST_ACCESS",
@@ -85,29 +73,6 @@ export async function createUser(params: {
     return created;
   });
 
-  const company = await prisma.company.findUniqueOrThrow({
-    where: { id: companyId },
-    select: { tradeName: true },
-  });
-
-  const delivery = await emailProvider.send(
-    buildWelcomeEmail({
-      name: user.name,
-      email: input.email,
-      employeeCode,
-      temporaryPassword,
-      companyName: company.tradeName,
-      loginUrl: env.APP_LOGIN_URL,
-    }),
-  );
-
-  if (!delivery.delivered) {
-    // O usuário foi criado; só a entrega falhou. Derrubar a criação aqui
-    // deixaria o dono sem saber se o cadastro existe ou não. O estado fica
-    // visível e o reenvio resolve.
-    request.log.error({ userId: user.id, error: delivery.error }, "falha ao enviar e-mail de boas-vindas");
-  }
-
   await audit(request, {
     action: "USER_CREATE",
     result: "SUCCESS",
@@ -118,33 +83,40 @@ export async function createUser(params: {
     entityId: user.id,
     newData: {
       name: user.name,
-      email: user.email,
       employeeCode: user.employeeCode,
       role: user.role,
       storeIds: input.storeIds,
     },
-    metadata: { welcomeEmailDelivered: delivery.delivered },
   });
 
   return {
     user: {
       id: user.id,
       name: user.name,
-      email: user.email,
       employeeCode: user.employeeCode,
       role: user.role,
       status: user.status,
     },
-    welcomeEmailDelivered: delivery.delivered,
+    /**
+     * Única vez que a senha em claro existe fora do hash.
+     *
+     * Sem e-mail no sistema, o dono anota e entrega em mãos. Não fica guardada
+     * em lugar nenhum: se ele perder, o caminho é gerar outra, que invalida
+     * esta.
+     */
+    temporaryPassword,
   };
 }
 
-export async function resendWelcomeEmail(params: {
+/**
+ * Gera uma senha temporária nova para quem ainda não concluiu o primeiro
+ * acesso — o caminho quando o funcionário perde o papel com a credencial.
+ */
+export async function regenerateTemporaryPassword(params: {
   userId: string;
   request: FastifyRequest;
-  emailProvider: EmailProvider;
 }) {
-  const { userId, request, emailProvider } = params;
+  const { userId, request } = params;
 
   const user = await prisma.user.findFirst({
     where: { id: userId, companyId: request.user.companyId, deletedAt: null },
@@ -160,42 +132,27 @@ export async function resendWelcomeEmail(params: {
     );
   }
 
-  // Uma senha nova invalida a anterior — o reenvio nunca ressuscita uma senha
-  // que já circulou.
+  // A senha nova invalida a anterior: gerar outra nunca ressuscita a que já
+  // circulou no papel.
   const temporaryPassword = generateTemporaryPassword();
+
   await prisma.user.update({
     where: { id: user.id },
     data: { passwordHash: await hashSecret(temporaryPassword), mustChangePassword: true },
   });
 
-  const company = await prisma.company.findUniqueOrThrow({
-    where: { id: user.companyId },
-    select: { tradeName: true },
-  });
-
-  const delivery = await emailProvider.send(
-    buildWelcomeEmail({
-      name: user.name,
-      email: user.email!,
-      employeeCode: user.employeeCode,
-      temporaryPassword,
-      companyName: company.tradeName,
-      loginUrl: env.APP_LOGIN_URL,
-    }),
-  );
-
   await audit(request, {
     action: "PASSWORD_CHANGE",
-    result: delivery.delivered ? "SUCCESS" : "FAILURE",
+    result: "SUCCESS",
     userId: request.user.sub,
     companyId: user.companyId,
     userRoleSnapshot: request.user.role,
     entityType: "User",
     entityId: user.id,
-    reason: "reenvio de credenciais de primeiro acesso",
+    reason: "nova senha temporária gerada pelo dono",
   });
 
-  return { delivered: delivery.delivered };
+  return { employeeCode: user.employeeCode, temporaryPassword };
 }
 
 export async function listUsers(request: FastifyRequest) {
@@ -231,7 +188,6 @@ export async function listUsers(request: FastifyRequest) {
   return users.map((user) => ({
     id: user.id,
     name: user.name,
-    email: user.email,
     employeeCode: user.employeeCode,
     role: user.role,
     status: user.status,
@@ -275,7 +231,6 @@ export async function updateUser(params: {
       where: { id: user.id },
       data: {
         ...(input.name ? { name: input.name } : {}),
-        ...(input.email ? { email: input.email } : {}),
       },
     });
 
@@ -305,10 +260,9 @@ export async function updateUser(params: {
     entityId: user.id,
     previousData: {
       name: user.name,
-      email: user.email,
       storeIds: user.userStores.map((link) => link.storeId),
     },
-    newData: { name: updated.name, email: updated.email, storeIds: input.storeIds ?? undefined },
+    newData: { name: updated.name, storeIds: input.storeIds ?? undefined },
   });
 
   return updated;

@@ -3,7 +3,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { TOTP, Secret } from "otpauth";
 import { prisma } from "../../src/db/prisma.js";
 import { decryptSecret } from "../../src/core/security/totp.service.js";
-import { clearSentEmails, sentEmails } from "../../src/core/email/index.js";
 import {
   createTestApp,
   createTestCompany,
@@ -29,11 +28,11 @@ beforeEach(async () => {
   await resetDatabase();
 });
 
-async function authenticate(email: string, password: string) {
+async function authenticate(employeeCode: string, password: string) {
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/auth/login/password",
-    payload: { identifier: email, password },
+    payload: { identifier: employeeCode, password },
   });
   return response.json().accessToken as string;
 }
@@ -54,42 +53,39 @@ async function ownerContext() {
   const company = await createTestCompany();
   const store = await createTestStore(company.id);
   const { user: owner, password } = await createTestUser({ companyId: company.id, role: "DONO" });
-  const token = await authenticate(owner.email!, password);
+  const token = await authenticate(owner.employeeCode, password);
   return { company, store, owner, password, token };
 }
 
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
 describe("criação de usuário pelo dono", () => {
-  it("gera matrícula RS + número e senha temporária, e envia por e-mail", async () => {
+  it("gera matrícula RS + número e devolve a senha temporária uma única vez", async () => {
     const { token, store } = await ownerContext();
 
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/users",
       headers: auth(token),
-      payload: {
-        name: "Maria Vendedora",
-        email: "maria@rspratas.com.br",
-        role: "VENDEDOR",
-        storeIds: [store.id],
-      },
+      payload: { name: "Maria Vendedora", role: "VENDEDOR", storeIds: [store.id] },
     });
 
     expect(response.statusCode).toBe(201);
     const body = response.json();
 
     expect(body.user.employeeCode).toMatch(/^RS\d{6}$/);
-    expect(body.welcomeEmailDelivered).toBe(true);
     expect(body.user.status).toBe("PENDING_FIRST_ACCESS");
 
-    // A senha temporária nunca volta na resposta da API — só vai por e-mail.
-    expect(JSON.stringify(body)).not.toContain("temporaryPassword");
+    // Sem e-mail no sistema, a senha precisa voltar aqui — é a única vez que
+    // ela existe fora do hash, para o dono anotar e entregar em mãos.
+    expect(body.temporaryPassword).toBeTypeOf("string");
+    expect(body.temporaryPassword.length).toBeGreaterThanOrEqual(12);
 
     const created = await prisma.user.findUniqueOrThrow({ where: { id: body.user.id } });
     expect(created.mustChangePassword).toBe(true);
     expect(created.mustCreatePin).toBe(true);
-    expect(created.passwordHash).not.toBeNull();
+    // Guardada só como hash — a senha em claro não fica em lugar nenhum.
+    expect(created.passwordHash).not.toContain(body.temporaryPassword);
 
     const links = await prisma.userStore.findMany({ where: { userId: created.id } });
     expect(links.map((link) => link.storeId)).toEqual([store.id]);
@@ -104,38 +100,12 @@ describe("criação de usuário pelo dono", () => {
         method: "POST",
         url: "/api/v1/users",
         headers: auth(token),
-        payload: {
-          name: `Funcionário ${index}`,
-          email: `func${index}@rspratas.com.br`,
-          role: "VENDEDOR",
-          storeIds: [store.id],
-        },
+        payload: { name: `Funcionário ${index}`, role: "VENDEDOR", storeIds: [store.id] },
       });
       codes.add(response.json().user.employeeCode);
     }
 
     expect(codes.size).toBe(5);
-  });
-
-  it("recusa e-mail já cadastrado", async () => {
-    const { token, store } = await ownerContext();
-    const payload = {
-      name: "Duplicado",
-      email: "duplicado@rspratas.com.br",
-      role: "VENDEDOR",
-      storeIds: [store.id],
-    };
-
-    await app.inject({ method: "POST", url: "/api/v1/users", headers: auth(token), payload });
-    const segunda = await app.inject({
-      method: "POST",
-      url: "/api/v1/users",
-      headers: auth(token),
-      payload,
-    });
-
-    expect(segunda.statusCode).toBe(409);
-    expect(segunda.json().error.code).toBe("EMAIL_TAKEN");
   });
 
   it("gerente não pode criar usuário", async () => {
@@ -145,65 +115,32 @@ describe("criação de usuário pelo dono", () => {
       role: "GERENTE",
     });
     await prisma.userStore.create({ data: { userId: manager.id, storeId: store.id } });
-    const token = await authenticate(manager.email!, password);
+    const token = await authenticate(manager.employeeCode, password);
 
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/users",
       headers: auth(token),
-      payload: { name: "Alguém", email: "alguem@x.com", role: "VENDEDOR", storeIds: [] },
+      payload: { name: "Alguém", role: "VENDEDOR", storeIds: [] },
     });
 
     expect(response.statusCode).toBe(403);
   });
 
-  it("o e-mail entregue traz a matrícula e a senha temporária", async () => {
+  it("o funcionário criado percorre o primeiro acesso com a credencial recebida", async () => {
     const { token, store } = await ownerContext();
-    clearSentEmails();
 
     const created = await app.inject({
       method: "POST",
       url: "/api/v1/users",
       headers: auth(token),
-      payload: {
-        name: "Novo Funcionário",
-        email: "novo@rspratas.com.br",
-        role: "VENDEDOR",
-        storeIds: [store.id],
-      },
+      payload: { name: "Fluxo Completo", role: "VENDEDOR", storeIds: [store.id] },
     });
+
     const employeeCode = created.json().user.employeeCode as string;
+    const temporaryPassword = created.json().temporaryPassword as string;
 
-    expect(sentEmails).toHaveLength(1);
-    const email = sentEmails[0]!;
-    expect(email.to).toBe("novo@rspratas.com.br");
-    expect(email.text).toContain(employeeCode);
-    expect(email.text).toMatch(/Senha temporária: \S+/);
-  });
-
-  it("o funcionário criado percorre o primeiro acesso com as credenciais recebidas", async () => {
-    const { token, store } = await ownerContext();
-    clearSentEmails();
-
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/v1/users",
-      headers: auth(token),
-      payload: {
-        name: "Fluxo Completo",
-        email: "fluxo@rspratas.com.br",
-        role: "VENDEDOR",
-        storeIds: [store.id],
-      },
-    });
-    const employeeCode = created.json().user.employeeCode as string;
-
-    // Este teste é sobre as credenciais entregues por e-mail, não sobre a regra
-    // de "só no tablet" — liberamos o acesso remoto para poder validar o login
-    // final sem montar loja, estação, caixa e tablet.
     await grantOffDeviceAccess(created.json().user.id as string);
-
-    const temporaryPassword = /Senha temporária: (\S+)/.exec(sentEmails[0]!.text)![1]!;
 
     // Entrar pela tela normal ainda não funciona: a conta exige o primeiro acesso.
     const loginDireto = await app.inject({
@@ -238,7 +175,6 @@ describe("criação de usuário pelo dono", () => {
       payload: { onboardingToken },
     });
 
-    // Agora entra com a senha própria — e a temporária deixou de valer.
     const comNova = await app.inject({
       method: "POST",
       url: "/api/v1/auth/login/password",
@@ -255,44 +191,55 @@ describe("criação de usuário pelo dono", () => {
   });
 });
 
-describe("reenvio de credenciais", () => {
-  it("gera uma senha nova, invalidando a anterior", async () => {
+describe("nova senha temporária", () => {
+  it("gera outra senha e invalida a anterior", async () => {
     const { token, store } = await ownerContext();
 
     const created = await app.inject({
       method: "POST",
       url: "/api/v1/users",
       headers: auth(token),
-      payload: {
-        name: "Esqueceu",
-        email: "esqueceu@rspratas.com.br",
-        role: "VENDEDOR",
-        storeIds: [store.id],
-      },
+      payload: { name: "Esqueceu", role: "VENDEDOR", storeIds: [store.id] },
     });
-    const userId = created.json().user.id;
-    const before = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const userId = created.json().user.id as string;
+    const senhaAntiga = created.json().temporaryPassword as string;
+    const employeeCode = created.json().user.employeeCode as string;
+    await grantOffDeviceAccess(userId);
 
-    const resend = await app.inject({
+    const regenerada = await app.inject({
       method: "POST",
-      url: `/api/v1/users/${userId}/resend-credentials`,
+      url: `/api/v1/users/${userId}/regenerate-password`,
       headers: auth(token),
     });
 
-    expect(resend.statusCode).toBe(200);
-    expect(resend.json().delivered).toBe(true);
+    expect(regenerada.statusCode).toBe(200);
+    const senhaNova = regenerada.json().temporaryPassword as string;
+    expect(senhaNova).not.toBe(senhaAntiga);
+    expect(regenerada.json().employeeCode).toBe(employeeCode);
 
-    const after = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    expect(after.passwordHash).not.toBe(before.passwordHash);
+    // A senha antiga, que já circulou no papel, deixa de valer.
+    const comAntiga = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/first-access/start",
+      payload: { identifier: employeeCode, tempPassword: senhaAntiga },
+    });
+    expect(comAntiga.statusCode).toBe(401);
+
+    const comNova = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/first-access/start",
+      payload: { identifier: employeeCode, tempPassword: senhaNova },
+    });
+    expect(comNova.statusCode).toBe(200);
   });
 
-  it("recusa reenvio para quem já concluiu o primeiro acesso", async () => {
+  it("recusa para quem já concluiu o primeiro acesso", async () => {
     const { token, company } = await ownerContext();
     const { user: active } = await createTestUser({ companyId: company.id, role: "VENDEDOR" });
 
     const response = await app.inject({
       method: "POST",
-      url: `/api/v1/users/${active.id}/resend-credentials`,
+      url: `/api/v1/users/${active.id}/regenerate-password`,
       headers: auth(token),
     });
 
@@ -313,7 +260,7 @@ describe("bloqueio de usuário", () => {
     const sellerLogin = await app.inject({
       method: "POST",
       url: "/api/v1/auth/login/password",
-      payload: { identifier: seller.email, password },
+      payload: { identifier: seller.employeeCode, password },
     });
     const sellerTokens = sellerLogin.json();
 
@@ -375,7 +322,7 @@ describe("mudança de perfil exige reautenticação", () => {
       headers: auth(token),
       payload: {
         purpose: "CREATE_OR_PROMOTE_OWNER",
-        totpCode: await currentTotpCode(owner.id, owner.email!),
+        totpCode: await currentTotpCode(owner.id, owner.employeeCode),
       },
     });
 
@@ -404,7 +351,7 @@ describe("mudança de perfil exige reautenticação", () => {
       headers: auth(token),
       payload: {
         purpose: "CREATE_OR_PROMOTE_OWNER",
-        totpCode: await currentTotpCode(owner.id, owner.email!),
+        totpCode: await currentTotpCode(owner.id, owner.employeeCode),
       },
     });
 
@@ -450,7 +397,7 @@ describe("lojas", () => {
       role: "VENDEDOR",
     });
     await prisma.userStore.create({ data: { userId: seller.id, storeId: store.id } });
-    const token = await authenticate(seller.email!, password);
+    const token = await authenticate(seller.employeeCode, password);
 
     const response = await app.inject({ method: "GET", url: "/api/v1/stores", headers: auth(token) });
 
@@ -476,7 +423,7 @@ describe("lojas", () => {
       headers: auth(token),
       payload: {
         purpose: "DEACTIVATE_STORE",
-        totpCode: await currentTotpCode(owner.id, owner.email!),
+        totpCode: await currentTotpCode(owner.id, owner.employeeCode),
       },
     });
 
@@ -504,8 +451,8 @@ describe("gestão de sessões", () => {
     });
     await prisma.userStore.create({ data: { userId: seller.id, storeId: store.id } });
 
-    await authenticate(seller.email!, password);
-    const currentToken = await authenticate(seller.email!, password);
+    await authenticate(seller.employeeCode, password);
+    const currentToken = await authenticate(seller.employeeCode, password);
 
     const response = await app.inject({
       method: "GET",
@@ -531,10 +478,10 @@ describe("gestão de sessões", () => {
       await app.inject({
         method: "POST",
         url: "/api/v1/auth/login/password",
-        payload: { identifier: seller.email, password },
+        payload: { identifier: seller.employeeCode, password },
       })
     ).json();
-    const atual = await authenticate(seller.email!, password);
+    const atual = await authenticate(seller.employeeCode, password);
 
     const sessions = (
       await app.inject({
@@ -579,10 +526,10 @@ describe("gestão de sessões", () => {
       ],
     });
 
-    await authenticate(b.email!, passwordB);
+    await authenticate(b.employeeCode, passwordB);
     const sessionOfB = await prisma.deviceSession.findFirstOrThrow({ where: { userId: b.id } });
 
-    const tokenA = await authenticate(a.email!, passwordA);
+    const tokenA = await authenticate(a.employeeCode, passwordA);
     const response = await app.inject({
       method: "DELETE",
       url: `/api/v1/auth/sessions/${sessionOfB.id}`,

@@ -1,9 +1,13 @@
 import { z } from "zod";
 import { USER_ROLES } from "../roles.const.js";
 
+/**
+ * O sistema não usa e-mail. A identidade do funcionário é a matrícula, gerada
+ * pelo próprio sistema, e as credenciais são entregues pessoalmente pelo dono —
+ * não há caixa de entrada por onde uma senha temporária possa vazar.
+ */
 export const createUserSchema = z.object({
   name: z.string().min(2, "Informe o nome completo.").max(120),
-  email: z.string().email("Informe um e-mail válido.").max(255),
   role: z.enum(USER_ROLES),
   /** Lojas às quais o funcionário terá acesso. Dono e desenvolvedor veem todas. */
   storeIds: z.array(z.string().uuid()).default([]),
@@ -11,7 +15,6 @@ export const createUserSchema = z.object({
 
 export const updateUserSchema = z.object({
   name: z.string().min(2).max(120).optional(),
-  email: z.string().email().max(255).optional(),
   storeIds: z.array(z.string().uuid()).optional(),
 });
 
@@ -27,7 +30,6 @@ export const blockUserSchema = z.object({
 export const userSummarySchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
-  email: z.string().nullable(),
   employeeCode: z.string(),
   role: z.enum(USER_ROLES),
   status: z.string(),

@@ -47,7 +47,7 @@ export async function issueStepUpToken(params: {
 
     const verification = verifyTotp({
       secretBase32: decryptSecret(user.twoFactorCredential.secretEncrypted),
-      accountLabel: user.email ?? user.employeeCode,
+      accountLabel: user.employeeCode,
       code: totpCode,
     });
 

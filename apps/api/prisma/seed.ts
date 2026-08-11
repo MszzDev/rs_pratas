@@ -65,7 +65,6 @@ async function main() {
     companyId: company.id,
     role: "DONO",
     employeeCode: "RS000001",
-    email: "dono@rspratas.com.br",
     name: "Dono RS Pratas",
   });
 
@@ -73,7 +72,6 @@ async function main() {
     companyId: company.id,
     role: "DESENVOLVEDOR",
     employeeCode: "RS000002",
-    email: "dev@rspratas.com.br",
     name: "Suporte Técnico",
   });
 }
@@ -88,7 +86,6 @@ async function createBootstrapUser(params: {
   companyId: string;
   role: "DONO" | "DESENVOLVEDOR";
   employeeCode: string;
-  email: string;
   name: string;
 }) {
   const existing = await prisma.user.findFirst({
@@ -103,7 +100,6 @@ async function createBootstrapUser(params: {
     data: {
       companyId: params.companyId,
       employeeCode: params.employeeCode,
-      email: params.email,
       name: params.name,
       role: params.role,
       status: "PENDING_FIRST_ACCESS",
@@ -115,7 +111,6 @@ async function createBootstrapUser(params: {
 
   console.log(`\n=== CONTA INICIAL: ${params.role} ===`);
   console.log(`matrícula:   ${user.employeeCode}`);
-  console.log(`e-mail:      ${user.email}`);
   console.log(`senha temp.: ${temporaryPassword}`);
   console.log("Anote agora — esta senha não aparece de novo.\n");
 }

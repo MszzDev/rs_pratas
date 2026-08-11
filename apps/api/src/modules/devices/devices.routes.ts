@@ -6,7 +6,8 @@ import {
   createDeviceSchema,
   createPOSStationSchema,
 } from "@rs-pratas/shared";
-import { requireRole } from "../../core/rbac/require-role.hook.js";
+import { prisma } from "../../db/prisma.js";
+import { assertStoreAccess, requireRole } from "../../core/rbac/require-role.hook.js";
 import {
   claimDevice,
   createCashRegister,
@@ -20,6 +21,22 @@ export async function deviceRoutes(app: FastifyInstance) {
   // A guarda de somente-leitura do DESENVOLVEDOR já vive dentro do requireAuth.
   const managerOrOwner = [app.requireAuth, requireRole("DONO", "GERENTE")];
   const ownerOnly = [app.requireAuth, requireRole("DONO")];
+
+  app.get("/pos-stations", { preHandler: app.requireAuth }, async (request) => {
+    const { storeId } = z.object({ storeId: z.string().uuid() }).parse(request.query);
+    await assertStoreAccess(request, storeId);
+
+    return prisma.pOSStation.findMany({
+      where: { storeId, deletedAt: null },
+      include: {
+        cashRegisters: {
+          where: { deletedAt: null },
+          orderBy: { code: "asc" },
+        },
+      },
+      orderBy: { code: "asc" },
+    });
+  });
 
   app.post("/pos-stations", { preHandler: ownerOnly }, async (request, reply) => {
     const input = createPOSStationSchema.parse(request.body);

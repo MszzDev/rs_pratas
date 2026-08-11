@@ -115,7 +115,7 @@ describe("funcionário só entra pelo tablet", () => {
   it("vendedor é recusado fora de um tablet", async () => {
     const { seller, sellerPassword } = await storeWithTablet();
 
-    const response = await login(seller.email!, sellerPassword);
+    const response = await login(seller.employeeCode, sellerPassword);
 
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe("DEVICE_REQUIRED");
@@ -125,7 +125,7 @@ describe("funcionário só entra pelo tablet", () => {
   it("gerente também é recusado fora de um tablet", async () => {
     const { manager, managerPassword } = await storeWithTablet();
 
-    const response = await login(manager.email!, managerPassword);
+    const response = await login(manager.employeeCode, managerPassword);
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe("DEVICE_REQUIRED");
   });
@@ -133,13 +133,13 @@ describe("funcionário só entra pelo tablet", () => {
   it("o mesmo vendedor entra normalmente pelo tablet da loja", async () => {
     const { seller, sellerPassword, device } = await storeWithTablet();
 
-    const response = await login(seller.email!, sellerPassword, device.id);
+    const response = await login(seller.employeeCode, sellerPassword, device.id);
     expect(response.statusCode).toBe(200);
   });
 
   it("a recusa fica registrada na auditoria", async () => {
     const { seller, sellerPassword } = await storeWithTablet();
-    await login(seller.email!, sellerPassword);
+    await login(seller.employeeCode, sellerPassword);
 
     const entry = await prisma.auditLog.findFirst({
       where: { userId: seller.id, action: "LOGIN_FAILED", result: "DENIED" },
@@ -150,7 +150,7 @@ describe("funcionário só entra pelo tablet", () => {
   it("senha errada continua respondendo como senha errada, não como bloqueio de aparelho", async () => {
     const { seller } = await storeWithTablet();
 
-    const response = await login(seller.email!, "senha-errada-mesmo");
+    const response = await login(seller.employeeCode, "senha-errada-mesmo");
 
     // A ordem importa: revelar "seu acesso é só no tablet" antes de validar a
     // senha confirmaria que a matrícula existe.
@@ -163,7 +163,7 @@ describe("o dono alcança o sistema de qualquer lugar", () => {
   it("entra sem tablet", async () => {
     const { owner, ownerPassword } = await storeWithTablet();
 
-    const response = await login(owner.email!, ownerPassword);
+    const response = await login(owner.employeeCode, ownerPassword);
     expect(response.statusCode).toBe(200);
   });
 });
@@ -171,7 +171,7 @@ describe("o dono alcança o sistema de qualquer lugar", () => {
 describe("liberação nominal concedida pelo dono", () => {
   async function ownerSession() {
     const context = await storeWithTablet();
-    const token = (await login(context.owner.email!, context.ownerPassword)).json().accessToken;
+    const token = (await login(context.owner.employeeCode, context.ownerPassword)).json().accessToken;
 
     const stepUp = await app.inject({
       method: "POST",
@@ -179,7 +179,7 @@ describe("liberação nominal concedida pelo dono", () => {
       headers: auth(token),
       payload: {
         purpose: "CHANGE_PERMISSIONS",
-        totpCode: await currentTotpCode(context.owner.id, context.owner.email!),
+        totpCode: await currentTotpCode(context.owner.id, context.owner.employeeCode),
       },
     });
 
@@ -189,7 +189,7 @@ describe("liberação nominal concedida pelo dono", () => {
   it("libera uma matrícula específica e ela passa a entrar de fora", async () => {
     const context = await ownerSession();
 
-    const antes = await login(context.seller.email!, context.sellerPassword);
+    const antes = await login(context.seller.employeeCode, context.sellerPassword);
     expect(antes.statusCode).toBe(403);
 
     const grant = await app.inject({
@@ -203,7 +203,7 @@ describe("liberação nominal concedida pelo dono", () => {
     });
     expect(grant.statusCode).toBe(201);
 
-    const depois = await login(context.seller.email!, context.sellerPassword);
+    const depois = await login(context.seller.employeeCode, context.sellerPassword);
     expect(depois.statusCode).toBe(200);
   });
 
@@ -218,7 +218,7 @@ describe("liberação nominal concedida pelo dono", () => {
     });
 
     // O gerente, que não foi liberado, continua preso ao tablet.
-    const gerente = await login(context.manager.email!, context.managerPassword);
+    const gerente = await login(context.manager.employeeCode, context.managerPassword);
     expect(gerente.statusCode).toBe(403);
   });
 
@@ -236,7 +236,7 @@ describe("liberação nominal concedida pelo dono", () => {
       },
     });
 
-    expect((await login(context.seller.email!, context.sellerPassword)).statusCode).toBe(200);
+    expect((await login(context.seller.employeeCode, context.sellerPassword)).statusCode).toBe(200);
 
     // Vence a liberação.
     const permission = await prisma.permission.findUniqueOrThrow({
@@ -250,7 +250,7 @@ describe("liberação nominal concedida pelo dono", () => {
     });
     await invalidateCache(context.seller.id);
 
-    expect((await login(context.seller.email!, context.sellerPassword)).statusCode).toBe(403);
+    expect((await login(context.seller.employeeCode, context.sellerPassword)).statusCode).toBe(403);
   });
 
   it("recusa validade no passado", async () => {
@@ -278,7 +278,7 @@ describe("liberação nominal concedida pelo dono", () => {
     const context = await ownerSession();
     await grantOffDeviceAccess(context.seller.id);
 
-    const sessaoRemota = (await login(context.seller.email!, context.sellerPassword)).json();
+    const sessaoRemota = (await login(context.seller.employeeCode, context.sellerPassword)).json();
     expect(sessaoRemota.accessToken).toBeTypeOf("string");
 
     const revoke = await app.inject({
@@ -298,7 +298,7 @@ describe("liberação nominal concedida pelo dono", () => {
     expect(refresh.statusCode).toBe(401);
 
     // E o acesso de fora volta a ser recusado.
-    expect((await login(context.seller.email!, context.sellerPassword)).statusCode).toBe(403);
+    expect((await login(context.seller.employeeCode, context.sellerPassword)).statusCode).toBe(403);
   });
 
   it("revogar não atrapalha quem está trabalhando no tablet da loja", async () => {
@@ -306,7 +306,7 @@ describe("liberação nominal concedida pelo dono", () => {
     await grantOffDeviceAccess(context.seller.id);
 
     const sessaoNoTablet = (
-      await login(context.seller.email!, context.sellerPassword, context.device.id)
+      await login(context.seller.employeeCode, context.sellerPassword, context.device.id)
     ).json();
 
     await app.inject({
@@ -327,7 +327,7 @@ describe("liberação nominal concedida pelo dono", () => {
 
   it("conceder permissão exige reautenticação do dono", async () => {
     const context = await storeWithTablet();
-    const token = (await login(context.owner.email!, context.ownerPassword)).json().accessToken;
+    const token = (await login(context.owner.employeeCode, context.ownerPassword)).json().accessToken;
 
     const response = await app.inject({
       method: "POST",
@@ -343,7 +343,7 @@ describe("liberação nominal concedida pelo dono", () => {
   it("gerente não consegue liberar ninguém", async () => {
     const context = await storeWithTablet();
     const managerToken = (
-      await login(context.manager.email!, context.managerPassword, context.device.id)
+      await login(context.manager.employeeCode, context.managerPassword, context.device.id)
     ).json().accessToken;
 
     const response = await app.inject({

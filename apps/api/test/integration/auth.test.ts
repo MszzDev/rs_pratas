@@ -37,7 +37,7 @@ describe("POST /api/v1/auth/login/password", () => {
     const company = await createTestCompany();
     const { user, password } = await createTestUser({ companyId: company.id });
 
-    const response = await login(user.email!, password);
+    const response = await login(user.employeeCode, password);
 
     expect(response.statusCode).toBe(200);
     const body = response.json();
@@ -65,7 +65,7 @@ describe("POST /api/v1/auth/login/password", () => {
     const company = await createTestCompany();
     const { user } = await createTestUser({ companyId: company.id });
 
-    const wrongPassword = await login(user.email!, "senha-errada-aqui");
+    const wrongPassword = await login(user.employeeCode, "senha-errada-aqui");
     const unknownUser = await login("naoexiste@teste.local", "senha-errada-aqui");
 
     expect(wrongPassword.statusCode).toBe(401);
@@ -79,12 +79,12 @@ describe("POST /api/v1/auth/login/password", () => {
     const { user, password } = await createTestUser({ companyId: company.id });
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const response = await login(user.email!, "senha-errada");
+      const response = await login(user.employeeCode, "senha-errada");
       expect(response.statusCode).toBe(401);
     }
 
     // 6ª tentativa: agora bloqueado, e mesmo a senha CORRETA é recusada.
-    const afterLock = await login(user.email!, password);
+    const afterLock = await login(user.employeeCode, password);
     expect(afterLock.statusCode).toBe(429);
     expect(afterLock.json().error.code).toBe("ACCOUNT_LOCKED");
 
@@ -104,7 +104,7 @@ describe("POST /api/v1/auth/login/password", () => {
       status: "BLOCKED",
     });
 
-    const response = await login(user.email!, password);
+    const response = await login(user.employeeCode, password);
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe("USER_BLOCKED");
   });
@@ -116,7 +116,7 @@ describe("POST /api/v1/auth/login/password", () => {
       status: "PENDING_FIRST_ACCESS",
     });
 
-    const response = await login(user.email!, password);
+    const response = await login(user.employeeCode, password);
     expect(response.statusCode).toBe(400);
     expect(response.json().error.code).toBe("FIRST_ACCESS_REQUIRED");
   });
@@ -125,7 +125,7 @@ describe("POST /api/v1/auth/login/password", () => {
     const company = await createTestCompany();
     const { user, password } = await createTestUser({ companyId: company.id });
 
-    await login(user.email!, password);
+    await login(user.employeeCode, password);
 
     const entry = await prisma.auditLog.findFirst({
       where: { userId: user.id, action: "LOGIN_SUCCESS" },
@@ -139,7 +139,7 @@ describe("POST /api/v1/auth/login/password", () => {
     const company = await createTestCompany();
     const { user, password } = await createTestUser({ companyId: company.id });
 
-    const { refreshToken } = (await login(user.email!, password)).json();
+    const { refreshToken } = (await login(user.employeeCode, password)).json();
 
     const stored = await prisma.refreshToken.findFirst();
     expect(stored).not.toBeNull();
@@ -152,7 +152,7 @@ describe("POST /api/v1/auth/refresh", () => {
   async function loggedInUser() {
     const company = await createTestCompany();
     const { user, password } = await createTestUser({ companyId: company.id });
-    const tokens = (await login(user.email!, password)).json();
+    const tokens = (await login(user.employeeCode, password)).json();
     return { user, tokens };
   }
 
@@ -217,7 +217,7 @@ describe("POST /api/v1/auth/logout", () => {
   it("revoga a sessão e impede refresh posterior", async () => {
     const company = await createTestCompany();
     const { user, password } = await createTestUser({ companyId: company.id });
-    const tokens = (await login(user.email!, password)).json();
+    const tokens = (await login(user.employeeCode, password)).json();
 
     const logoutResponse = await app.inject({
       method: "POST",
@@ -260,7 +260,7 @@ describe("rotas autenticadas", () => {
   it("aceita o access token emitido no login", async () => {
     const company = await createTestCompany();
     const { user, password } = await createTestUser({ companyId: company.id });
-    const tokens = (await login(user.email!, password)).json();
+    const tokens = (await login(user.employeeCode, password)).json();
 
     const response = await app.inject({
       method: "GET",
@@ -277,8 +277,8 @@ describe("rotas autenticadas", () => {
     const company = await createTestCompany();
     const { user, password } = await createTestUser({ companyId: company.id });
 
-    const first = (await login(user.email!, password)).json();
-    const second = (await login(user.email!, password)).json();
+    const first = (await login(user.employeeCode, password)).json();
+    const second = (await login(user.employeeCode, password)).json();
 
     const response = await app.inject({
       method: "POST",

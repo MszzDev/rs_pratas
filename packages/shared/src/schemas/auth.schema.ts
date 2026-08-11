@@ -16,11 +16,11 @@ export const pinSchema = z
   .string()
   .regex(/^\d{4}$|^\d{6}$/, "O PIN deve ter 4 ou 6 números.");
 
-/** E-mail ou matrícula — a API aceita os dois no mesmo campo. */
+/** Matrícula — a identidade do funcionário no sistema (formato RS + números). */
 export const identifierSchema = z
   .string()
-  .min(1, "Informe seu e-mail ou matrícula.")
-  .max(255);
+  .min(1, "Informe sua matrícula.")
+  .max(50);
 
 export const loginPasswordSchema = z.object({
   identifier: identifierSchema,
@@ -42,7 +42,6 @@ export const refreshSchema = z.object({
 export const authenticatedUserSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
-  email: z.string().nullable(),
   employeeCode: z.string(),
   role: z.enum(USER_ROLES),
   companyId: z.string().uuid(),

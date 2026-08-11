@@ -28,11 +28,11 @@ beforeEach(async () => {
   await resetDatabase();
 });
 
-async function authenticate(email: string, password: string) {
+async function authenticate(employeeCode: string, password: string) {
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/auth/login/password",
-    payload: { identifier: email, password },
+    payload: { identifier: employeeCode, password },
   });
   return response.json().accessToken as string;
 }
@@ -173,7 +173,7 @@ describe("guarda de somente-leitura do DESENVOLVEDOR", () => {
     });
     await invalidatePermissionCache(dev.id);
 
-    const token = await authenticate(dev.email!, password);
+    const token = await authenticate(dev.employeeCode, password);
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/pos-stations",
@@ -198,7 +198,7 @@ describe("guarda de somente-leitura do DESENVOLVEDOR", () => {
       data: { storeId: store.id, key: "meta", value: { faturamento: 15000, nome: "Meta mensal" } },
     });
 
-    const token = await authenticate(dev.email!, password);
+    const token = await authenticate(dev.employeeCode, password);
     const response = await app.inject({
       method: "GET",
       url: "/api/v1/auth/me",
@@ -221,7 +221,7 @@ describe("2FA obrigatório para o DONO", () => {
       withTwoFactor: false,
     });
 
-    const token = await authenticate(owner.email!, password);
+    const token = await authenticate(owner.employeeCode, password);
 
     const bloqueada = await app.inject({
       method: "POST",
@@ -248,7 +248,7 @@ describe("2FA obrigatório para o DONO", () => {
       role: "DONO",
       withTwoFactor: false,
     });
-    const token = await authenticate(owner.email!, password);
+    const token = await authenticate(owner.employeeCode, password);
 
     const setup = await app.inject({
       method: "POST",
@@ -261,7 +261,7 @@ describe("2FA obrigatório para o DONO", () => {
       method: "POST",
       url: "/api/v1/auth/2fa/confirm",
       headers: { authorization: `Bearer ${token}` },
-      payload: { code: await currentTotpCode(owner.id, owner.email!) },
+      payload: { code: await currentTotpCode(owner.id, owner.employeeCode) },
     });
     expect(confirm.statusCode).toBe(200);
     expect(confirm.json().recoveryCodes).toHaveLength(10);
@@ -282,7 +282,7 @@ describe("2FA obrigatório para o DONO", () => {
       role: "DONO",
       withTwoFactor: false,
     });
-    const token = await authenticate(owner.email!, password);
+    const token = await authenticate(owner.employeeCode, password);
 
     await app.inject({
       method: "POST",
@@ -303,7 +303,7 @@ describe("2FA obrigatório para o DONO", () => {
   it("não permite desativar o 2FA do dono", async () => {
     const company = await createTestCompany();
     const { user: owner, password } = await createTestUser({ companyId: company.id, role: "DONO" });
-    const token = await authenticate(owner.email!, password);
+    const token = await authenticate(owner.employeeCode, password);
 
     const stepUp = await app.inject({
       method: "POST",
@@ -311,7 +311,7 @@ describe("2FA obrigatório para o DONO", () => {
       headers: { authorization: `Bearer ${token}` },
       payload: {
         purpose: "TWO_FACTOR_DISABLE",
-        totpCode: await currentTotpCode(owner.id, owner.email!),
+        totpCode: await currentTotpCode(owner.id, owner.employeeCode),
       },
     });
     expect(stepUp.statusCode).toBe(200);
@@ -336,7 +336,7 @@ describe("2FA obrigatório para o DONO", () => {
       role: "DONO",
       withTwoFactor: false,
     });
-    const token = await authenticate(owner.email!, password);
+    const token = await authenticate(owner.employeeCode, password);
 
     await app.inject({
       method: "POST",
@@ -347,7 +347,7 @@ describe("2FA obrigatório para o DONO", () => {
       method: "POST",
       url: "/api/v1/auth/2fa/confirm",
       headers: { authorization: `Bearer ${token}` },
-      payload: { code: await currentTotpCode(owner.id, owner.email!) },
+      payload: { code: await currentTotpCode(owner.id, owner.employeeCode) },
     });
     const [recoveryCode] = confirm.json().recoveryCodes as string[];
 
@@ -379,7 +379,7 @@ describe("step-up (reautenticação)", () => {
       role: "GERENTE",
     });
     await prisma.userStore.create({ data: { userId: manager.id, storeId: store.id } });
-    const token = await authenticate(manager.email!, password);
+    const token = await authenticate(manager.employeeCode, password);
     return { company, store, manager, password, token };
   }
 
@@ -419,7 +419,7 @@ describe("step-up (reautenticação)", () => {
   it("exige TOTP de quem tem 2FA ativo — senha sozinha não basta", async () => {
     const company = await createTestCompany();
     const { user: owner, password } = await createTestUser({ companyId: company.id, role: "DONO" });
-    const token = await authenticate(owner.email!, password);
+    const token = await authenticate(owner.employeeCode, password);
 
     const comSenha = await app.inject({
       method: "POST",
@@ -436,7 +436,7 @@ describe("step-up (reautenticação)", () => {
       headers: { authorization: `Bearer ${token}` },
       payload: {
         purpose: "CREATE_OR_PROMOTE_OWNER",
-        totpCode: await currentTotpCode(owner.id, owner.email!),
+        totpCode: await currentTotpCode(owner.id, owner.employeeCode),
       },
     });
     expect(comTotp.statusCode).toBe(200);

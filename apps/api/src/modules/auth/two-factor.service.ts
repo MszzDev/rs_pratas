@@ -30,7 +30,7 @@ export async function startTwoFactorSetup(request: FastifyRequest) {
     throw conflict("TWO_FACTOR_ALREADY_ENABLED", "A verificação em duas etapas já está ativa.");
   }
 
-  const accountLabel = user.email ?? user.employeeCode;
+  const accountLabel = user.employeeCode;
   const setup = createTotpSetup(accountLabel);
 
   // Sobrescreve qualquer tentativa anterior não confirmada: o segredo antigo
@@ -78,7 +78,7 @@ export async function confirmTwoFactorSetup(params: { code: string; request: Fas
 
   const verification = verifyTotp({
     secretBase32: decryptSecret(credential.secretEncrypted),
-    accountLabel: user.email ?? user.employeeCode,
+    accountLabel: user.employeeCode,
     code,
   });
 
@@ -134,7 +134,7 @@ export async function verifyTwoFactorChallenge(params: { code: string; request: 
 
   const verification = verifyTotp({
     secretBase32: decryptSecret(credential.secretEncrypted),
-    accountLabel: user.email ?? user.employeeCode,
+    accountLabel: user.employeeCode,
     code,
   });
 

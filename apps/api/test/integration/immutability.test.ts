@@ -90,7 +90,6 @@ describe("time_clock_entries é append-only", () => {
       data: {
         companyId: company.id,
         employeeCode: "RS900001",
-        email: "ponto@teste.local",
         name: "Funcionário",
         role: "VENDEDOR",
         status: "ACTIVE",

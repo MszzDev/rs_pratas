@@ -12,12 +12,11 @@ import {
 } from "@rs-pratas/shared";
 import { requireRole } from "../../core/rbac/require-role.hook.js";
 import { requireStepUp } from "../auth/step-up.service.js";
-import { createEmailProvider } from "../../core/email/index.js";
 import {
   changeUserRole,
   createUser,
   listUsers,
-  resendWelcomeEmail,
+  regenerateTemporaryPassword,
   setUserBlocked,
   updateUser,
 } from "./users.service.js";
@@ -30,7 +29,6 @@ import {
 const idParamSchema = z.object({ id: z.string().uuid() });
 
 export async function userRoutes(app: FastifyInstance) {
-  const emailProvider = createEmailProvider(app.log);
   const ownerOnly = [app.requireAuth, requireRole("DONO")];
 
   app.get("/users", { preHandler: app.requireAuth }, async (request) => {
@@ -39,13 +37,18 @@ export async function userRoutes(app: FastifyInstance) {
 
   app.post("/users", { preHandler: ownerOnly }, async (request, reply) => {
     const input = createUserSchema.parse(request.body);
-    const result = await createUser({ input, request, emailProvider });
+    const result = await createUser({ input, request });
     return reply.status(201).send(result);
   });
 
-  app.post("/users/:id/resend-credentials", { preHandler: ownerOnly }, async (request) => {
+  /**
+   * Gera uma senha temporária nova e a devolve na resposta. Sem e-mail no
+   * sistema, é assim que o dono recupera o acesso de quem perdeu o papel com a
+   * credencial — e a senha anterior deixa de valer no mesmo instante.
+   */
+  app.post("/users/:id/regenerate-password", { preHandler: ownerOnly }, async (request) => {
     const { id } = idParamSchema.parse(request.params);
-    return resendWelcomeEmail({ userId: id, request, emailProvider });
+    return regenerateTemporaryPassword({ userId: id, request });
   });
 
   app.patch("/users/:id", { preHandler: ownerOnly }, async (request) => {

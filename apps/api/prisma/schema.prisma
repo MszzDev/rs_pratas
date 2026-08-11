@@ -193,7 +193,11 @@ model User {
   companyId String
   company   Company @relation(fields: [companyId], references: [id])
 
-  employeeCode String // matrícula
+  /// Matrícula: a ÚNICA identidade de login. O e-mail abaixo nunca autentica.
+  employeeCode String
+  /// Canal de contato — envio de credenciais e documentos. Não serve para login:
+  /// separar identidade de canal evita que uma caixa de e-mail comprometida
+  /// vire acesso ao caixa da loja.
   email        String?
   name         String
   role         UserRole
@@ -239,8 +243,10 @@ model User {
   storeSettingsUpdated  StoreSetting[]
   deviceSettingsUpdated DeviceSetting[]
 
+  documents         EmployeeDocument[] @relation("EmployeeDocumentOwner")
+  documentsReviewed EmployeeDocument[] @relation("EmployeeDocumentReviewer")
+
   @@unique([companyId, employeeCode])
-  @@unique([companyId, email])
   @@index([companyId, role])
   @@map("users")
 }
@@ -609,6 +615,87 @@ model TimeClockEntry {
   @@index([storeId, timestamp])
   @@index([companyId, timestamp])
   @@map("time_clock_entries")
+}
+
+// =====================================================================
+// DOCUMENTOS DO FUNCIONÁRIO (atestado, comprovante de horas, etc.)
+// =====================================================================
+
+enum EmployeeDocumentType {
+  MEDICAL_CERTIFICATE // atestado médico
+  HOURS_PROOF // comprovante de horas
+  ABSENCE_JUSTIFICATION // justificativa de falta
+  OTHER
+}
+
+enum EmployeeDocumentStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum DocumentAnalysisVerdict {
+  /// Nada chamou atenção — ainda assim precisa de decisão humana.
+  LOOKS_ROUTINE
+  /// Algo merece conferência: data divergente, ilegível, duplicado.
+  NEEDS_ATTENTION
+  /// A análise não pôde ser feita (arquivo ilegível, provedor fora do ar).
+  INCONCLUSIVE
+}
+
+/// Documento enviado pelo funcionário e conferido pelo dono ou gerente.
+///
+/// A análise automática é ADVISORY: ela extrai dados e levanta pontos de
+/// atenção, nunca aprova nem reprova sozinha. Detectar falsificação de
+/// atestado exige verificar com a fonte emissora, o que nenhum modelo faz —
+/// e uma recusa automática indevida tem consequência trabalhista real.
+model EmployeeDocument {
+  id        String @id @default(uuid())
+  companyId String
+  storeId   String?
+
+  userId String
+  user   User   @relation("EmployeeDocumentOwner", fields: [userId], references: [id])
+
+  type        EmployeeDocumentType
+  title       String
+  description String?
+
+  /// Período coberto pelo documento (ex.: dias de afastamento do atestado).
+  referenceStart DateTime?
+  referenceEnd   DateTime?
+
+  fileName     String
+  fileMimeType String
+  fileSizeBytes Int
+  /// Caminho relativo no armazenamento — nunca uma URL pública.
+  fileStorageKey String
+  /// SHA-256 do conteúdo: identifica reenvio do mesmo arquivo.
+  fileChecksum String
+
+  status EmployeeDocumentStatus @default(PENDING_REVIEW)
+
+  reviewedAt     DateTime?
+  reviewedById   String?
+  reviewedBy     User?     @relation("EmployeeDocumentReviewer", fields: [reviewedById], references: [id])
+  reviewComment  String?
+
+  /// Parecer automático — sugestão, não decisão.
+  analysisVerdict   DocumentAnalysisVerdict?
+  analysisSummary   String?
+  /// Pontos de atenção levantados pela análise, um por item.
+  analysisFindings  String[]
+  /// Dados extraídos (datas, CRM, emitente) para o revisor não redigitar.
+  analysisExtracted Json?
+  analyzedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([userId, createdAt])
+  @@index([fileChecksum])
+  @@map("employee_documents")
 }
 
 // =====================================================================

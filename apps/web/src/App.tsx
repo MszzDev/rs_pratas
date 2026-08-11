@@ -9,6 +9,8 @@ import { PinLoginPage } from "./features/auth/PinLoginPage";
 import { TwoFactorSetupPage } from "./features/auth/TwoFactorSetupPage";
 import { TimeClockPage } from "./features/timeclock/TimeClockPage";
 import { UsersPage } from "./features/users/UsersPage";
+import { StoresPage } from "./features/stores/StoresPage";
+import { DevicesPage } from "./features/devices/DevicesPage";
 
 /**
  * Guarda de rota — conveniência de navegação, NUNCA controle de acesso.
@@ -64,6 +66,22 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <UsersPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/lojas"
+        element={
+          <RequireAuth>
+            <StoresPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/tablets"
+        element={
+          <RequireAuth>
+            <DevicesPage />
           </RequireAuth>
         }
       />

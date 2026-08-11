@@ -29,7 +29,6 @@ export interface IssuedSession {
   user: {
     id: string;
     name: string;
-    email: string | null;
     employeeCode: string;
     role: string;
     companyId: string;
@@ -145,7 +144,6 @@ export async function issueSessionForUser(params: {
     user: {
       id: user.id,
       name: user.name,
-      email: user.email,
       employeeCode: user.employeeCode,
       role: user.role,
       companyId: user.companyId,
@@ -203,7 +201,7 @@ export async function loginWithPassword(params: {
   const user = await prisma.user.findFirst({
     where: {
       deletedAt: null,
-      OR: [{ email: input.identifier }, { employeeCode: input.identifier }],
+      employeeCode: input.identifier,
     },
   });
 
@@ -217,7 +215,7 @@ export async function loginWithPassword(params: {
       reason: "identificador não encontrado",
       metadata: { identifier: input.identifier },
     });
-    throw unauthorized("INVALID_CREDENTIALS", "E-mail/matrícula ou senha incorretos.");
+    throw unauthorized("INVALID_CREDENTIALS", "Matrícula ou senha incorretos.");
   }
 
   if (user.passwordLockedUntil && user.passwordLockedUntil > new Date()) {
@@ -247,7 +245,7 @@ export async function loginWithPassword(params: {
       userRoleSnapshot: user.role,
       reason: "senha incorreta",
     });
-    throw unauthorized("INVALID_CREDENTIALS", "E-mail/matrícula ou senha incorretos.");
+    throw unauthorized("INVALID_CREDENTIALS", "Matrícula ou senha incorretos.");
   }
 
   if (user.status === "BLOCKED" || user.status === "INACTIVE") {
@@ -485,7 +483,6 @@ export async function refreshSession(params: {
     user: {
       id: session.user.id,
       name: session.user.name,
-      email: session.user.email,
       employeeCode: session.user.employeeCode,
       role: session.user.role,
       companyId: session.user.companyId,

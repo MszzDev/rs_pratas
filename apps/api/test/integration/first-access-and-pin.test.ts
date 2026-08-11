@@ -36,7 +36,6 @@ async function createPendingUser(companyId: string, employeeCode = "0100") {
     data: {
       companyId,
       employeeCode,
-      email: `${employeeCode}@teste.local`,
       name: "Funcionário Novo",
       role: "VENDEDOR",
       status: "PENDING_FIRST_ACCESS",
@@ -67,7 +66,7 @@ async function startOnboarding(identifier: string) {
 /** Percorre o fluxo inteiro e devolve o usuário já ativo. */
 async function completeOnboarding(companyId: string, employeeCode = "0100") {
   const user = await createPendingUser(companyId, employeeCode);
-  const { onboardingToken } = (await startOnboarding(user.email!)).json();
+  const { onboardingToken } = (await startOnboarding(user.employeeCode)).json();
 
   await post("/first-access/set-password", {
     onboardingToken,
@@ -89,7 +88,7 @@ describe("primeiro acesso", () => {
     const company = await createTestCompany();
     const user = await createPendingUser(company.id);
 
-    const start = await startOnboarding(user.email!);
+    const start = await startOnboarding(user.employeeCode);
     expect(start.statusCode).toBe(200);
     const { onboardingToken } = start.json();
     expect(onboardingToken).toBeTypeOf("string");
@@ -123,7 +122,7 @@ describe("primeiro acesso", () => {
     const user = await createPendingUser(company.id);
 
     const response = await post("/first-access/start", {
-      identifier: user.email,
+      identifier: user.employeeCode,
       tempPassword: "chute-errado",
     });
     expect(response.statusCode).toBe(401);
@@ -132,7 +131,7 @@ describe("primeiro acesso", () => {
   it("impede reutilizar a senha temporária como senha definitiva", async () => {
     const company = await createTestCompany();
     const user = await createPendingUser(company.id);
-    const { onboardingToken } = (await startOnboarding(user.email!)).json();
+    const { onboardingToken } = (await startOnboarding(user.employeeCode)).json();
 
     const response = await post("/first-access/set-password", {
       onboardingToken,
@@ -147,7 +146,7 @@ describe("primeiro acesso", () => {
   it("exige confirmação coerente de senha e de PIN", async () => {
     const company = await createTestCompany();
     const user = await createPendingUser(company.id);
-    const { onboardingToken } = (await startOnboarding(user.email!)).json();
+    const { onboardingToken } = (await startOnboarding(user.employeeCode)).json();
 
     const senhaDivergente = await post("/first-access/set-password", {
       onboardingToken,
@@ -173,7 +172,7 @@ describe("primeiro acesso", () => {
   it("rejeita PIN previsível", async () => {
     const company = await createTestCompany();
     const user = await createPendingUser(company.id);
-    const { onboardingToken } = (await startOnboarding(user.email!)).json();
+    const { onboardingToken } = (await startOnboarding(user.employeeCode)).json();
 
     await post("/first-access/set-password", {
       onboardingToken,
@@ -195,7 +194,7 @@ describe("primeiro acesso", () => {
   it("não ativa a conta se o PIN ainda não foi criado", async () => {
     const company = await createTestCompany();
     const user = await createPendingUser(company.id);
-    const { onboardingToken } = (await startOnboarding(user.email!)).json();
+    const { onboardingToken } = (await startOnboarding(user.employeeCode)).json();
 
     await post("/first-access/set-password", {
       onboardingToken,
@@ -214,7 +213,7 @@ describe("primeiro acesso", () => {
   it("exige a senha antes do PIN", async () => {
     const company = await createTestCompany();
     const user = await createPendingUser(company.id);
-    const { onboardingToken } = (await startOnboarding(user.email!)).json();
+    const { onboardingToken } = (await startOnboarding(user.employeeCode)).json();
 
     const response = await post("/first-access/set-pin", {
       onboardingToken,
@@ -228,7 +227,7 @@ describe("primeiro acesso", () => {
   it("token de onboarding não abre rotas normais da aplicação", async () => {
     const company = await createTestCompany();
     const user = await createPendingUser(company.id);
-    const { onboardingToken } = (await startOnboarding(user.email!)).json();
+    const { onboardingToken } = (await startOnboarding(user.employeeCode)).json();
 
     const response = await app.inject({
       method: "GET",
@@ -244,13 +243,13 @@ describe("primeiro acesso", () => {
     const user = await completeOnboarding(company.id);
 
     const response = await post("/login/password", {
-      identifier: user.email,
+      identifier: user.employeeCode,
       password: NEW_PASSWORD,
     });
     expect(response.statusCode).toBe(200);
 
     const antiga = await post("/login/password", {
-      identifier: user.email,
+      identifier: user.employeeCode,
       password: TEMP_PASSWORD,
     });
     expect(antiga.statusCode).toBe(401);
@@ -262,7 +261,7 @@ describe("primeiro acesso", () => {
 
     // Credencial correta (a senha própria), mas na tela errada.
     const response = await post("/first-access/start", {
-      identifier: user.email,
+      identifier: user.employeeCode,
       tempPassword: NEW_PASSWORD,
     });
     expect(response.statusCode).toBe(400);
@@ -274,7 +273,7 @@ describe("primeiro acesso", () => {
     const user = await completeOnboarding(company.id);
 
     const response = await post("/first-access/start", {
-      identifier: user.email,
+      identifier: user.employeeCode,
       tempPassword: TEMP_PASSWORD,
     });
     expect(response.statusCode).toBe(401);
@@ -288,7 +287,7 @@ describe("primeiro acesso", () => {
     // Com senha errada, a conta ativa e a inexistente respondem igual — o
     // atacante não aprende nada sobre quem existe na empresa.
     const contaAtiva = await post("/first-access/start", {
-      identifier: ativo.email,
+      identifier: ativo.employeeCode,
       tempPassword: "chute-qualquer-errado",
     });
     const contaInexistente = await post("/first-access/start", {
@@ -314,7 +313,7 @@ describe("login por PIN no tablet", () => {
     });
 
     const token = (
-      await post("/login/password", { identifier: owner.email, password })
+      await post("/login/password", { identifier: owner.employeeCode, password })
     ).json().accessToken;
 
     const station = await app
@@ -419,7 +418,7 @@ describe("login por PIN no tablet", () => {
     }
 
     const porSenha = await post("/login/password", {
-      identifier: seller.email,
+      identifier: seller.employeeCode,
       password: NEW_PASSWORD,
     });
     expect(porSenha.statusCode).toBe(200);
