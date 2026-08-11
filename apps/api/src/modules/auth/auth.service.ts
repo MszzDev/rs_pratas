@@ -4,7 +4,7 @@ import type { LoginPasswordInput } from "@rs-pratas/shared";
 import { prisma } from "../../db/prisma.js";
 import { env } from "../../config/env.js";
 import { audit } from "../../core/audit.service.js";
-import { badRequest, forbidden, tooManyRequests, unauthorized } from "../../core/errors.js";
+import { badRequest, forbidden, notFound, tooManyRequests, unauthorized } from "../../core/errors.js";
 import { burnVerificationTime, verifySecret } from "../../core/security/password.service.js";
 import {
   generateRefreshToken,
@@ -427,6 +427,56 @@ export async function logout(params: {
     deviceId: stored.session.deviceId,
     sessionId: stored.session.id,
     userRoleSnapshot: stored.session.user.role,
+  });
+}
+
+export async function listActiveSessions(userId: string) {
+  return prisma.deviceSession.findMany({
+    where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+    include: { device: { select: { name: true } } },
+    orderBy: { lastUsedAt: "desc" },
+  });
+}
+
+/**
+ * Encerra uma sessão específica. Um usuário só encerra as próprias sessões;
+ * derrubar a sessão de outra pessoa é ação administrativa, com permissão
+ * própria (SESSION_REVOKE), e responde 404 quando a sessão não é acessível —
+ * confirmar que ela existe já seria informação demais.
+ */
+export async function revokeSessionById(params: {
+  sessionId: string;
+  request: FastifyRequest;
+}): Promise<void> {
+  const { sessionId, request } = params;
+
+  const session = await prisma.deviceSession.findFirst({
+    where: { id: sessionId, revokedAt: null },
+    include: { user: { select: { role: true, companyId: true } } },
+  });
+
+  const isOwnSession = session?.userId === request.user.sub;
+  const isSameCompany = session?.companyId === request.user.companyId;
+  const canRevokeOthers = request.user.role === "DONO";
+
+  if (!session || !isSameCompany || (!isOwnSession && !canRevokeOthers)) {
+    throw notFound("SESSION_NOT_FOUND", "Sessão não encontrada.");
+  }
+
+  await revokeSession(session, isOwnSession ? "encerrada pelo usuário" : "encerrada pelo dono");
+
+  await audit(request, {
+    action: "SESSION_REVOKE",
+    result: "SUCCESS",
+    userId: request.user.sub,
+    companyId: session.companyId,
+    storeId: session.storeId,
+    deviceId: session.deviceId,
+    sessionId: session.id,
+    userRoleSnapshot: request.user.role,
+    entityType: "DeviceSession",
+    entityId: session.id,
+    metadata: { targetUserId: session.userId },
   });
 }
 

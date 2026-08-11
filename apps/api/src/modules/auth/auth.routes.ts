@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import {
   firstAccessCompleteSchema,
@@ -11,10 +12,12 @@ import {
 import { env } from "../../config/env.js";
 import { unauthorized } from "../../core/errors.js";
 import {
+  listActiveSessions,
   loginWithPassword,
   logout,
   logoutAll,
   refreshSession,
+  revokeSessionById,
   type AccessTokenPayload,
 } from "./auth.service.js";
 import { loginWithPin } from "./pin-login.service.js";
@@ -122,6 +125,28 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/logout-all", { preHandler: app.requireAuth }, async (request, reply) => {
     const revoked = await logoutAll({ userId: request.user.sub, request });
     return reply.status(200).send({ revokedSessions: revoked });
+  });
+
+  app.get("/sessions", { preHandler: app.requireAuth }, async (request) => {
+    const sessions = await listActiveSessions(request.user.sub);
+
+    return sessions.map((session) => ({
+      id: session.id,
+      deviceId: session.deviceId,
+      deviceName: session.device?.name ?? null,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      createdAt: session.createdAt,
+      lastUsedAt: session.lastUsedAt,
+      expiresAt: session.expiresAt,
+      current: session.id === request.user.sessionId,
+    }));
+  });
+
+  app.delete("/sessions/:id", { preHandler: app.requireAuth }, async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    await revokeSessionById({ sessionId: id, request });
+    return reply.status(204).send();
   });
 
   app.get("/me", { preHandler: app.requireAuth }, async (request) => {

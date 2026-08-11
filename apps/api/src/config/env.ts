@@ -31,6 +31,11 @@ const envSchema = z.object({
   TOTP_ISSUER: z.string().default("RS Pratas"),
   TOTP_ENCRYPTION_KEY: z.string().min(32, "TOTP_ENCRYPTION_KEY deve ter ao menos 32 caracteres"),
 
+  /** "log" grava o e-mail no log em vez de enviar — proibido em produção. */
+  EMAIL_PROVIDER: z.enum(["log", "smtp"]).default("log"),
+  EMAIL_FROM: z.string().default("RS Pratas <nao-responda@rspratas.com.br>"),
+  APP_LOGIN_URL: z.string().default("http://localhost:5173/login"),
+
   CORS_ALLOWED_ORIGINS: z
     .string()
     .default("")
