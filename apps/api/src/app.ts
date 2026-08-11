@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
+import underPressure from "@fastify/under-pressure";
 import { env } from "./config/env.js";
 import { prisma } from "./db/prisma.js";
 import { redis } from "./db/redis.js";
@@ -61,6 +62,21 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rateLimit, {
     max: env.RATE_LIMIT_MAX,
     timeWindow: env.RATE_LIMIT_WINDOW,
+  });
+
+  /**
+   * Sob sobrecarga, recusar rápido é melhor que aceitar e travar.
+   *
+   * O tablet do PDV tem um usuário esperando na frente do cliente: um 503
+   * imediato deixa a tela dizer "tente de novo", enquanto uma requisição
+   * pendurada por 30s trava a venda sem explicar nada. Os limites são
+   * generosos de propósito — isto é rede de proteção, não controle de vazão.
+   */
+  await app.register(underPressure, {
+    maxEventLoopDelay: 2_000,
+    maxHeapUsedBytes: 1_500_000_000,
+    retryAfter: 5,
+    message: "Servidor sobrecarregado. Tente novamente em alguns segundos.",
   });
 
   registerErrorHandler(app);
