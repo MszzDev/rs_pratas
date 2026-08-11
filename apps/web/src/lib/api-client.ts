@@ -40,6 +40,25 @@ export async function clearSession(): Promise<void> {
   await clearRefreshToken();
 }
 
+/**
+ * Obtém a confirmação de identidade exigida pelas ações sensíveis.
+ *
+ * O token vale para UMA ação e expira em minutos, então é pedido na hora de
+ * agir — nunca guardado para usar depois.
+ */
+export async function requestStepUpToken(params: {
+  purpose: string;
+  password?: string;
+  totpCode?: string;
+}): Promise<string> {
+  const result = await apiFetch<{ stepUpToken: string }>("/api/v1/auth/step-up", {
+    method: "POST",
+    body: params,
+  });
+
+  return result.stepUpToken;
+}
+
 interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
   /** Token de reautenticação para ações sensíveis. */

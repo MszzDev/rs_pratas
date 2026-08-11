@@ -7,12 +7,19 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "../auth/auth-context";
+import { OffDeviceAccessDialog } from "./OffDeviceAccessDialog";
 
 interface Store {
   id: string;
   code: string;
   name: string;
 }
+
+/** O que a listagem devolve, além do resumo compartilhado. */
+type UserRow = UserSummary & {
+  offDeviceAllowed: boolean;
+  offDeviceExpiresAt: string | null;
+};
 
 const ROLE_LABELS: Record<UserRole, string> = {
   VENDEDOR: "Vendedor",
@@ -41,9 +48,11 @@ export function UsersPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [offDeviceTarget, setOffDeviceTarget] = useState<UserRow | null>(null);
+
   const users = useQuery({
     queryKey: ["users"],
-    queryFn: () => apiFetch<UserSummary[]>("/api/v1/users"),
+    queryFn: () => apiFetch<UserRow[]>("/api/v1/users"),
   });
 
   const stores = useQuery({
@@ -198,13 +207,14 @@ export function UsersPage() {
                 <th className="px-4 py-3 font-semibold">Matrícula</th>
                 <th className="px-4 py-3 font-semibold">Perfil</th>
                 <th className="px-4 py-3 font-semibold">Situação</th>
+                <th className="px-4 py-3 font-semibold">Onde pode entrar</th>
                 {isOwner && <th className="px-4 py-3" />}
               </tr>
             </thead>
             <tbody>
               {users.isLoading && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
+                  <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
                     Carregando...
                   </td>
                 </tr>
@@ -231,17 +241,45 @@ export function UsersPage() {
                       {STATUS_LABELS[entry.status] ?? entry.status}
                     </span>
                   </td>
+                  <td className="px-4 py-3">
+                    {entry.role === "DONO" || entry.role === "DESENVOLVEDOR" ? (
+                      <span className="text-text-muted">Qualquer aparelho</span>
+                    ) : entry.offDeviceAllowed ? (
+                      <span className="text-info">
+                        Liberado
+                        {entry.offDeviceExpiresAt && (
+                          <span className="block text-text-muted">
+                            até {new Date(entry.offDeviceExpiresAt).toLocaleDateString("pt-BR")}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-text-secondary">Somente tablet</span>
+                    )}
+                  </td>
+
                   {isOwner && (
-                    <td className="px-4 py-3 text-right">
-                      {entry.status === "PENDING_FIRST_ACCESS" && (
-                        <Button
-                          variant="outline"
-                          onClick={() => resend.mutate(entry.id)}
-                          disabled={resend.isPending}
-                        >
-                          Reenviar credenciais
-                        </Button>
-                      )}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {entry.status === "PENDING_FIRST_ACCESS" && (
+                          <Button
+                            variant="outline"
+                            onClick={() => resend.mutate(entry.id)}
+                            disabled={resend.isPending}
+                          >
+                            Reenviar credenciais
+                          </Button>
+                        )}
+
+                        {entry.role !== "DONO" && entry.role !== "DESENVOLVEDOR" && (
+                          <Button
+                            variant={entry.offDeviceAllowed ? "ghost" : "outline"}
+                            onClick={() => setOffDeviceTarget(entry)}
+                          >
+                            {entry.offDeviceAllowed ? "Cortar acesso externo" : "Liberar fora da loja"}
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -250,6 +288,14 @@ export function UsersPage() {
           </table>
         </div>
       </div>
+
+      {offDeviceTarget && (
+        <OffDeviceAccessDialog
+          user={offDeviceTarget}
+          currentlyAllowed={offDeviceTarget.offDeviceAllowed}
+          onClose={() => setOffDeviceTarget(null)}
+        />
+      )}
     </main>
   );
 }

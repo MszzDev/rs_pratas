@@ -213,6 +213,21 @@ export async function listUsers(request: FastifyRequest) {
     orderBy: { name: "asc" },
   });
 
+  // Quem está liberado a entrar fora dos tablets — a tela precisa mostrar isso
+  // ao lado de cada matrícula para o dono saber o que já concedeu.
+  const offDeviceGrants = await prisma.userPermission.findMany({
+    where: {
+      userId: { in: users.map((user) => user.id) },
+      permission: { code: "AUTH_LOGIN_OFF_DEVICE" },
+      effect: "ALLOW",
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    select: { userId: true, expiresAt: true },
+  });
+
+  const grantByUser = new Map(offDeviceGrants.map((grant) => [grant.userId, grant.expiresAt]));
+
   return users.map((user) => ({
     id: user.id,
     name: user.name,
@@ -223,6 +238,10 @@ export async function listUsers(request: FastifyRequest) {
     storeIds: user.userStores.map((link) => link.storeId),
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
+    /** Perfis com alcance global não dependem de liberação nominal. */
+    offDeviceAllowed:
+      user.role === "DONO" || user.role === "DESENVOLVEDOR" || grantByUser.has(user.id),
+    offDeviceExpiresAt: grantByUser.get(user.id) ?? null,
   }));
 }
 
