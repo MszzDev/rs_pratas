@@ -12,6 +12,13 @@ export default tseslint.config(
       "**/coverage/**",
       "**/android/**",
       "**/prisma/migrations/**",
+      /**
+       * O vitest cria um arquivo temporário ao lado do próprio config ao
+       * carregá-lo, e o apaga logo depois. Como o turbo roda lint e test em
+       * paralelo, o eslint às vezes o encontra no instante em que ele some e
+       * quebra com ENOENT — falha intermitente que não diz nada sobre o código.
+       */
+      "**/*.timestamp-*.mjs",
     ],
   },
 
