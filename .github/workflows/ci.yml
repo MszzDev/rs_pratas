@@ -8,12 +8,38 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: rs_pratas_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -21,4 +47,29 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run lint test build
+
+      # As duas roles espelham produção: app_rw é a role de runtime, sem
+      # UPDATE/DELETE nas tabelas append-only; app_owner só roda migração.
+      # Sem essa separação, o teste de imutabilidade passaria por engano.
+      - name: Preparar roles do banco
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -p 5434 -U postgres -d rs_pratas_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE app_owner LOGIN PASSWORD 'dev_owner_pw' CREATEDB;
+          GRANT ALL PRIVILEGES ON DATABASE rs_pratas_test TO app_owner;
+          GRANT ALL PRIVILEGES ON SCHEMA public TO app_owner;
+
+          CREATE ROLE app_rw LOGIN PASSWORD 'dev_rw_pw';
+          GRANT CONNECT ON DATABASE rs_pratas_test TO app_rw;
+          GRANT USAGE, CREATE ON SCHEMA public TO app_rw;
+          ALTER DEFAULT PRIVILEGES FOR ROLE app_owner IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_rw;
+          ALTER DEFAULT PRIVILEGES FOR ROLE app_owner IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO app_rw;
+          SQL
+
+      - name: Preparar ambiente de teste
+        run: cp apps/api/.env.test.example apps/api/.env.test
+
+      - run: pnpm turbo run lint typecheck build test

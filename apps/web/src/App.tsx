@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import type { ReactNode } from "react";
+import { installBackgroundPrivacy, installKioskGuards } from "./lib/kiosk";
 import { AuthProvider, useAuth } from "./features/auth/auth-context";
 import { LoginPage } from "./features/auth/LoginPage";
 import { FirstAccessPage } from "./features/auth/FirstAccessPage";
@@ -57,9 +59,35 @@ function AppRoutes() {
 }
 
 export function App() {
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    const removeKioskGuards = installKioskGuards();
+    const removePrivacy = installBackgroundPrivacy(setHidden);
+
+    return () => {
+      removeKioskGuards();
+      removePrivacy();
+    };
+  }, []);
+
   return (
     <AuthProvider>
       <AppRoutes />
+
+      {/*
+        Cortina opaca enquanto o app está em segundo plano: o Android fotografa
+        a tela para a lista de recentes, e sem isso dados de venda ou de caixa
+        ficariam visíveis na miniatura para quem pegasse o tablet.
+      */}
+      {hidden && (
+        <div
+          aria-hidden
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background"
+        >
+          <span className="text-2xl font-semibold text-rose-primary">RS Pratas</span>
+        </div>
+      )}
     </AuthProvider>
   );
 }

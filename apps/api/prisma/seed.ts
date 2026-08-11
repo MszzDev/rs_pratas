@@ -83,7 +83,6 @@ async function main() {
       },
     });
 
-    // eslint-disable-next-line no-console
     console.log("\n=== USUARIO DONO BOOTSTRAP CRIADO ===");
     console.log(`employeeCode: ${owner.employeeCode}`);
     console.log(`email:        ${owner.email}`);

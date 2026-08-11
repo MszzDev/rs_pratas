@@ -57,10 +57,8 @@ function loadEnv(): Env {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
-    // eslint-disable-next-line no-console
     console.error("Configuração de ambiente inválida:");
     for (const issue of result.error.issues) {
-      // eslint-disable-next-line no-console
       console.error(`  - ${issue.path.join(".")}: ${issue.message}`);
     }
     process.exit(1);
