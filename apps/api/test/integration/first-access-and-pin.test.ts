@@ -8,6 +8,7 @@ import {
   createTestStore,
   createTestUser,
   disconnectAll,
+  grantOffDeviceAccess,
   resetDatabase,
 } from "./helpers.js";
 
@@ -31,7 +32,7 @@ const NEW_PASSWORD = "minha-nova-senha-forte";
 const GOOD_PIN = "4821";
 
 async function createPendingUser(companyId: string, employeeCode = "0100") {
-  return prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       companyId,
       employeeCode,
@@ -44,6 +45,12 @@ async function createPendingUser(companyId: string, employeeCode = "0100") {
       mustCreatePin: true,
     },
   });
+
+  // Este arquivo testa o primeiro acesso e o PIN, não a regra de "só no
+  // tablet" — que tem cobertura própria em device-required-login.test.ts.
+  await grantOffDeviceAccess(user.id);
+
+  return user;
 }
 
 const post = (url: string, payload: unknown) =>

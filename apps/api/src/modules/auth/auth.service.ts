@@ -6,6 +6,7 @@ import { env } from "../../config/env.js";
 import { audit } from "../../core/audit.service.js";
 import { badRequest, forbidden, notFound, tooManyRequests, unauthorized } from "../../core/errors.js";
 import { burnVerificationTime, verifySecret } from "../../core/security/password.service.js";
+import { getEffectivePermissions } from "../../core/rbac/permissions.engine.js";
 import {
   generateRefreshToken,
   hashRefreshToken,
@@ -135,6 +136,27 @@ export async function issueSessionForUser(params: {
       mustCreatePin: user.mustCreatePin,
     },
   };
+}
+
+/**
+ * Quem pode entrar fora de um tablet pareado.
+ *
+ * O DONO sempre — ele precisa alcançar a empresa de qualquer lugar, e é a conta
+ * mais protegida do sistema (2FA obrigatório).
+ *
+ * O DESENVOLVEDOR também, porque é um perfil de suporte remoto por natureza:
+ * exigir presença física num tablet o tornaria inútil. O risco é baixo — ele
+ * não escreve nada e não enxerga valor em dinheiro.
+ *
+ * Todos os demais precisam da liberação nominal AUTH_LOGIN_OFF_DEVICE.
+ */
+async function canLoginWithoutDevice(user: User): Promise<boolean> {
+  if (user.role === "DONO" || user.role === "DESENVOLVEDOR") {
+    return true;
+  }
+
+  const permissions = await getEffectivePermissions(user.id);
+  return permissions.has("AUTH_LOGIN_OFF_DEVICE");
 }
 
 async function registerFailedPasswordAttempt(user: User): Promise<void> {
@@ -279,6 +301,24 @@ export async function loginWithPassword(params: {
       reason: "usuário sem acesso à loja deste dispositivo",
     });
     throw forbidden("STORE_ACCESS_DENIED", "Você não tem acesso a esta loja.");
+  }
+
+  // Sem tablet, o acesso é a exceção e não a regra: funcionário opera pelo
+  // aparelho da loja. Fora dele, só entra quem o dono autorizou nominalmente —
+  // ou o próprio dono, que precisa alcançar o sistema de qualquer lugar.
+  if (!device && !(await canLoginWithoutDevice(user))) {
+    await audit(request, {
+      action: "LOGIN_FAILED",
+      result: "DENIED",
+      userId: user.id,
+      companyId: user.companyId,
+      userRoleSnapshot: user.role,
+      reason: "acesso fora do tablet da loja não autorizado para esta matrícula",
+    });
+    throw forbidden(
+      "DEVICE_REQUIRED",
+      "Seu acesso é permitido apenas nos tablets da loja. Peça ao dono para liberar sua matrícula em outros aparelhos.",
+    );
   }
 
   const issued = await issueSessionForUser({

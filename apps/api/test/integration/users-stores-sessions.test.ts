@@ -10,6 +10,7 @@ import {
   createTestStore,
   createTestUser,
   disconnectAll,
+  grantOffDeviceAccess,
   resetDatabase,
 } from "./helpers.js";
 
@@ -196,6 +197,11 @@ describe("criação de usuário pelo dono", () => {
       },
     });
     const employeeCode = created.json().user.employeeCode as string;
+
+    // Este teste é sobre as credenciais entregues por e-mail, não sobre a regra
+    // de "só no tablet" — liberamos o acesso remoto para poder validar o login
+    // final sem montar loja, estação, caixa e tablet.
+    await grantOffDeviceAccess(created.json().user.id as string);
 
     const temporaryPassword = /Senha temporária: (\S+)/.exec(sentEmails[0]!.text)![1]!;
 

@@ -99,6 +99,15 @@ export async function createTestUser(params: {
    * configuração de 2FA. Passe `false` para exercitar justamente esse bloqueio.
    */
   withTwoFactor?: boolean;
+  /**
+   * Em produção o padrão é o oposto: funcionário só entra pelo tablet da loja.
+   * Aqui a liberação vem ligada para que os testes de OUTROS assuntos possam
+   * abrir sessão sem montar loja, estação, caixa e tablet a cada caso.
+   *
+   * A regra de verdade tem cobertura dedicada em device-required-login.test.ts
+   * — passe `false` para exercitá-la.
+   */
+  allowOffDevice?: boolean;
 }) {
   const password = params.password ?? "senha-de-teste-12345";
   const suffix = crypto.randomUUID().slice(0, 8);
@@ -131,5 +140,30 @@ export async function createTestUser(params: {
     });
   }
 
+  const shouldAllowOffDevice = params.allowOffDevice ?? true;
+
+  if (shouldAllowOffDevice && role !== "DONO" && role !== "DESENVOLVEDOR") {
+    await grantOffDeviceAccess(user.id);
+  }
+
   return { user, password };
+}
+
+/** Libera a matrícula a entrar fora dos tablets, como o dono faria na tela. */
+export async function grantOffDeviceAccess(userId: string): Promise<void> {
+  const permission = await prisma.permission.findUniqueOrThrow({
+    where: { code: "AUTH_LOGIN_OFF_DEVICE" },
+  });
+
+  await prisma.userPermission.upsert({
+    where: { userId_permissionId: { userId, permissionId: permission.id } },
+    update: { effect: "ALLOW", revokedAt: null },
+    create: {
+      userId,
+      permissionId: permission.id,
+      effect: "ALLOW",
+      grantedById: userId,
+      reason: "fixture de teste",
+    },
+  });
 }

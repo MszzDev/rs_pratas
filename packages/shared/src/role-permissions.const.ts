@@ -39,6 +39,15 @@ const GERENTE_PERMISSIONS: PermissionCode[] = [
 const DONO_PERMISSIONS: PermissionCode[] = [...PERMISSION_CODES];
 
 /**
+ * AUTH_LOGIN_OFF_DEVICE fica de fora de VENDEDOR e GERENTE de propósito.
+ *
+ * Funcionário entra pelo tablet da loja, ponto. Entrar de casa é exceção, e
+ * exceção se concede nominalmente — o dono libera a matrícula específica, com
+ * prazo se quiser, e o ato fica auditado. Colocar no perfil transformaria a
+ * exceção em regra para todo mundo daquele cargo.
+ */
+
+/**
  * DESENVOLVEDOR recebe automaticamente todo código de permissão "de
  * visualização" (contém `VIEW` no nome) — inclusive os que expõem campos
  * monetários, como PRODUCT_VIEW_COST: o dado chega, mas o hook de

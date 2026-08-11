@@ -5,7 +5,10 @@ import {
   blockUserSchema,
   changeUserRoleSchema,
   createUserSchema,
+  grantPermissionSchema,
+  revokePermissionSchema,
   updateUserSchema,
+  type PermissionCode,
 } from "@rs-pratas/shared";
 import { requireRole } from "../../core/rbac/require-role.hook.js";
 import { requireStepUp } from "../auth/step-up.service.js";
@@ -18,6 +21,11 @@ import {
   setUserBlocked,
   updateUser,
 } from "./users.service.js";
+import {
+  grantPermission,
+  listUserPermissions,
+  revokePermission,
+} from "./permissions.service.js";
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 
@@ -58,6 +66,50 @@ export async function userRoutes(app: FastifyInstance) {
       const { id } = idParamSchema.parse(request.params);
       const input = changeUserRoleSchema.parse(request.body);
       return changeUserRole({ userId: id, input, request });
+    },
+  );
+
+  app.get("/users/:id/permissions", { preHandler: ownerOnly }, async (request) => {
+    const { id } = idParamSchema.parse(request.params);
+    return listUserPermissions({ userId: id, request });
+  });
+
+  /**
+   * Conceder ou revogar permissão exige reautenticação: é por aqui que se
+   * libera um funcionário a entrar fora do tablet da loja, e a especificação
+   * trata alteração de permissão como ação sensível.
+   */
+  app.post(
+    "/users/:id/permissions",
+    { preHandler: [...ownerOnly, requireStepUp(StepUpPurpose.CHANGE_PERMISSIONS)] },
+    async (request, reply) => {
+      const { id } = idParamSchema.parse(request.params);
+      const input = grantPermissionSchema.parse(request.body);
+
+      const granted = await grantPermission({
+        userId: id,
+        code: input.code as PermissionCode,
+        effect: input.effect,
+        reason: input.reason,
+        request,
+        ...(input.expiresAt ? { expiresAt: new Date(input.expiresAt) } : {}),
+      });
+
+      return reply.status(201).send({ id: granted.id, code: input.code, effect: granted.effect });
+    },
+  );
+
+  app.delete(
+    "/users/:id/permissions/:code",
+    { preHandler: [...ownerOnly, requireStepUp(StepUpPurpose.CHANGE_PERMISSIONS)] },
+    async (request, reply) => {
+      const { id, code } = z
+        .object({ id: z.string().uuid(), code: z.string().min(1).max(60) })
+        .parse(request.params);
+      const { reason } = revokePermissionSchema.parse(request.body);
+
+      await revokePermission({ userId: id, code: code as PermissionCode, reason, request });
+      return reply.status(204).send();
     },
   );
 

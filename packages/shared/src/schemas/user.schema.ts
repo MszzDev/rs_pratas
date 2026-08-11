@@ -36,6 +36,18 @@ export const userSummarySchema = z.object({
   createdAt: z.string(),
 });
 
+export const grantPermissionSchema = z.object({
+  code: z.string().min(1).max(60),
+  effect: z.enum(["ALLOW", "DENY"]).default("ALLOW"),
+  reason: z.string().min(3, "Informe o motivo da liberação.").max(500),
+  /** Opcional: liberação temporária, por exemplo durante um afastamento. */
+  expiresAt: z.string().datetime().optional(),
+});
+
+export const revokePermissionSchema = z.object({
+  reason: z.string().min(3, "Informe o motivo da revogação.").max(500),
+});
+
 export const createStoreSchema = z.object({
   code: z.string().min(1).max(20),
   name: z.string().min(2).max(120),

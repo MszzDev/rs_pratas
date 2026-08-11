@@ -109,6 +109,11 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
 
   // SECURITY
   { code: "TWO_FACTOR_MANAGE", category: "SECURITY", description: "Gerenciar 2FA de outro usuário" },
+  {
+    code: "AUTH_LOGIN_OFF_DEVICE",
+    category: "SECURITY",
+    description: "Entrar fora dos tablets da loja (computador ou celular próprio)",
+  },
 
   // AUDIT
   { code: "AUDIT_VIEW_STORE", category: "AUDIT", description: "Visualizar auditoria da loja" },
