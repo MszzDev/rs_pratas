@@ -50,15 +50,18 @@ export async function startFirstAccess(params: {
     throw unauthorized("INVALID_CREDENTIALS", "E-mail/matrícula ou senha temporária incorretos.");
   }
 
-  if (user.status !== "PENDING_FIRST_ACCESS") {
-    await burnVerificationTime();
+  // A senha é conferida ANTES do status. Se a ordem fosse invertida, bastaria
+  // chutar um e-mail para descobrir se ele pertence a um usuário já ativo — o
+  // que desfaria, por esta porta, a proteção anti-enumeração que o login tem.
+  const matches = await verifySecret(user.passwordHash, input.tempPassword);
+
+  if (matches && user.status !== "PENDING_FIRST_ACCESS") {
     throw badRequest(
       "FIRST_ACCESS_ALREADY_DONE",
       "Este usuário já concluiu o primeiro acesso. Use a tela de login normal.",
     );
   }
 
-  const matches = await verifySecret(user.passwordHash, input.tempPassword);
   if (!matches) {
     await audit(request, {
       action: "LOGIN_FAILED",

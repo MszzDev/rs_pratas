@@ -249,7 +249,20 @@ describe("primeiro acesso", () => {
     expect(antiga.statusCode).toBe(401);
   });
 
-  it("recusa reabrir o fluxo para quem já concluiu", async () => {
+  it("orienta quem já concluiu a usar o login normal", async () => {
+    const company = await createTestCompany();
+    const user = await completeOnboarding(company.id);
+
+    // Credencial correta (a senha própria), mas na tela errada.
+    const response = await post("/first-access/start", {
+      identifier: user.email,
+      tempPassword: NEW_PASSWORD,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe("FIRST_ACCESS_ALREADY_DONE");
+  });
+
+  it("a senha temporária deixa de abrir o primeiro acesso depois de concluído", async () => {
     const company = await createTestCompany();
     const user = await completeOnboarding(company.id);
 
@@ -257,8 +270,29 @@ describe("primeiro acesso", () => {
       identifier: user.email,
       tempPassword: TEMP_PASSWORD,
     });
-    expect(response.statusCode).toBe(400);
-    expect(response.json().error.code).toBe("FIRST_ACCESS_ALREADY_DONE");
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("não serve para descobrir se uma conta existe", async () => {
+    const company = await createTestCompany();
+    // Conta real, já ativa.
+    const ativo = await completeOnboarding(company.id, "0300");
+
+    // Com senha errada, a conta ativa e a inexistente respondem igual — o
+    // atacante não aprende nada sobre quem existe na empresa.
+    const contaAtiva = await post("/first-access/start", {
+      identifier: ativo.email,
+      tempPassword: "chute-qualquer-errado",
+    });
+    const contaInexistente = await post("/first-access/start", {
+      identifier: "ninguem@teste.local",
+      tempPassword: "chute-qualquer-errado",
+    });
+
+    expect(contaAtiva.statusCode).toBe(401);
+    expect(contaInexistente.statusCode).toBe(401);
+    expect(contaAtiva.json().error.code).toBe(contaInexistente.json().error.code);
+    expect(contaAtiva.json().error.message).toBe(contaInexistente.json().error.message);
   });
 });
 
