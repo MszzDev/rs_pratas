@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { StepUpPurpose } from "@prisma/client";
+import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
 import { forbidden } from "../../core/errors.js";
@@ -17,24 +18,47 @@ const totpCodeSchema = z.object({
 });
 
 export async function twoFactorRoutes(app: FastifyInstance) {
+  /**
+   * Um código TOTP tem só 6 dígitos — 1 milhão de combinações, e a janela de
+   * validade é de 30 segundos. Sem teto de tentativas, quem já tem a sessão
+   * aberta poderia varrer o espaço inteiro e derrotar o segundo fator antes do
+   * código expirar. O limite por IP fecha essa porta; a chave de anti-replay
+   * (lastUsedStep) cuida do código já usado.
+   */
+  const challengeRateLimit = {
+    rateLimit: { max: env.TWO_FACTOR_RATE_LIMIT_PER_MINUTE, timeWindow: "1 minute" },
+  };
+
   app.post("/2fa/setup", { preHandler: app.requireAuth }, async (request) => {
     return startTwoFactorSetup(request);
   });
 
-  app.post("/2fa/confirm", { preHandler: app.requireAuth }, async (request) => {
-    const { code } = totpCodeSchema.parse(request.body);
-    return confirmTwoFactorSetup({ code, request });
-  });
+  app.post(
+    "/2fa/confirm",
+    { preHandler: app.requireAuth, config: challengeRateLimit },
+    async (request) => {
+      const { code } = totpCodeSchema.parse(request.body);
+      return confirmTwoFactorSetup({ code, request });
+    },
+  );
 
-  app.post("/2fa/verify", { preHandler: app.requireAuth }, async (request) => {
-    const { code } = totpCodeSchema.parse(request.body);
-    return verifyTwoFactorChallenge({ code, request });
-  });
+  app.post(
+    "/2fa/verify",
+    { preHandler: app.requireAuth, config: challengeRateLimit },
+    async (request) => {
+      const { code } = totpCodeSchema.parse(request.body);
+      return verifyTwoFactorChallenge({ code, request });
+    },
+  );
 
-  app.post("/2fa/recovery-code", { preHandler: app.requireAuth }, async (request) => {
-    const { code } = z.object({ code: z.string().min(4).max(40) }).parse(request.body);
-    return useRecoveryCode({ code, request });
-  });
+  app.post(
+    "/2fa/recovery-code",
+    { preHandler: app.requireAuth, config: challengeRateLimit },
+    async (request) => {
+      const { code } = z.object({ code: z.string().min(4).max(40) }).parse(request.body);
+      return useRecoveryCode({ code, request });
+    },
+  );
 
   /**
    * Desligar o 2FA é justamente a ação que um invasor com sessão aberta faria
@@ -67,7 +91,9 @@ export async function twoFactorRoutes(app: FastifyInstance) {
     },
   );
 
-  app.post("/step-up", { preHandler: app.requireAuth }, async (request) => {
+  // Step-up também recebe senha ou TOTP e precisa do mesmo teto — é a porta que
+  // autoriza promover a dono, desativar loja e sair do quiosque.
+  app.post("/step-up", { preHandler: app.requireAuth, config: challengeRateLimit }, async (request) => {
     const input = z
       .object({
         purpose: z.nativeEnum(StepUpPurpose),

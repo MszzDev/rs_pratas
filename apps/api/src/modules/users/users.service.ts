@@ -52,6 +52,10 @@ export async function createUser(params: {
   const employeeCode = await generateEmployeeCode(companyId);
   const temporaryPassword = generateTemporaryPassword();
 
+  // Argon2id é caro de propósito (~100ms). Fora da transação, para não segurar
+  // uma conexão do pool durante o hash.
+  const passwordHash = await hashSecret(temporaryPassword);
+
   const user = await prisma.$transaction(async (tx) => {
     const created = await tx.user.create({
       data: {
@@ -61,7 +65,7 @@ export async function createUser(params: {
         name: input.name,
         role: input.role,
         status: "PENDING_FIRST_ACCESS",
-        passwordHash: await hashSecret(temporaryPassword),
+        passwordHash,
         mustChangePassword: true,
         mustCreatePin: true,
         createdById: request.user.sub,
@@ -313,9 +317,27 @@ export async function changeUserRole(params: {
     );
   }
 
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data: { role: input.role },
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.user.update({
+      where: { id: user.id },
+      data: { role: input.role },
+    });
+
+    // O perfil viaja dentro do access token, então uma sessão aberta continuaria
+    // valendo com o perfil ANTIGO até o token expirar. Num rebaixamento isso
+    // significaria manter privilégio elevado por mais 15 minutos. Derrubar as
+    // sessões força o novo perfil a valer imediatamente.
+    const now = new Date();
+    await tx.refreshToken.updateMany({
+      where: { session: { userId: user.id }, revokedAt: null },
+      data: { revokedAt: now, revokedReason: "perfil alterado" },
+    });
+    await tx.deviceSession.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: now, revokedReason: "perfil alterado" },
+    });
+
+    return result;
   });
 
   // A troca de perfil muda as permissões efetivas na hora, não no fim do TTL.

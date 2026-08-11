@@ -256,6 +256,31 @@ export async function loginWithPassword(params: {
     throw forbidden("DEVICE_WRONG_COMPANY", "Dispositivo não pertence à sua empresa.");
   }
 
+  // Mesma regra do login por PIN: entrar num tablet exige acesso àquela loja.
+  // Sem isto, o login por senha seria a porta dos fundos para operar o caixa de
+  // uma loja à qual o funcionário não pertence.
+  if (
+    device &&
+    user.role !== "DONO" &&
+    user.role !== "DESENVOLVEDOR" &&
+    !(await prisma.userStore.findUnique({
+      where: { userId_storeId: { userId: user.id, storeId: device.storeId } },
+      select: { id: true },
+    }))
+  ) {
+    await audit(request, {
+      action: "LOGIN_FAILED",
+      result: "DENIED",
+      userId: user.id,
+      companyId: user.companyId,
+      storeId: device.storeId,
+      deviceId: device.id,
+      userRoleSnapshot: user.role,
+      reason: "usuário sem acesso à loja deste dispositivo",
+    });
+    throw forbidden("STORE_ACCESS_DENIED", "Você não tem acesso a esta loja.");
+  }
+
   const issued = await issueSessionForUser({
     user,
     deviceId: device?.id ?? null,
@@ -351,12 +376,23 @@ export async function refreshSession(params: {
   const accessTtlMs = parseDuration(env.JWT_ACCESS_TTL);
   const newPlainToken = generateRefreshToken();
 
-  await prisma.$transaction([
-    prisma.refreshToken.update({
-      where: { id: stored.id },
+  await prisma.$transaction(async (tx) => {
+    // UPDATE condicional em vez de update direto: duas requisições paralelas
+    // com o mesmo token disputam esta linha e só uma consegue marcá-la. Sem a
+    // condição, ambas rotacionariam e criariam duas cadeias válidas — o que
+    // anularia a detecção de reuso justamente no cenário que ela existe para
+    // pegar. É comum o cliente disparar várias chamadas ao expirar o access
+    // token, então a corrida não é hipotética.
+    const claimed = await tx.refreshToken.updateMany({
+      where: { id: stored.id, revokedAt: null },
       data: { revokedAt: now, revokedReason: "rotated" },
-    }),
-    prisma.refreshToken.create({
+    });
+
+    if (claimed.count === 0) {
+      throw unauthorized("REFRESH_IN_PROGRESS", "Sua sessão foi renovada em outra aba. Tente novamente.");
+    }
+
+    await tx.refreshToken.create({
       data: {
         sessionId: session.id,
         tokenHash: hashRefreshToken(newPlainToken),
@@ -364,12 +400,13 @@ export async function refreshSession(params: {
         expiresAt: new Date(now.getTime() + refreshTtlMs),
         createdByIp: request.ip,
       },
-    }),
-    prisma.deviceSession.update({
+    });
+
+    await tx.deviceSession.update({
       where: { id: session.id },
       data: { lastUsedAt: now },
-    }),
-  ]);
+    });
+  });
 
   const storeIds = await loadStoreIds(session.userId);
 

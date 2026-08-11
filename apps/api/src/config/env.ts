@@ -45,6 +45,8 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW: z.string().default("1m"),
   /** Teto por IP nos endpoints de login, por minuto (camada separada do bloqueio por usuário). */
   LOGIN_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
+  /** Teto por IP nos desafios de 2FA e step-up — barra força bruta do código de 6 dígitos. */
+  TWO_FACTOR_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
   PIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),

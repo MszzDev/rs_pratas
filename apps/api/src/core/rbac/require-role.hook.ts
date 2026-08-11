@@ -17,6 +17,38 @@ export function requireRole(...allowed: UserRole[]) {
 }
 
 /**
+ * O usuário pode operar nesta loja?
+ *
+ * Versão sem exceção, para uso dentro de serviços que precisam decidir o que
+ * fazer com a resposta. DONO e DESENVOLVEDOR alcançam qualquer loja da própria
+ * empresa — nunca de outra.
+ */
+export async function userCanAccessStore(params: {
+  userId: string;
+  role: string;
+  companyId: string;
+  storeId: string;
+}): Promise<boolean> {
+  const store = await prisma.store.findFirst({
+    where: { id: params.storeId, companyId: params.companyId, deletedAt: null },
+    select: { id: true },
+  });
+
+  if (!store) return false;
+
+  if (params.role === "DONO" || params.role === "DESENVOLVEDOR") {
+    return true;
+  }
+
+  const link = await prisma.userStore.findUnique({
+    where: { userId_storeId: { userId: params.userId, storeId: params.storeId } },
+    select: { id: true },
+  });
+
+  return link !== null;
+}
+
+/**
  * Confirma que o usuário pode acessar aquela loja.
  *
  * Responde 404 (e não 403) quando a loja existe mas não é dele: um 403 confirma

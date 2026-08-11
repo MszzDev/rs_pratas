@@ -4,7 +4,7 @@ import type { CorrectEntryInput, CreateWorkScheduleInput, PunchInput } from "@rs
 import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
 import { badRequest, forbidden, notFound } from "../../core/errors.js";
-import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
+import { assertStoreAccess, userCanAccessStore } from "../../core/rbac/require-role.hook.js";
 import {
   evaluateTolerance,
   minutesOfDayInTimezone,
@@ -64,6 +64,30 @@ export async function registerPunch(params: { input: PunchInput; request: Fastif
 
   if (device.companyId !== request.user.companyId) {
     throw forbidden("DEVICE_WRONG_COMPANY", "Dispositivo não pertence à sua empresa.");
+  }
+
+  // Não basta o tablet ser da mesma empresa: o funcionário precisa ter acesso
+  // àquela loja. Sem isso, quem entrasse por senha (sessão sem dispositivo)
+  // poderia registrar ponto no tablet de qualquer outra loja da rede.
+  const canUseStore = await userCanAccessStore({
+    userId: request.user.sub,
+    role: request.user.role,
+    companyId: request.user.companyId,
+    storeId: device.storeId,
+  });
+
+  if (!canUseStore) {
+    await audit(request, {
+      action: "TIMECLOCK_ENTRY_CREATE",
+      result: "DENIED",
+      userId: request.user.sub,
+      companyId: request.user.companyId,
+      storeId: device.storeId,
+      deviceId: device.id,
+      userRoleSnapshot: request.user.role,
+      reason: "usuário sem acesso à loja do dispositivo",
+    });
+    throw forbidden("STORE_ACCESS_DENIED", "Você não tem acesso a esta loja.");
   }
 
   const timestamp = new Date();
@@ -241,10 +265,29 @@ export async function getMirror(params: {
 
   const target = await prisma.user.findFirst({
     where: { id: userId, companyId: request.user.companyId, deletedAt: null },
-    select: { id: true, name: true, employeeCode: true },
+    select: {
+      id: true,
+      name: true,
+      employeeCode: true,
+      userStores: { select: { storeId: true } },
+    },
   });
   if (!target) {
     throw notFound("USER_NOT_FOUND", "Usuário não encontrado.");
+  }
+
+  // O gerente enxerga o ponto da SUA loja, não o da rede inteira. Sem esta
+  // checagem, o perfil de gerente daria acesso à jornada de qualquer
+  // funcionário da empresa — inclusive de lojas onde ele não atua.
+  if (!isSelf && request.user.role === "GERENTE") {
+    const sharesStore = target.userStores.some((link) =>
+      request.user.storeIds.includes(link.storeId),
+    );
+
+    if (!sharesStore) {
+      // 404 e não 403: confirmar que o funcionário existe já seria informação.
+      throw notFound("USER_NOT_FOUND", "Usuário não encontrado.");
+    }
   }
 
   const entries = await prisma.timeClockEntry.findMany({
@@ -260,7 +303,7 @@ export async function getMirror(params: {
   });
 
   return {
-    user: target,
+    user: { id: target.id, name: target.name, employeeCode: target.employeeCode },
     entries: entries
       .filter((entry) => entry.correctsEntryId === null)
       .map((entry) => ({
