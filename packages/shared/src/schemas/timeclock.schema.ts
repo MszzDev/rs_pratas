@@ -69,6 +69,9 @@ export const timeClockEntrySchema = z.object({
   deviceId: z.string().uuid(),
 });
 
+export type TimeClockEventType = (typeof TIME_CLOCK_EVENT_TYPES)[number];
+export type Weekday = (typeof WEEKDAYS)[number];
+
 export type PunchInput = z.infer<typeof punchSchema>;
 export type CorrectEntryInput = z.infer<typeof correctEntrySchema>;
 export type CreateWorkScheduleInput = z.infer<typeof createWorkScheduleSchema>;
