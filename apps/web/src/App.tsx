@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "./features/auth/auth-context";
 import { LoginPage } from "./features/auth/LoginPage";
 import { FirstAccessPage } from "./features/auth/FirstAccessPage";
 import { PinLoginPage } from "./features/auth/PinLoginPage";
+import { TwoFactorSetupPage } from "./features/auth/TwoFactorSetupPage";
 import { TimeClockPage } from "./features/timeclock/TimeClockPage";
 import { UsersPage } from "./features/users/UsersPage";
 
@@ -25,7 +26,18 @@ function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
 
-  return user ? <>{children}</> : <Navigate to="/login" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // O backend recusa todas as outras rotas até o segundo fator ser confirmado.
+  // Levar direto à configuração é melhor que deixar o usuário esbarrar num
+  // "sem permissão" em cada tela que tentar abrir.
+  if (user.twoFactorPending) {
+    return <Navigate to="/verificacao-duas-etapas" replace />;
+  }
+
+  return <>{children}</>;
 }
 
 function AppRoutes() {
@@ -34,6 +46,10 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/pin" element={<PinLoginPage />} />
       <Route path="/primeiro-acesso" element={<FirstAccessPage />} />
+
+      {/* Fora do RequireAuth de propósito: é a única rota que o dono alcança
+          enquanto o segundo fator não estiver confirmado. */}
+      <Route path="/verificacao-duas-etapas" element={<TwoFactorSetupPage />} />
 
       <Route
         path="/ponto"

@@ -72,7 +72,10 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     headers: {
-      "Content-Type": "application/json",
+      // Só declara JSON quando há corpo: o Fastify recusa uma requisição que
+      // anuncia application/json e chega vazia, o que quebraria todo POST sem
+      // corpo (confirmar 2FA, encerrar sessões, reenviar credenciais).
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(stepUpToken ? { "X-Step-Up-Token": stepUpToken } : {}),
       ...headers,

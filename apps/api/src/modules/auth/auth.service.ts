@@ -36,7 +36,25 @@ export interface IssuedSession {
     storeIds: string[];
     mustChangePassword: boolean;
     mustCreatePin: boolean;
+    /**
+     * O perfil exige 2FA e ele ainda não foi confirmado. O app usa isto para
+     * levar direto à configuração, em vez de deixar o usuário esbarrar num 403
+     * em cada tela que tentar abrir.
+     */
+    twoFactorPending: boolean;
   };
+}
+
+/** Só o DONO é obrigado a usar segundo fator (item 19 da especificação). */
+async function isTwoFactorPending(user: { id: string; role: string }): Promise<boolean> {
+  if (user.role !== "DONO") return false;
+
+  const credential = await prisma.twoFactorCredential.findUnique({
+    where: { userId: user.id },
+    select: { confirmedAt: true },
+  });
+
+  return !credential?.confirmedAt;
 }
 
 /** Assina o access token. Injetado pelas rotas (vem do plugin @fastify/jwt). */
@@ -134,6 +152,7 @@ export async function issueSessionForUser(params: {
       storeIds,
       mustChangePassword: user.mustChangePassword,
       mustCreatePin: user.mustCreatePin,
+      twoFactorPending: await isTwoFactorPending(user),
     },
   };
 }
@@ -473,6 +492,7 @@ export async function refreshSession(params: {
       storeIds,
       mustChangePassword: session.user.mustChangePassword,
       mustCreatePin: session.user.mustCreatePin,
+      twoFactorPending: await isTwoFactorPending(session.user),
     },
   };
 }

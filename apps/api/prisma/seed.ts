@@ -61,34 +61,63 @@ async function main() {
     }
   }
 
-  const existingOwner = await prisma.user.findFirst({
-    where: { companyId: company.id, role: "DONO" },
+  await createBootstrapUser({
+    companyId: company.id,
+    role: "DONO",
+    employeeCode: "RS000001",
+    email: "dono@rspratas.com.br",
+    name: "Dono RS Pratas",
   });
 
-  if (!existingOwner) {
-    const temporaryPassword = generateTemporaryPassword();
-    const passwordHash = await argon2.hash(temporaryPassword, ARGON2_OPTIONS);
+  await createBootstrapUser({
+    companyId: company.id,
+    role: "DESENVOLVEDOR",
+    employeeCode: "RS000002",
+    email: "dev@rspratas.com.br",
+    name: "Suporte Técnico",
+  });
+}
 
-    const owner = await prisma.user.create({
-      data: {
-        companyId: company.id,
-        employeeCode: "0001",
-        email: "dono@rspratas.com.br",
-        name: "Dono RS Pratas",
-        role: "DONO",
-        status: "PENDING_FIRST_ACCESS",
-        passwordHash,
-        mustChangePassword: true,
-        mustCreatePin: true,
-      },
-    });
+/**
+ * Cria a conta inicial de um perfil, se ainda não existir.
+ *
+ * A senha é gerada e mostrada uma única vez: como fica guardada só em hash
+ * Argon2id, não há como recuperá-la depois — e é isso que se quer.
+ */
+async function createBootstrapUser(params: {
+  companyId: string;
+  role: "DONO" | "DESENVOLVEDOR";
+  employeeCode: string;
+  email: string;
+  name: string;
+}) {
+  const existing = await prisma.user.findFirst({
+    where: { companyId: params.companyId, role: params.role },
+  });
 
-    console.log("\n=== USUARIO DONO BOOTSTRAP CRIADO ===");
-    console.log(`employeeCode: ${owner.employeeCode}`);
-    console.log(`email:        ${owner.email}`);
-    console.log(`senha temp.:  ${temporaryPassword}`);
-    console.log("Guarde esta senha agora — ela não é recuperável depois (hash Argon2id, não reversível).\n");
-  }
+  if (existing) return;
+
+  const temporaryPassword = generateTemporaryPassword();
+
+  const user = await prisma.user.create({
+    data: {
+      companyId: params.companyId,
+      employeeCode: params.employeeCode,
+      email: params.email,
+      name: params.name,
+      role: params.role,
+      status: "PENDING_FIRST_ACCESS",
+      passwordHash: await argon2.hash(temporaryPassword, ARGON2_OPTIONS),
+      mustChangePassword: true,
+      mustCreatePin: true,
+    },
+  });
+
+  console.log(`\n=== CONTA INICIAL: ${params.role} ===`);
+  console.log(`matrícula:   ${user.employeeCode}`);
+  console.log(`e-mail:      ${user.email}`);
+  console.log(`senha temp.: ${temporaryPassword}`);
+  console.log("Anote agora — esta senha não aparece de novo.\n");
 }
 
 main()
