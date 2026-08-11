@@ -5,6 +5,7 @@ import type { TimeClockEventType } from "@rs-pratas/shared";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
+import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { readDeviceId } from "@/lib/secure-storage";
 import { useAuth } from "../auth/auth-context";
@@ -54,7 +55,8 @@ function formatTime(iso: string): string {
 }
 
 export function TimeClockPage() {
-  const { user, logout } = useAuth();
+  // Sair agora fica no menu lateral, comum a todas as telas.
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const [justification, setJustification] = useState("");
@@ -103,18 +105,11 @@ export function TimeClockPage() {
   const requiresJustification = NEEDS_JUSTIFICATION.includes(suggested);
 
   return (
-    <main className="min-h-screen bg-background-secondary px-4 py-8">
+    <PageShell
+      title={`Olá, ${user?.name ?? ""}`}
+      description={`Matrícula ${user?.employeeCode ?? ""}`}
+    >
       <div className="mx-auto max-w-lg">
-        <header className="mb-6 flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-text-primary">Olá, {user?.name}</h1>
-            <p className="text-text-secondary">Matrícula {user?.employeeCode}</p>
-          </div>
-          <Button variant="ghost" onClick={() => void logout()}>
-            Sair
-          </Button>
-        </header>
-
         {receipt && (
           <div className="mb-5">
             <Alert
@@ -195,6 +190,6 @@ export function TimeClockPage() {
           registradas ao lado do original.
         </p>
       </div>
-    </main>
+    </PageShell>
   );
 }

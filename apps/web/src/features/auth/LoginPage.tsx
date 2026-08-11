@@ -44,20 +44,20 @@ export function LoginPage() {
       <div className="w-full max-w-md rounded-lg border border-border bg-surface p-8 shadow-sm">
         <header className="mb-8 text-center">
           <h1 className="text-3xl font-semibold tracking-tight text-rose-primary">RS Pratas</h1>
-          <p className="mt-2 text-text-secondary">Entre com sua matrícula ou e-mail</p>
+          <p className="mt-2 text-text-secondary">Entre com sua matrícula</p>
         </header>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
           {error && <Alert tone="error">{error}</Alert>}
 
           <Field
-            label="Matrícula ou e-mail"
+            label="Matrícula"
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
             autoComplete="username"
             autoCapitalize="none"
             required
-            hint="Sua matrícula começa com RS"
+            hint="Começa com RS, como RS482103."
           />
 
           <Field

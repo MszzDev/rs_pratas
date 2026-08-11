@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
-import { Building2, Clock, LogOut, Tablet, Users } from "lucide-react";
+import { NavLink, useLocation } from "react-router-dom";
+import { Building2, Clock, FileText, LogOut, Menu, Tablet, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-context";
 
@@ -8,7 +9,7 @@ interface NavItem {
   to: string;
   label: string;
   icon: typeof Users;
-  /** Perfis que enxergam o item. Vazio = todos. */
+  /** Perfis que enxergam o item. Ausente = todos. */
   roles?: string[];
 }
 
@@ -18,6 +19,13 @@ interface NavItem {
  */
 const NAV_ITEMS: NavItem[] = [
   { to: "/ponto", label: "Ponto", icon: Clock },
+  { to: "/meus-documentos", label: "Meus documentos", icon: FileText },
+  {
+    to: "/documentos",
+    label: "Conferir documentos",
+    icon: FileText,
+    roles: ["DONO", "GERENTE", "DESENVOLVEDOR"],
+  },
   { to: "/funcionarios", label: "Funcionários", icon: Users },
   { to: "/lojas", label: "Lojas", icon: Building2, roles: ["DONO", "DESENVOLVEDOR"] },
   { to: "/tablets", label: "Tablets", icon: Tablet, roles: ["DONO", "GERENTE", "DESENVOLVEDOR"] },
@@ -35,62 +43,205 @@ export function PageShell({
   children: ReactNode;
 }) {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const visibleItems = NAV_ITEMS.filter(
+  const items = NAV_ITEMS.filter(
     (item) => !item.roles || (user && item.roles.includes(user.role)),
   );
 
+  // Fecha ao navegar: sem isso o menu fica por cima da tela que acabou de abrir.
+  useEffect(() => setDrawerOpen(false), [location.pathname]);
+
+  // Esc fecha o menu — quem abriu sem querer precisa de saída sem mirar no X.
+  useEffect(() => {
+    if (!drawerOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDrawerOpen(false);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [drawerOpen]);
+
   return (
-    <div className="min-h-screen bg-background-secondary">
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3">
+    <div className="min-h-screen bg-background-secondary lg:flex">
+      {/*
+        Computador: menu lateral fixo.
+        Tablet: barra horizontal no topo — o toque alcança melhor o topo que a
+        lateral, e a tela ainda comporta os rótulos lado a lado.
+        Celular: gaveta atrás do botão de três linhas.
+      */}
+      <Sidebar items={items} onLogout={() => void logout()} userName={user?.name} />
+
+      <MobileBar
+        open={drawerOpen}
+        onToggle={() => setDrawerOpen((current) => !current)}
+        items={items}
+        onLogout={() => void logout()}
+        userName={user?.name}
+      />
+
+      <div className="flex-1 lg:min-w-0">
+        <main className="mx-auto max-w-5xl px-4 py-6 md:py-8">
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold text-text-primary">{title}</h1>
+              {description && <p className="mt-1 text-text-secondary">{description}</p>}
+            </div>
+            {actions}
+          </div>
+
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+const linkClass = ({ isActive }: { isActive: boolean }) =>
+  cn(
+    "flex min-h-[48px] items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
+    isActive ? "bg-rose-soft text-rose-dark" : "text-text-secondary hover:bg-background-secondary",
+  );
+
+/** Só no computador (lg em diante). */
+function Sidebar({
+  items,
+  userName,
+  onLogout,
+}: {
+  items: NavItem[];
+  userName: string | undefined;
+  onLogout: () => void;
+}) {
+  return (
+    <aside className="hidden w-64 shrink-0 border-r border-border bg-surface lg:flex lg:flex-col">
+      <div className="border-b border-border px-5 py-5">
+        <span className="text-xl font-semibold text-rose-primary">RS Pratas</span>
+      </div>
+
+      <nav className="flex-1 space-y-1 p-3" aria-label="Navegação principal">
+        {items.map((item) => (
+          <NavLink key={item.to} to={item.to} className={linkClass}>
+            <item.icon className="h-5 w-5 shrink-0" aria-hidden />
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+
+      <div className="border-t border-border p-3">
+        <p className="px-3 pb-2 text-sm text-text-secondary">{userName}</p>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="flex min-h-[48px] w-full items-center gap-3 rounded-md px-3 text-sm text-text-secondary hover:bg-background-secondary"
+        >
+          <LogOut className="h-5 w-5" aria-hidden />
+          Sair
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+/** Tablet: abas no topo. Celular: botão de três linhas abrindo a gaveta. */
+function MobileBar({
+  open,
+  onToggle,
+  items,
+  userName,
+  onLogout,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  items: NavItem[];
+  userName: string | undefined;
+  onLogout: () => void;
+}) {
+  return (
+    <>
+      <header className="border-b border-border bg-surface lg:hidden">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-label={open ? "Fechar menu" : "Abrir menu"}
+            className="flex h-12 w-12 items-center justify-center rounded-md text-text-secondary hover:bg-background-secondary md:hidden"
+          >
+            <Menu className="h-6 w-6" aria-hidden />
+          </button>
+
           <span className="text-lg font-semibold text-rose-primary">RS Pratas</span>
 
-          <nav className="flex flex-1 flex-wrap gap-1" aria-label="Navegação principal">
-            {visibleItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    "flex min-h-[44px] items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-rose-soft text-rose-dark"
-                      : "text-text-secondary hover:bg-background-secondary",
-                  )
-                }
-              >
-                <item.icon className="h-4 w-4" aria-hidden />
+          {/* Tablet mostra as abas direto; celular deixa tudo na gaveta. */}
+          <nav className="hidden flex-1 flex-wrap gap-1 md:flex" aria-label="Navegação principal">
+            {items.map((item) => (
+              <NavLink key={item.to} to={item.to} className={linkClass}>
+                <item.icon className="h-5 w-5 shrink-0" aria-hidden />
                 {item.label}
               </NavLink>
             ))}
           </nav>
 
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-text-secondary">{user?.name}</span>
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="flex min-h-[44px] items-center gap-2 rounded-md px-3 text-sm text-text-secondary hover:bg-background-secondary"
-            >
-              <LogOut className="h-4 w-4" aria-hidden />
-              Sair
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="ml-auto hidden min-h-[48px] items-center gap-2 rounded-md px-3 text-sm text-text-secondary hover:bg-background-secondary md:flex"
+          >
+            <LogOut className="h-5 w-5" aria-hidden />
+            Sair
+          </button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-text-primary">{title}</h1>
-            {description && <p className="mt-1 text-text-secondary">{description}</p>}
-          </div>
-          {actions}
-        </div>
+      {open && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <button
+            type="button"
+            aria-label="Fechar menu"
+            onClick={onToggle}
+            className="absolute inset-0 bg-text-primary/40"
+          />
 
-        {children}
-      </main>
-    </div>
+          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-surface shadow-lg">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <span className="text-lg font-semibold text-rose-primary">RS Pratas</span>
+              <button
+                type="button"
+                onClick={onToggle}
+                aria-label="Fechar menu"
+                className="flex h-12 w-12 items-center justify-center rounded-md text-text-secondary"
+              >
+                <X className="h-6 w-6" aria-hidden />
+              </button>
+            </div>
+
+            <nav className="flex-1 space-y-1 p-3" aria-label="Navegação principal">
+              {items.map((item) => (
+                <NavLink key={item.to} to={item.to} className={linkClass}>
+                  <item.icon className="h-5 w-5 shrink-0" aria-hidden />
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+
+            <div className="border-t border-border p-3">
+              <p className="px-3 pb-2 text-sm text-text-secondary">{userName}</p>
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex min-h-[48px] w-full items-center gap-3 rounded-md px-3 text-sm text-text-secondary hover:bg-background-secondary"
+              >
+                <LogOut className="h-5 w-5" aria-hidden />
+                Sair
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

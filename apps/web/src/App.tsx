@@ -11,6 +11,8 @@ import { TimeClockPage } from "./features/timeclock/TimeClockPage";
 import { UsersPage } from "./features/users/UsersPage";
 import { StoresPage } from "./features/stores/StoresPage";
 import { DevicesPage } from "./features/devices/DevicesPage";
+import { MyDocumentsPage } from "./features/documents/MyDocumentsPage";
+import { ReviewDocumentsPage } from "./features/documents/ReviewDocumentsPage";
 
 /**
  * Guarda de rota — conveniência de navegação, NUNCA controle de acesso.
@@ -74,6 +76,22 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <StoresPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/meus-documentos"
+        element={
+          <RequireAuth>
+            <MyDocumentsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/documentos"
+        element={
+          <RequireAuth>
+            <ReviewDocumentsPage />
           </RequireAuth>
         }
       />

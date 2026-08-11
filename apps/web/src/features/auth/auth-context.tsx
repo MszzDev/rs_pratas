@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuthenticatedUser, LoginResponse } from "@rs-pratas/shared";
 import { apiFetch, clearSession, setAccessToken } from "@/lib/api-client";
@@ -24,13 +24,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(session.user);
   }, []);
 
+  /**
+   * Trava de execução única da restauração.
+   *
+   * Em desenvolvimento o React monta o efeito duas vezes, e sem esta guarda as
+   * duas execuções chamam /auth/refresh com o MESMO token. O servidor rotaciona
+   * uma e recusa a outra — comportamento correto dele, mas o app interpretava a
+   * recusa como sessão inválida e deslogava o usuário que acabara de entrar.
+   */
+  const restoreStarted = useRef(false);
+
   // Retoma a sessão ao abrir o app: o refresh token sobrevive ao recarregamento,
   // o access token (só em memória) não.
   useEffect(() => {
+    if (restoreStarted.current) return;
+    restoreStarted.current = true;
+
     void (async () => {
       try {
         const refreshToken = await readRefreshToken();
-        if (!refreshToken) return;
+        if (!refreshToken) {
+          setLoading(false);
+          return;
+        }
 
         const session = await apiFetch<LoginResponse>("/api/v1/auth/refresh", {
           method: "POST",

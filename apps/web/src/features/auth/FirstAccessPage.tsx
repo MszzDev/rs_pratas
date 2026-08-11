@@ -96,7 +96,7 @@ export function FirstAccessPage() {
             }}
           >
             <Field
-              label="Matrícula ou e-mail"
+              label="Matrícula"
               value={identifier}
               onChange={(event) => setIdentifier(event.target.value)}
               autoCapitalize="none"
@@ -107,7 +107,7 @@ export function FirstAccessPage() {
               type="password"
               value={tempPassword}
               onChange={(event) => setTempPassword(event.target.value)}
-              hint="A que você recebeu por e-mail"
+              hint="A que o dono entregou para você."
               required
             />
             <Button type="submit" size="lg" disabled={submitting}>
