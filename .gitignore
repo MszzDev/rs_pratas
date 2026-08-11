@@ -27,6 +27,9 @@ apps/web/android/app/build/
 apps/web/android/build/
 apps/web/ios/
 
+# Documentos enviados pelos funcionarios — dado sensivel, nunca no repositorio
+apps/api/storage/
+
 # Prisma
 apps/api/prisma/*.db
 

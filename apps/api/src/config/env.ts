@@ -31,6 +31,15 @@ const envSchema = z.object({
   TOTP_ISSUER: z.string().default("RS Pratas"),
   TOTP_ENCRYPTION_KEY: z.string().min(32, "TOTP_ENCRYPTION_KEY deve ter ao menos 32 caracteres"),
 
+  /**
+   * Pasta onde ficam os documentos enviados pelos funcionários.
+   *
+   * Fora da raiz web de propósito: nada aqui é servido estaticamente, o
+   * download passa pela API para a permissão ser checada. Precisa entrar na
+   * rotina de backup junto com o banco.
+   */
+  DOCUMENT_STORAGE_DIR: z.string().default("./storage/documents"),
+
   CORS_ALLOWED_ORIGINS: z
     .string()
     .default("")

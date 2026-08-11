@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
+import multipart from "@fastify/multipart";
 import underPressure from "@fastify/under-pressure";
 import { env } from "./config/env.js";
 import { prisma } from "./db/prisma.js";
@@ -17,6 +18,7 @@ import { userRoutes } from "./modules/users/users.routes.js";
 import { storeRoutes } from "./modules/stores/stores.routes.js";
 import { timeClockRoutes } from "./modules/timeclock/timeclock.routes.js";
 import { settingsRoutes } from "./modules/settings/settings.routes.js";
+import { documentRoutes } from "./modules/documents/documents.routes.js";
 
 const REDACTED_LOG_PATHS = [
   "req.headers.authorization",
@@ -51,6 +53,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(sensible);
+
+  // Envio de documentos do funcionário (atestado, comprovante de horas).
+  await app.register(multipart, {
+    limits: { fileSize: 20 * 1024 * 1024, files: 1 },
+    attachFieldsToBody: false,
+  });
   await app.register(helmet, { contentSecurityPolicy: false });
 
   await app.register(cors, {
@@ -109,6 +117,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(storeRoutes, { prefix: "/api/v1" });
   await app.register(timeClockRoutes, { prefix: "/api/v1" });
   await app.register(settingsRoutes, { prefix: "/api/v1" });
+  await app.register(documentRoutes, { prefix: "/api/v1" });
 
   app.get("/health", async () => ({ status: "ok" }));
 
