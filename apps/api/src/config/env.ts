@@ -41,6 +41,28 @@ const envSchema = z.object({
     .default("")
     .transform((value) => value.split(",").map((origin) => origin.trim()).filter(Boolean)),
 
+  /**
+   * Confiar no cabeçalho X-Forwarded-For para descobrir o IP do cliente.
+   *
+   * Fica FALSO por padrão de propósito. Confiar nesse cabeçalho sem um proxy
+   * real na frente permite que qualquer um forje o próprio IP a cada
+   * requisição — o que anula todo rate limit por IP (login, PIN, TOTP, código
+   * de pareamento) e ainda envenena o IP gravado na auditoria.
+   *
+   * Só ligue quando a API estiver de fato atrás de um proxy que sobrescreve o
+   * cabeçalho. Aceita `true`/`false` ou o número de saltos confiáveis, que é a
+   * forma mais segura: com "1", apenas o proxy imediato é considerado.
+   */
+  TRUST_PROXY: z
+    .string()
+    .default("false")
+    .transform((value) => {
+      if (value === "true") return true;
+      if (value === "false") return false;
+      const hops = Number(value);
+      return Number.isInteger(hops) && hops > 0 ? hops : false;
+    }),
+
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW: z.string().default("1m"),
   /** Teto por IP nos endpoints de login, por minuto (camada separada do bloqueio por usuário). */

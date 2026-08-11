@@ -44,7 +44,7 @@ export async function buildApp(): Promise<FastifyInstance> {
             redact: { paths: REDACTED_LOG_PATHS, censor: "[redacted]" },
           },
     genReqId: () => crypto.randomUUID(),
-    trustProxy: true,
+    trustProxy: env.TRUST_PROXY,
     bodyLimit: 1_048_576,
     requestTimeout: 30_000,
   });
