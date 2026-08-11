@@ -5,6 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import { env } from "./config/env.js";
 import { prisma } from "./db/prisma.js";
+import { redis } from "./db/redis.js";
 import { registerErrorHandler } from "./core/error-handler.js";
 import { maskMoneyDeep } from "./core/security/money-mask.js";
 import { authPlugin } from "./plugins/auth.plugin.js";
@@ -95,13 +96,32 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.get("/health", async () => ({ status: "ok" }));
 
+  /**
+   * Prontidão real: consulta banco e Redis de verdade.
+   *
+   * O Redis é reportado como "degraded" e não derruba a prontidão, porque ele
+   * só guarda cache de permissões — sem ele o motor de RBAC cai para consulta
+   * direta ao banco e o sistema continua correto, apenas mais lento. Já o banco
+   * fora do ar é indisponibilidade real.
+   */
   app.get("/health/ready", async (_request, reply) => {
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-      return { status: "ok", database: "ok" };
-    } catch {
-      return reply.status(503).send({ status: "degraded", database: "error" });
-    }
+    const [database, cache] = await Promise.all([
+      prisma
+        .$queryRaw`SELECT 1`.then(() => "ok" as const)
+        .catch(() => "error" as const),
+      redis
+        .ping()
+        .then(() => "ok" as const)
+        .catch(() => "error" as const),
+    ]);
+
+    const body = {
+      status: database === "ok" ? (cache === "ok" ? "ok" : "degraded") : "unavailable",
+      database,
+      cache,
+    };
+
+    return reply.status(database === "ok" ? 200 : 503).send(body);
   });
 
   return app;

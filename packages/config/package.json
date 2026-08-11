@@ -2,9 +2,7 @@
   "name": "@rs-pratas/config",
   "private": true,
   "version": "0.1.0",
-  "main": "index.js",
   "files": [
-    "base.json",
-    "eslint.base.js"
+    "base.json"
   ]
 }
