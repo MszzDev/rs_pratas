@@ -13,6 +13,8 @@ import { twoFactorRoutes } from "./modules/auth/two-factor.routes.js";
 import { deviceRoutes } from "./modules/devices/devices.routes.js";
 import { userRoutes } from "./modules/users/users.routes.js";
 import { storeRoutes } from "./modules/stores/stores.routes.js";
+import { timeClockRoutes } from "./modules/timeclock/timeclock.routes.js";
+import { settingsRoutes } from "./modules/settings/settings.routes.js";
 
 const REDACTED_LOG_PATHS = [
   "req.headers.authorization",
@@ -88,6 +90,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(deviceRoutes, { prefix: "/api/v1" });
   await app.register(userRoutes, { prefix: "/api/v1" });
   await app.register(storeRoutes, { prefix: "/api/v1" });
+  await app.register(timeClockRoutes, { prefix: "/api/v1" });
+  await app.register(settingsRoutes, { prefix: "/api/v1" });
 
   app.get("/health", async () => ({ status: "ok" }));
 

@@ -6,3 +6,4 @@ export * from "./schemas/auth.schema.js";
 export * from "./schemas/device.schema.js";
 export * from "./schemas/first-access.schema.js";
 export * from "./schemas/user.schema.js";
+export * from "./schemas/timeclock.schema.js";
