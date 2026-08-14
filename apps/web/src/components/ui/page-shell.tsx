@@ -18,6 +18,7 @@ import {
   ShoppingCart,
   Settings,
   Tablet,
+  Tag,
   UserRound,
   Users,
   Wallet,
@@ -57,6 +58,13 @@ const NAV_ITEMS: NavItem[] = [
 
   { to: "/produtos", label: "Produtos", icon: Package, section: "gestao" },
   { to: "/estoque", label: "Estoque", icon: Boxes, section: "gestao" },
+  {
+    to: "/etiquetas",
+    label: "Etiquetas",
+    icon: Tag,
+    section: "gestao",
+    roles: ["DONO", "GERENTE", "DESENVOLVEDOR"],
+  },
   {
     to: "/documentos",
     label: "Conferir documentos",

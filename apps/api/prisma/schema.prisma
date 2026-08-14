@@ -160,6 +160,9 @@ enum AuditAction {
   RESERVATION_CONVERT
   QUOTE_CREATE
   QUOTE_CONVERT
+  LABEL_TEMPLATE_CREATE
+  LABEL_TEMPLATE_UPDATE
+  PRINT_JOB_CREATE
 }
 
 // =====================================================================
@@ -190,6 +193,7 @@ model Company {
   stockTransfers StockTransfer[]
   inventories    Inventory[]
   customers      Customer[]
+  labelTemplates LabelTemplate[]
 
   @@map("companies")
 }
@@ -228,6 +232,7 @@ model Store {
   sales        Sale[]
   reservations Reservation[]
   quotes       Quote[]
+  printJobs    PrintJob[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -299,6 +304,7 @@ model User {
   cashMovements        CashMovement[]
   salesMade            Sale[]         @relation("SaleSeller")
   saleDiscountsAllowed Sale[]         @relation("SaleDiscountAuthorizer")
+  printJobsRequested   PrintJob[]
 
   @@unique([companyId, employeeCode])
   @@index([companyId, role])
@@ -1596,4 +1602,121 @@ model QuoteItem {
 
   @@index([quoteId])
   @@map("quote_items")
+}
+
+// =====================================================================
+// ETIQUETAS E IMPRESSÃO (Fase 5)
+// =====================================================================
+
+enum PrintJobStatus {
+  NA_FILA
+  IMPRIMINDO
+  CONCLUIDO
+  FALHOU
+  CANCELADO
+}
+
+enum PrintJobType {
+  ETIQUETA
+  COMPROVANTE
+  FECHAMENTO_CAIXA
+}
+
+/// Modelo de etiqueta — dimensões e o que aparece impresso.
+///
+/// Etiqueta de joia é pequena e vai enrolada na peça ou pendurada. O que cabe
+/// nela é pouco: código de barras, preço e um nome curto. Por isso o modelo é
+/// um conjunto de opções e não um editor livre — campo demais numa etiqueta de
+/// 20 mm sai ilegível, e etiqueta ilegível não é lida no PDV.
+model LabelTemplate {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  code String
+  name String
+
+  /// Em milímetros. A impressora térmica precisa do tamanho exato do rolo.
+  widthMm  Decimal @db.Decimal(6, 2)
+  heightMm Decimal @db.Decimal(6, 2)
+
+  /// Etiqueta de joia costuma ser dupla: dobra ao meio e as duas metades
+  /// ficam coladas na argola. A segunda metade repete o código.
+  isDoubleSided Boolean @default(true)
+
+  showProductName Boolean @default(true)
+  showSku         Boolean @default(true)
+  showPrice       Boolean @default(true)
+  showWeight      Boolean @default(false)
+  showSize        Boolean @default(true)
+  showBarcode     Boolean @default(true)
+
+  /// Ajuste fino de posição, em milímetros. Rolo de etiqueta desalinha com o
+  /// uso, e sem isso a impressão sai cortada até alguém trocar a impressora.
+  offsetXMm Decimal @default(0) @db.Decimal(6, 2)
+  offsetYMm Decimal @default(0) @db.Decimal(6, 2)
+
+  fontScale Decimal @default(1) @db.Decimal(4, 2)
+
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  printJobs PrintJob[]
+
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@unique([companyId, code])
+  @@map("label_templates")
+}
+
+/// Fila de impressão.
+///
+/// A impressão não é feita pelo servidor: quem imprime é o tablet, que está na
+/// mesma rede da impressora. O servidor guarda a fila e o resultado. Isso
+/// existe porque impressora térmica de balcão falha o tempo todo — acaba
+/// papel, perde a rede, trava — e sem fila o funcionário não sabe se a
+/// etiqueta saiu, e reimprime até sair errado.
+model PrintJob {
+  id        String  @id @default(uuid())
+  companyId String
+  storeId   String
+  store     Store   @relation(fields: [storeId], references: [id])
+
+  /// Tablet que deve imprimir. Nulo enquanto qualquer um da loja pode pegar.
+  deviceId String?
+
+  type   PrintJobType
+  status PrintJobStatus @default(NA_FILA)
+
+  templateId String?
+  template   LabelTemplate? @relation(fields: [templateId], references: [id])
+
+  /// O conteúdo já resolvido: nome, preço, código de barras. Congelado aqui
+  /// para a etiqueta sair com o preço do momento em que foi pedida, e não com
+  /// o preço de quando a impressora finalmente respondeu.
+  payload Json
+
+  copies Int @default(1)
+
+  /// Origem: produto, venda, fechamento de caixa.
+  referenceType String?
+  referenceId   String?
+
+  attempts    Int       @default(0)
+  lastError   String?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  requestedById String
+  requestedBy   User   @relation(fields: [requestedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storeId, status, createdAt])
+  @@index([deviceId, status])
+  @@map("print_jobs")
 }

@@ -25,6 +25,7 @@ import { PosPage } from "./features/pos/PosPage";
 import { QuotesPage } from "./features/pos/QuotesPage";
 import { CashPage } from "./features/cash/CashPage";
 import { CustomersPage } from "./features/customers/CustomersPage";
+import { LabelsPage } from "./features/labels/LabelsPage";
 
 /**
  * Guarda de rota — conveniência de navegação, NUNCA controle de acesso.
@@ -201,6 +202,14 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <CustomersPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/etiquetas"
+        element={
+          <RequireAuth>
+            <LabelsPage />
           </RequireAuth>
         }
       />

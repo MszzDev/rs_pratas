@@ -1,0 +1,131 @@
+import { z } from "zod";
+import type { FastifyInstance } from "fastify";
+import { requirePermission } from "../../core/rbac/require-permission.hook.js";
+import {
+  calibrateTemplate,
+  cancelPrintJob,
+  createTemplate,
+  listQueue,
+  listTemplates,
+  queueProductLabels,
+  queueReceipt,
+  reportPrintResult,
+} from "./labels.service.js";
+
+const idParamSchema = z.object({ id: z.string().uuid() });
+
+const createTemplateSchema = z.object({
+  code: z.string().min(1).max(20),
+  name: z.string().min(2).max(80),
+  /** Em milímetros. Etiqueta de joia costuma ficar entre 10 e 60 mm. */
+  widthMm: z.number().min(5).max(200),
+  heightMm: z.number().min(5).max(200),
+  isDoubleSided: z.boolean().optional(),
+  showProductName: z.boolean().optional(),
+  showSku: z.boolean().optional(),
+  showPrice: z.boolean().optional(),
+  showWeight: z.boolean().optional(),
+  showSize: z.boolean().optional(),
+  showBarcode: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+});
+
+export async function labelRoutes(app: FastifyInstance) {
+  app.get(
+    "/label-templates",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request) => listTemplates(request),
+  );
+
+  app.post(
+    "/label-templates",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_TEMPLATE_MANAGE")] },
+    async (request, reply) => {
+      const input = createTemplateSchema.parse(request.body);
+      return reply.status(201).send(await createTemplate({ input, request }));
+    },
+  );
+
+  app.patch(
+    "/label-templates/:id/calibration",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_TEMPLATE_MANAGE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      const input = z
+        .object({
+          offsetXMm: z.number().min(-200).max(200),
+          offsetYMm: z.number().min(-200).max(200),
+          fontScale: z.number().min(0.5).max(2).optional(),
+        })
+        .parse(request.body);
+
+      return calibrateTemplate({ templateId: id, input, request });
+    },
+  );
+
+  app.post(
+    "/print-jobs/labels",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request, reply) => {
+      const input = z
+        .object({
+          storeId: z.string().uuid(),
+          productId: z.string().uuid(),
+          variationId: z.string().uuid().optional(),
+          copies: z.number().int().min(1).max(100),
+          templateId: z.string().uuid().optional(),
+          deviceId: z.string().uuid().optional(),
+        })
+        .parse(request.body);
+
+      return reply.status(201).send(await queueProductLabels({ input, request }));
+    },
+  );
+
+  app.post(
+    "/print-jobs/receipts",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request, reply) => {
+      const input = z
+        .object({ saleId: z.string().uuid(), deviceId: z.string().uuid().optional() })
+        .parse(request.body);
+
+      return reply.status(201).send(await queueReceipt({ ...input, request }));
+    },
+  );
+
+  /** O tablet consulta esta rota para saber o que imprimir. */
+  app.get(
+    "/print-jobs/queue",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request) => {
+      const query = z
+        .object({ storeId: z.string().uuid(), deviceId: z.string().uuid().optional() })
+        .parse(request.query);
+
+      return listQueue({ request, ...query });
+    },
+  );
+
+  app.post(
+    "/print-jobs/:id/result",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      const input = z
+        .object({ success: z.boolean(), error: z.string().max(500).optional() })
+        .parse(request.body);
+
+      return reportPrintResult({ jobId: id, ...input, request });
+    },
+  );
+
+  app.post(
+    "/print-jobs/:id/cancel",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      return cancelPrintJob({ jobId: id, request });
+    },
+  );
+}
