@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarClock,
   Boxes,
+  Calculator,
   Clock,
   CreditCard,
   FileCheck,
@@ -14,9 +15,12 @@ import {
   MonitorSmartphone,
   Package,
   ScrollText,
+  ShoppingCart,
   Settings,
   Tablet,
+  UserRound,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -42,6 +46,10 @@ interface NavItem {
  * gestão abre evita que o item mais frequente se perca numa lista longa.
  */
 const NAV_ITEMS: NavItem[] = [
+  { to: "/venda", label: "Venda", icon: ShoppingCart, section: "dia-a-dia" },
+  { to: "/orcamentos", label: "Orçamentos", icon: Calculator, section: "dia-a-dia" },
+  { to: "/caixa", label: "Caixa", icon: Wallet, section: "dia-a-dia" },
+  { to: "/clientes", label: "Clientes", icon: UserRound, section: "dia-a-dia" },
   { to: "/ponto", label: "Ponto", icon: Clock, section: "dia-a-dia" },
   { to: "/meus-documentos", label: "Meus documentos", icon: FileText, section: "dia-a-dia" },
   { to: "/espelho-de-ponto", label: "Espelho de ponto", icon: CalendarClock, section: "dia-a-dia" },

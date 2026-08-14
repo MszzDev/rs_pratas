@@ -21,6 +21,10 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { TerminalsPage } from "./features/terminals/TerminalsPage";
 import { ProductsPage } from "./features/catalog/ProductsPage";
 import { StockPage } from "./features/stock/StockPage";
+import { PosPage } from "./features/pos/PosPage";
+import { QuotesPage } from "./features/pos/QuotesPage";
+import { CashPage } from "./features/cash/CashPage";
+import { CustomersPage } from "./features/customers/CustomersPage";
 
 /**
  * Guarda de rota — conveniência de navegação, NUNCA controle de acesso.
@@ -169,6 +173,38 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/venda"
+        element={
+          <RequireAuth>
+            <PosPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/orcamentos"
+        element={
+          <RequireAuth>
+            <QuotesPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/caixa"
+        element={
+          <RequireAuth>
+            <CashPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/clientes"
+        element={
+          <RequireAuth>
+            <CustomersPage />
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/configuracoes"
         element={
           <RequireAuth>
@@ -177,7 +213,8 @@ function AppRoutes() {
         }
       />
 
-      <Route path="/" element={<Navigate to="/ponto" replace />} />
+      {/* A venda é o que se abre o dia inteiro — é ela que merece a raiz. */}
+      <Route path="/" element={<Navigate to="/venda" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
