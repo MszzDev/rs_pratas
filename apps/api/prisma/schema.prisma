@@ -427,14 +427,20 @@ model PaymentTerminal {
   companyId      String
 
   provider     String?
-  serialNumber String?                @unique
-  status       PaymentTerminalStatus  @default(PENDING)
+  serialNumber String?               @unique
+  status       PaymentTerminalStatus @default(PENDING)
+
+  /// A que o PDV oferece primeiro. As demais do mesmo caixa são reserva, para
+  /// quando a principal fica sem sinal ou sem bateria no meio do expediente.
+  /// O índice parcial abaixo garante uma só principal por caixa.
+  isPrimary Boolean @default(false)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@index([deviceId])
+  @@index([cashRegisterId])
   @@map("payment_terminals")
 }
 

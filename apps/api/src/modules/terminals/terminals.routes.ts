@@ -6,6 +6,7 @@ import {
   listTerminals,
   moveTerminal,
   replaceTerminal,
+  setPrimaryTerminal,
   setTerminalStatus,
 } from "./terminals.service.js";
 
@@ -83,6 +84,15 @@ export async function terminalRoutes(app: FastifyInstance) {
       });
 
       return reply.status(201).send(result);
+    },
+  );
+
+  app.post(
+    "/terminals/:id/primary",
+    { preHandler: [app.requireAuth, requirePermission("TERMINAL_EDIT")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      return setPrimaryTerminal({ terminalId: id, request });
     },
   );
 

@@ -14,6 +14,7 @@ interface Terminal {
   provider: string | null;
   serialNumber: string | null;
   status: TerminalStatus;
+  isPrimary: boolean;
   storeId: string;
   deviceId: string;
   device: { name: string; status: string };
@@ -77,6 +78,16 @@ export function TerminalsPage() {
       setError(null);
       setAdding(false);
       setForm({ deviceId: "", provider: "", serialNumber: "" });
+      invalidate();
+    },
+    onError: handleError,
+  });
+
+  const makePrimary = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/api/v1/terminals/${id}/primary`, { method: "POST" }),
+    onSuccess: () => {
+      setError(null);
       invalidate();
     },
     onError: handleError,
@@ -192,15 +203,34 @@ export function TerminalsPage() {
                   {terminal.serialNumber ? ` · ${terminal.serialNumber}` : ""}
                 </p>
                 <p className="text-sm text-text-secondary">No tablet {terminal.device.name}</p>
-                <span
-                  className={`mt-2 inline-block rounded px-2 py-0.5 text-sm ${STATUS_STYLES[terminal.status]}`}
-                >
-                  {STATUS_LABELS[terminal.status]}
-                </span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span
+                    className={`inline-block rounded px-2 py-0.5 text-sm ${STATUS_STYLES[terminal.status]}`}
+                  >
+                    {STATUS_LABELS[terminal.status]}
+                  </span>
+                  {terminal.isPrimary && (
+                    <span className="inline-block rounded bg-rose-soft px-2 py-0.5 text-sm text-rose-dark">
+                      Principal do caixa
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            {terminal.status !== "RETIRED" && (
+            <div className="flex flex-wrap gap-2">
+              {terminal.status === "ACTIVE" && !terminal.isPrimary && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={makePrimary.isPending}
+                  onClick={() => makePrimary.mutate(terminal.id)}
+                >
+                  Tornar principal
+                </Button>
+              )}
+
+              {terminal.status !== "RETIRED" && (
               <Button
                 type="button"
                 variant="outline"
@@ -218,7 +248,8 @@ export function TerminalsPage() {
               >
                 {terminal.status === "ACTIVE" ? "Bloquear" : "Liberar"}
               </Button>
-            )}
+              )}
+            </div>
           </li>
         ))}
       </ul>

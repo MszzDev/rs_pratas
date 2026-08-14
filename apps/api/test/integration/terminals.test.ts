@@ -232,6 +232,138 @@ describe("substituição de maquininha", () => {
   });
 });
 
+describe("principal e reserva", () => {
+  it("eleger uma principal rebaixa a anterior do mesmo caixa", async () => {
+    const company = await createTestCompany();
+    const store = await createTestStore(company.id);
+    const chain = await createChain(company.id, store.id, "11");
+    const { user: owner, password } = await createTestUser({
+      companyId: company.id,
+      role: "DONO",
+    });
+    const token = await authenticate(owner.employeeCode, password);
+
+    const base = {
+      deviceId: chain.device.id,
+      cashRegisterId: chain.cashRegister.id,
+      posStationId: chain.station.id,
+      storeId: store.id,
+      companyId: company.id,
+      status: "ACTIVE" as const,
+    };
+
+    const first = await prisma.paymentTerminal.create({
+      data: { ...base, serialNumber: "P-1", isPrimary: true },
+    });
+    const second = await prisma.paymentTerminal.create({
+      data: { ...base, serialNumber: "P-2" },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/terminals/${second.id}/primary`,
+      headers: auth(token),
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const [a, b] = await Promise.all([
+      prisma.paymentTerminal.findUniqueOrThrow({ where: { id: first.id } }),
+      prisma.paymentTerminal.findUniqueOrThrow({ where: { id: second.id } }),
+    ]);
+
+    expect(a.isPrimary).toBe(false);
+    expect(b.isPrimary).toBe(true);
+  });
+
+  it("bloquear a principal tira o posto dela", async () => {
+    const company = await createTestCompany();
+    const store = await createTestStore(company.id);
+    const chain = await createChain(company.id, store.id, "12");
+    const { user: owner, password } = await createTestUser({
+      companyId: company.id,
+      role: "DONO",
+    });
+    const token = await authenticate(owner.employeeCode, password);
+
+    const terminal = await prisma.paymentTerminal.create({
+      data: {
+        deviceId: chain.device.id,
+        cashRegisterId: chain.cashRegister.id,
+        posStationId: chain.station.id,
+        storeId: store.id,
+        companyId: company.id,
+        status: "ACTIVE",
+        isPrimary: true,
+      },
+    });
+
+    await app.inject({
+      method: "PATCH",
+      url: `/api/v1/terminals/${terminal.id}/status`,
+      headers: auth(token),
+      payload: { status: "BLOCKED", reason: "aparelho sumiu" },
+    });
+
+    const stored = await prisma.paymentTerminal.findUniqueOrThrow({ where: { id: terminal.id } });
+    expect(stored.isPrimary).toBe(false);
+  });
+
+  it("o banco recusa duas principais no mesmo caixa", async () => {
+    const company = await createTestCompany();
+    const store = await createTestStore(company.id);
+    const chain = await createChain(company.id, store.id, "13");
+
+    const base = {
+      deviceId: chain.device.id,
+      cashRegisterId: chain.cashRegister.id,
+      posStationId: chain.station.id,
+      storeId: store.id,
+      companyId: company.id,
+      status: "ACTIVE" as const,
+      isPrimary: true,
+    };
+
+    await prisma.paymentTerminal.create({ data: { ...base, serialNumber: "D-1" } });
+
+    // Insert direto, contornando o serviço: é a trava do banco que está sob teste.
+    await expect(
+      prisma.paymentTerminal.create({ data: { ...base, serialNumber: "D-2" } }),
+    ).rejects.toThrow();
+  });
+
+  it("maquininha bloqueada não pode virar principal", async () => {
+    const company = await createTestCompany();
+    const store = await createTestStore(company.id);
+    const chain = await createChain(company.id, store.id, "14");
+    const { user: owner, password } = await createTestUser({
+      companyId: company.id,
+      role: "DONO",
+    });
+    const token = await authenticate(owner.employeeCode, password);
+
+    const terminal = await prisma.paymentTerminal.create({
+      data: {
+        deviceId: chain.device.id,
+        cashRegisterId: chain.cashRegister.id,
+        posStationId: chain.station.id,
+        storeId: store.id,
+        companyId: company.id,
+        status: "BLOCKED",
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/terminals/${terminal.id}/primary`,
+      headers: auth(token),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe("TERMINAL_NOT_ACTIVE");
+  });
+});
+
 describe("trava de cobrança", () => {
   it("recusa cobrar por maquininha de outro caixa", async () => {
     const company = await createTestCompany();

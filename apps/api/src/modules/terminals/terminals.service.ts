@@ -186,7 +186,9 @@ export async function replaceTerminal(params: {
   const replacement = await prisma.$transaction(async (tx) => {
     await tx.paymentTerminal.update({
       where: { id: old.id },
-      data: { status: "RETIRED" },
+      // Perde o posto de principal junto com a aposentadoria: o caixa não pode
+      // apontar para um aparelho que saiu de circulação.
+      data: { status: "RETIRED", isPrimary: false },
     });
 
     return tx.paymentTerminal.create({
@@ -244,11 +246,18 @@ export async function setTerminalStatus(params: {
     );
   }
 
+  const blocking = status !== "ACTIVE";
+
   const updated = await prisma.paymentTerminal.update({
     where: { id: terminal.id },
-    // O schema só conhece PENDING/ACTIVE/BLOCKED/RETIRED; INACTIVE é
-    // representado como BLOCKED, que é o estado de "não cobra agora".
-    data: { status: status === "INACTIVE" ? "BLOCKED" : status },
+    data: {
+      // O schema só conhece PENDING/ACTIVE/BLOCKED/RETIRED; INACTIVE é
+      // representado como BLOCKED, que é o estado de "não cobra agora".
+      status: status === "INACTIVE" ? "BLOCKED" : status,
+      // Bloquear tira o posto de principal: senão o PDV continuaria oferecendo
+      // primeiro justo a maquininha que não pode cobrar.
+      ...(blocking ? { isPrimary: false } : {}),
+    },
   });
 
   await audit(request, {
@@ -263,6 +272,67 @@ export async function setTerminalStatus(params: {
     previousData: { status: terminal.status },
     newData: { status: updated.status },
     reason,
+  });
+
+  return updated;
+}
+
+/**
+ * Elege a maquininha principal do caixa. As demais viram reserva.
+ *
+ * O PDV oferece a principal primeiro e cai para a reserva quando ela não
+ * responde — maquininha sem sinal ou sem bateria no meio do expediente é
+ * rotina, e o vendedor não pode ficar escolhendo de qual cobrar com o cliente
+ * esperando no balcão.
+ *
+ * A troca é uma transação só: sem isso, uma falha entre rebaixar a antiga e
+ * promover a nova deixaria o caixa sem nenhuma principal.
+ */
+export async function setPrimaryTerminal(params: {
+  terminalId: string;
+  request: FastifyRequest;
+}) {
+  const { terminalId, request } = params;
+
+  const terminal = await prisma.paymentTerminal.findFirst({
+    where: { id: terminalId, companyId: request.user.companyId, deletedAt: null },
+  });
+  if (!terminal) {
+    throw notFound("TERMINAL_NOT_FOUND", "Maquininha não encontrada.");
+  }
+
+  await assertStoreAccess(request, terminal.storeId);
+
+  if (terminal.status !== "ACTIVE") {
+    throw badRequest(
+      "TERMINAL_NOT_ACTIVE",
+      "Só uma maquininha em uso pode ser a principal do caixa.",
+    );
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.paymentTerminal.updateMany({
+      where: { cashRegisterId: terminal.cashRegisterId, isPrimary: true },
+      data: { isPrimary: false },
+    });
+
+    return tx.paymentTerminal.update({
+      where: { id: terminal.id },
+      data: { isPrimary: true },
+    });
+  });
+
+  await audit(request, {
+    action: "DEVICE_UPDATE",
+    result: "SUCCESS",
+    userId: request.user.sub,
+    companyId: terminal.companyId,
+    storeId: terminal.storeId,
+    userRoleSnapshot: request.user.role,
+    entityType: "PaymentTerminal",
+    entityId: terminal.id,
+    newData: { isPrimary: true },
+    reason: "definida como maquininha principal do caixa",
   });
 
   return updated;
