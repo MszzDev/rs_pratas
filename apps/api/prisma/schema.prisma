@@ -131,6 +131,21 @@ enum AuditAction {
   STEP_UP_FAILED
   SETTING_UPDATE
   PERMISSION_DENIED
+  CATEGORY_CREATE
+  CATEGORY_UPDATE
+  PRODUCT_CREATE
+  PRODUCT_UPDATE
+  PRODUCT_DEACTIVATE
+  PRODUCT_PRICE_CHANGE
+  STOCK_MOVEMENT
+  STOCK_ADJUST
+  STOCK_TRANSFER_CREATE
+  STOCK_TRANSFER_SEND
+  STOCK_TRANSFER_RECEIVE
+  STOCK_TRANSFER_CANCEL
+  INVENTORY_OPEN
+  INVENTORY_COUNT
+  INVENTORY_CLOSE
 }
 
 // =====================================================================
@@ -154,6 +169,12 @@ model Company {
   users       User[]
   auditLogs   AuditLog[]
   appSettings AppSetting[]
+
+  categories     Category[]
+  sizeGrades     SizeGrade[]
+  products       Product[]
+  stockTransfers StockTransfer[]
+  inventories    Inventory[]
 
   @@map("companies")
 }
@@ -182,6 +203,11 @@ model Store {
   timeClockEntries TimeClockEntry[]
   storeSettings    StoreSetting[]
   auditLogs        AuditLog[]
+
+  stockItems       StockItem[]
+  transfersSent    StockTransfer[] @relation("TransferOrigin")
+  transfersReceived StockTransfer[] @relation("TransferDestination")
+  inventories      Inventory[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -245,6 +271,8 @@ model User {
 
   documents         EmployeeDocument[] @relation("EmployeeDocumentOwner")
   documentsReviewed EmployeeDocument[] @relation("EmployeeDocumentReviewer")
+
+  stockMovements StockMovement[]
 
   @@unique([companyId, employeeCode])
   @@index([companyId, role])
@@ -798,4 +826,361 @@ model DeviceSetting {
 
   @@unique([deviceId, key])
   @@map("device_settings")
+}
+
+// =====================================================================
+// CATÁLOGO — PRODUTOS, VARIAÇÕES E GRADE DE TAMANHOS (Fase 3)
+// =====================================================================
+
+enum StockMovementType {
+  ENTRADA
+  SAIDA
+  AJUSTE
+  TRANSFERENCIA_SAIDA
+  TRANSFERENCIA_ENTRADA
+  VENDA
+  DEVOLUCAO
+  INVENTARIO
+  PERDA
+}
+
+enum StockTransferStatus {
+  RASCUNHO
+  EM_TRANSITO
+  RECEBIDA
+  CANCELADA
+}
+
+enum InventoryStatus {
+  ABERTO
+  CONTANDO
+  FECHADO
+  CANCELADO
+}
+
+model Category {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  /// Hierarquia simples: "Anéis" > "Anéis de compromisso". Um nível de pai
+  /// basta para a operação da loja e evita árvores que ninguém consegue
+  /// navegar no tablet.
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  code     String
+  name     String
+  isActive Boolean @default(true)
+
+  products Product[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([companyId, code])
+  @@index([companyId, parentId])
+  @@map("categories")
+}
+
+/// Grade de tamanhos — hoje só de anel, mas o modelo não é específico de anel
+/// porque pulseira e corrente também vêm em tamanhos.
+model SizeGrade {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  code String
+  name String
+  /// Tamanhos na ordem em que a loja fala deles: ["8","9",...,"30"].
+  /// Array em vez de tabela filha: a grade é lida inteira, sempre, e nunca
+  /// referenciada linha a linha.
+  sizes    String[]
+  isActive Boolean  @default(true)
+
+  products Product[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([companyId, code])
+  @@map("size_grades")
+}
+
+model Product {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  /// Grade de tamanhos quando o produto tem numeração (anel, pulseira).
+  /// Nulo para o que não tem tamanho, como um pingente.
+  sizeGradeId String?
+  sizeGrade   SizeGrade? @relation(fields: [sizeGradeId], references: [id])
+
+  sku         String
+  name        String
+  description String?
+
+  /// Teor do metal. Prata 925 é o padrão da rede; o campo existe porque
+  /// folheado e ouro entram no mostruário e não podem ser vendidos como prata.
+  material String @default("PRATA_925")
+  /// Peso em gramas. Decimal, não float: prata é vendida por peso e um erro de
+  /// arredondamento aqui vira diferença de dinheiro.
+  weightGrams Decimal? @db.Decimal(10, 3)
+
+  costPrice Decimal @default(0) @db.Decimal(12, 2)
+  salePrice Decimal @default(0) @db.Decimal(12, 2)
+
+  /// Produto com variação não é vendido direto: quem sai do estoque é a
+  /// variação (o anel tamanho 18, não "o anel").
+  hasVariations Boolean @default(false)
+  isActive      Boolean @default(true)
+
+  variations ProductVariation[]
+  stockItems StockItem[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([companyId, sku])
+  @@index([companyId, categoryId])
+  @@index([companyId, name])
+  @@map("products")
+}
+
+model ProductVariation {
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  companyId String
+
+  sku String
+  /// O tamanho desta variação dentro da grade do produto ("18").
+  size String?
+  /// Outros atributos que distinguem a variação: cor da pedra, acabamento.
+  attributes Json?
+
+  /// Preço próprio quando esta variação custa diferente do produto — anel
+  /// tamanho 30 leva mais prata que o 12. Nulo herda o preço do produto.
+  costPriceOverride Decimal? @db.Decimal(12, 2)
+  salePriceOverride Decimal? @db.Decimal(12, 2)
+  weightGrams       Decimal? @db.Decimal(10, 3)
+
+  barcode  String?
+  isActive Boolean @default(true)
+
+  stockItems StockItem[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([companyId, sku])
+  @@unique([productId, size])
+  @@index([barcode])
+  @@map("product_variations")
+}
+
+// =====================================================================
+// ESTOQUE POR LOJA (Fase 3)
+// =====================================================================
+
+/// Saldo de um produto (ou variação) numa loja.
+///
+/// O saldo vive aqui, mas a VERDADE é a soma dos movimentos: esta tabela é o
+/// acumulado, mantido na mesma transação de cada StockMovement. Separar as
+/// duas coisas permite auditar divergência — se o acumulado não bate com a
+/// soma dos movimentos, houve bug ou escrita fora do caminho.
+model StockItem {
+  id        String @id @default(uuid())
+  companyId String
+  storeId   String
+  store     Store  @relation(fields: [storeId], references: [id])
+
+  productId   String
+  product     Product           @relation(fields: [productId], references: [id])
+  variationId String?
+  variation   ProductVariation? @relation(fields: [variationId], references: [id])
+
+  quantity Int @default(0)
+  /// Peças separadas para reserva de cliente. O saldo disponível para venda é
+  /// `quantity - reservedQuantity`, nunca `quantity`.
+  reservedQuantity Int @default(0)
+  /// Abaixo disso a tela avisa. Zero desliga o aviso.
+  minQuantity Int @default(0)
+
+  movements StockMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, productId, variationId])
+  @@index([companyId, storeId])
+  @@index([productId])
+  @@map("stock_items")
+}
+
+/// IMUTÁVEL — todo movimento de estoque é append-only, como a auditoria.
+///
+/// Corrigir um erro de contagem é lançar um AJUSTE novo, com motivo, nunca
+/// alterar o movimento anterior. Sem isso ninguém reconstrói por que o saldo é
+/// o que é, e desvio de peça vira palavra contra palavra.
+model StockMovement {
+  id        String @id @default(uuid())
+  companyId String
+  storeId   String
+
+  stockItemId String
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id])
+
+  type StockMovementType
+  /// Positivo entra, negativo sai. O sinal é redundante com o `type` de
+  /// propósito: a soma da coluna reconstrói o saldo sem interpretar o enum.
+  quantity Int
+
+  quantityBefore Int
+  quantityAfter  Int
+
+  unitCost Decimal? @db.Decimal(12, 2)
+
+  /// De onde veio o movimento: venda, transferência, inventário. Fica solto
+  /// (sem FK) porque a origem pode ser de um módulo que ainda não existe.
+  referenceType String?
+  referenceId   String?
+
+  reason String?
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  transferId String?
+  transfer   StockTransfer? @relation(fields: [transferId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([storeId, createdAt])
+  @@index([stockItemId, createdAt])
+  @@map("stock_movements")
+}
+
+model StockTransfer {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  fromStoreId String
+  fromStore   Store  @relation("TransferOrigin", fields: [fromStoreId], references: [id])
+  toStoreId   String
+  toStore     Store  @relation("TransferDestination", fields: [toStoreId], references: [id])
+
+  code   String
+  status StockTransferStatus @default(RASCUNHO)
+
+  /// A peça sai do estoque da origem quando a transferência PARTE e entra no
+  /// destino quando é RECEBIDA. Entre os dois momentos ela não está em nenhuma
+  /// loja — é isso que EM_TRANSITO representa, e é onde peça some se ninguém
+  /// confere no recebimento.
+  sentAt       DateTime?
+  sentById     String?
+  receivedAt   DateTime?
+  receivedById String?
+
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  notes String?
+
+  items     StockTransferItem[]
+  movements StockMovement[]
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([fromStoreId, status])
+  @@index([toStoreId, status])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id         String        @id @default(uuid())
+  transferId String
+  transfer   StockTransfer @relation(fields: [transferId], references: [id])
+
+  productId   String
+  variationId String?
+
+  quantitySent Int
+  /// Preenchido só no recebimento. Diferente do enviado = divergência, que a
+  /// tela precisa mostrar em vez de aceitar em silêncio.
+  quantityReceived Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([transferId])
+  @@map("stock_transfer_items")
+}
+
+/// Inventário (contagem) — cego por padrão.
+///
+/// Quem conta não vê o saldo do sistema. Ver o número esperado antes de contar
+/// enviesa a contagem: a tendência é "achar" exatamente o que o sistema diz, e
+/// a diferença que deveria aparecer some.
+model Inventory {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  storeId   String
+  store     Store   @relation(fields: [storeId], references: [id])
+
+  code   String
+  status InventoryStatus @default(ABERTO)
+  /// Contagem cega. Abrir uma contagem não-cega é ato do dono, e fica auditado.
+  isBlind Boolean @default(true)
+
+  startedAt   DateTime  @default(now())
+  startedById String
+  closedAt    DateTime?
+  closedById  String?
+
+  notes String?
+
+  counts InventoryCount[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([storeId, status])
+  @@map("inventories")
+}
+
+model InventoryCount {
+  id          String    @id @default(uuid())
+  inventoryId String
+  inventory   Inventory @relation(fields: [inventoryId], references: [id])
+
+  productId   String
+  variationId String?
+
+  /// Saldo que o sistema tinha no momento do fechamento. Gravado no
+  /// fechamento, não na contagem — antes disso o contador não pode vê-lo.
+  systemQuantity  Int?
+  countedQuantity Int
+
+  countedById String
+  countedAt   DateTime @default(now())
+
+  @@unique([inventoryId, productId, variationId])
+  @@index([inventoryId])
+  @@map("inventory_counts")
 }
