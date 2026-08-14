@@ -33,6 +33,9 @@ const GERENTE_PERMISSIONS: PermissionCode[] = [
   "TIMECLOCK_VIEW_STORE",
   "TIMECLOCK_CORRECT",
   "TIMECLOCK_MANAGE_SCHEDULE",
+  // O gerente consulta a comissao da equipe dele, mas nao define a regra —
+  // quem decide quanto se paga de comissao e o dono.
+  "COMMISSION_VIEW",
 ];
 
 /** DONO tem acesso completo — todo o catálogo. */

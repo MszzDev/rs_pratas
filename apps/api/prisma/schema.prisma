@@ -163,6 +163,11 @@ enum AuditAction {
   LABEL_TEMPLATE_CREATE
   LABEL_TEMPLATE_UPDATE
   PRINT_JOB_CREATE
+  COMMISSION_RULE_CREATE
+  COMMISSION_RULE_END
+  GOAL_CREATE
+  GOAL_UPDATE
+  REPORT_VIEW
 }
 
 // =====================================================================
@@ -193,7 +198,9 @@ model Company {
   stockTransfers StockTransfer[]
   inventories    Inventory[]
   customers      Customer[]
-  labelTemplates LabelTemplate[]
+  labelTemplates  LabelTemplate[]
+  commissionRules CommissionRule[]
+  goals           Goal[]
 
   @@map("companies")
 }
@@ -232,7 +239,9 @@ model Store {
   sales        Sale[]
   reservations Reservation[]
   quotes       Quote[]
-  printJobs    PrintJob[]
+  printJobs       PrintJob[]
+  commissionRules CommissionRule[]
+  goals           Goal[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -305,6 +314,8 @@ model User {
   salesMade            Sale[]         @relation("SaleSeller")
   saleDiscountsAllowed Sale[]         @relation("SaleDiscountAuthorizer")
   printJobsRequested   PrintJob[]
+  commissionRules      CommissionRule[]
+  goals                Goal[]
 
   @@unique([companyId, employeeCode])
   @@index([companyId, role])
@@ -1719,4 +1730,100 @@ model PrintJob {
   @@index([storeId, status, createdAt])
   @@index([deviceId, status])
   @@map("print_jobs")
+}
+
+// =====================================================================
+// COMISSÕES E METAS (Fase 6)
+// =====================================================================
+
+enum CommissionBasis {
+  /// Percentual sobre o valor vendido.
+  FATURAMENTO
+  /// Percentual sobre a margem (venda menos custo). Protege a loja de
+  /// comissionar venda feita com desconto que comeu o lucro inteiro.
+  MARGEM
+}
+
+enum GoalPeriod {
+  DIARIA
+  SEMANAL
+  MENSAL
+}
+
+enum GoalScope {
+  LOJA
+  VENDEDOR
+}
+
+/// Regra de comissão vigente.
+///
+/// Versionada por período em vez de editada: a comissão de março precisa
+/// continuar sendo calculada pela regra de março, mesmo que a regra mude em
+/// abril. Editar no lugar reescreveria o que já foi pago.
+model CommissionRule {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  /// Nula = vale para toda a rede. Preenchida = só aquela loja.
+  storeId String?
+  store   Store?  @relation(fields: [storeId], references: [id])
+  /// Nulo = vale para todos os vendedores da abrangência acima.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  name  String
+  basis CommissionBasis @default(FATURAMENTO)
+
+  percent Decimal @db.Decimal(6, 3)
+
+  /// Só comissiona a partir deste valor vendido no período. Zero desliga.
+  minimumSalesAmount Decimal @default(0) @db.Decimal(12, 2)
+
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  isActive      Boolean   @default(true)
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId, isActive])
+  @@index([storeId, userId])
+  @@map("commission_rules")
+}
+
+/// Meta de venda — da loja ou de um vendedor.
+model Goal {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id])
+
+  scope  GoalScope
+  /// Preenchido quando o escopo é VENDEDOR.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  period    GoalPeriod
+  /// Primeiro dia do período. Guardado como data para o mês de referência ser
+  /// inequívoco — "meta de março" e não "meta dos últimos 30 dias".
+  periodStart DateTime
+  periodEnd   DateTime
+
+  targetAmount Decimal @db.Decimal(12, 2)
+
+  notes String?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// Uma meta por escopo e período. Duas metas do mesmo vendedor no mesmo mês
+  /// fariam o painel mostrar percentuais conflitantes.
+  @@unique([storeId, scope, userId, periodStart])
+  @@index([companyId, periodStart])
+  @@map("goals")
 }

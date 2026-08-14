@@ -63,6 +63,11 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   { code: "REPORT_VIEW_ALL", category: "REPORT", description: "Visualizar relatórios de todas as lojas" },
   { code: "REPORT_EXPORT", category: "REPORT", description: "Exportar relatórios" },
 
+  // COMISSAO / META
+  { code: "COMMISSION_VIEW", category: "COMMISSION", description: "Consultar comissões" },
+  { code: "COMMISSION_MANAGE", category: "COMMISSION", description: "Definir regras de comissão" },
+  { code: "GOAL_MANAGE", category: "COMMISSION", description: "Definir metas de venda" },
+
   // INTEGRATION (fase futura)
   { code: "INTEGRATION_NUVEMSHOP", category: "INTEGRATION", description: "Configurar integração Nuvemshop" },
   { code: "INTEGRATION_MERCADOPAGO", category: "INTEGRATION", description: "Configurar integração Mercado Pago" },
