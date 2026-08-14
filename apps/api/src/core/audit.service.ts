@@ -8,6 +8,10 @@ export interface AuditInput {
   result: AuditResult;
   companyId?: string | null;
   storeId?: string | null;
+  posStationId?: string | null;
+  /// Amarra o evento ao caixa — sem isso, uma venda ou sangria fica no ar
+  /// dentro da loja e a conferencia nao consegue reconstruir de qual gaveta veio.
+  cashRegisterId?: string | null;
   deviceId?: string | null;
   userId?: string | null;
   userRoleSnapshot?: string | null;
@@ -37,6 +41,8 @@ export async function audit(request: FastifyRequest | null, input: AuditInput): 
         result: input.result,
         companyId: input.companyId ?? null,
         storeId: input.storeId ?? null,
+        posStationId: input.posStationId ?? null,
+        cashRegisterId: input.cashRegisterId ?? null,
         deviceId: input.deviceId ?? null,
         userId: input.userId ?? null,
         userRoleSnapshot: input.userRoleSnapshot ?? null,
