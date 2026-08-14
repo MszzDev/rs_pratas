@@ -4,6 +4,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   Building2,
   CalendarClock,
+  Boxes,
   Clock,
   CreditCard,
   FileCheck,
@@ -11,6 +12,7 @@ import {
   LogOut,
   Menu,
   MonitorSmartphone,
+  Package,
   ScrollText,
   Settings,
   Tablet,
@@ -45,6 +47,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/espelho-de-ponto", label: "Espelho de ponto", icon: CalendarClock, section: "dia-a-dia" },
   { to: "/sessoes", label: "Meus acessos", icon: MonitorSmartphone, section: "dia-a-dia" },
 
+  { to: "/produtos", label: "Produtos", icon: Package, section: "gestao" },
+  { to: "/estoque", label: "Estoque", icon: Boxes, section: "gestao" },
   {
     to: "/documentos",
     label: "Conferir documentos",

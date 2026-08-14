@@ -19,6 +19,8 @@ import { SessionsPage } from "./features/auth/SessionsPage";
 import { SchedulesPage } from "./features/timeclock/SchedulesPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { TerminalsPage } from "./features/terminals/TerminalsPage";
+import { ProductsPage } from "./features/catalog/ProductsPage";
+import { StockPage } from "./features/stock/StockPage";
 
 /**
  * Guarda de rota — conveniência de navegação, NUNCA controle de acesso.
@@ -147,6 +149,22 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <TerminalsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/produtos"
+        element={
+          <RequireAuth>
+            <ProductsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/estoque"
+        element={
+          <RequireAuth>
+            <StockPage />
           </RequireAuth>
         }
       />
