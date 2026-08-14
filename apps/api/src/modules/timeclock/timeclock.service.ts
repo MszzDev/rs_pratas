@@ -387,3 +387,47 @@ export async function createWorkSchedule(params: {
 
   return schedule;
 }
+
+/**
+ * Encerra uma jornada sem apagá-la.
+ *
+ * A linha continua no banco com `effectiveTo` preenchido porque o cálculo de
+ * atraso de qualquer marcação antiga depende da jornada que valia no dia. Um
+ * DELETE reescreveria o passado de um registro que tem valor legal.
+ */
+export async function deactivateWorkSchedule(params: {
+  scheduleId: string;
+  request: FastifyRequest;
+}) {
+  const { scheduleId, request } = params;
+
+  const schedule = await prisma.workSchedule.findFirst({
+    where: { id: scheduleId, companyId: request.user.companyId },
+  });
+  if (!schedule) {
+    throw notFound("SCHEDULE_NOT_FOUND", "Jornada não encontrada.");
+  }
+
+  await assertStoreAccess(request, schedule.storeId);
+
+  const updated = await prisma.workSchedule.update({
+    where: { id: schedule.id },
+    data: { isActive: false, effectiveTo: schedule.effectiveTo ?? new Date() },
+  });
+
+  await audit(request, {
+    action: "WORK_SCHEDULE_UPDATE",
+    result: "SUCCESS",
+    userId: request.user.sub,
+    companyId: schedule.companyId,
+    storeId: schedule.storeId,
+    userRoleSnapshot: request.user.role,
+    entityType: "WorkSchedule",
+    entityId: schedule.id,
+    previousData: { isActive: schedule.isActive, effectiveTo: schedule.effectiveTo },
+    newData: { isActive: updated.isActive, effectiveTo: updated.effectiveTo },
+    reason: "jornada encerrada",
+  });
+
+  return updated;
+}

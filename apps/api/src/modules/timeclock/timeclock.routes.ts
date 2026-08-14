@@ -11,6 +11,7 @@ import { requirePermission } from "../../core/rbac/require-permission.hook.js";
 import {
   correctEntry,
   createWorkSchedule,
+  deactivateWorkSchedule,
   getLastEntry,
   getMirror,
   registerPunch,
@@ -122,6 +123,21 @@ export async function timeClockRoutes(app: FastifyInstance) {
       const input = createWorkScheduleSchema.parse(request.body);
       const schedule = await createWorkSchedule({ input, request });
       return reply.status(201).send(schedule);
+    },
+  );
+
+  /**
+   * Encerrar uma jornada não apaga a linha: marca `effectiveTo` e desativa.
+   *
+   * O cálculo de atraso de uma marcação antiga precisa da jornada que valia
+   * naquele dia. Apagar reescreveria o passado do ponto oficial.
+   */
+  app.delete(
+    "/timeclock/schedules/:id",
+    { preHandler: [app.requireAuth, requirePermission("TIMECLOCK_MANAGE_SCHEDULE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      return deactivateWorkSchedule({ scheduleId: id, request });
     },
   );
 }

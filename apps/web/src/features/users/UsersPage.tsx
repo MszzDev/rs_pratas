@@ -43,6 +43,7 @@ export function UsersPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [role, setRole] = useState<UserRole>("VENDEDOR");
   const [storeIds, setStoreIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +54,7 @@ export function UsersPage() {
     name: string;
     code: string;
     password: string;
+    emailSent: boolean;
   } | null>(null);
 
   const users = useQuery({
@@ -71,19 +73,26 @@ export function UsersPage() {
 
   const createUser = useMutation({
     mutationFn: () =>
-      apiFetch<{ user: { name: string; employeeCode: string }; temporaryPassword: string }>(
-        "/api/v1/users",
-        { method: "POST", body: { name, role, storeIds } },
-      ),
+      apiFetch<{
+        user: { name: string; employeeCode: string };
+        temporaryPassword: string;
+        emailSent: boolean;
+      }>("/api/v1/users", {
+        method: "POST",
+        // E-mail em branco não vai como string vazia: o campo é opcional.
+        body: { name, role, storeIds, ...(email.trim() ? { email: email.trim() } : {}) },
+      }),
     onSuccess: (result) => {
       setCredential({
         name: result.user.name,
         code: result.user.employeeCode,
         password: result.temporaryPassword,
+        emailSent: result.emailSent,
       });
       setError(null);
       setShowForm(false);
       setName("");
+      setEmail("");
       setStoreIds([]);
       void queryClient.invalidateQueries({ queryKey: ["users"] });
     },
@@ -92,7 +101,7 @@ export function UsersPage() {
 
   const regenerate = useMutation({
     mutationFn: (target: UserRow) =>
-      apiFetch<{ employeeCode: string; temporaryPassword: string }>(
+      apiFetch<{ employeeCode: string; temporaryPassword: string; emailSent: boolean }>(
         `/api/v1/users/${target.id}/regenerate-password`,
         { method: "POST" },
       ).then((result) => ({ ...result, name: target.name })),
@@ -101,6 +110,7 @@ export function UsersPage() {
         name: result.name,
         code: result.employeeCode,
         password: result.temporaryPassword,
+        emailSent: result.emailSent,
       }),
     onError: (caught) => handleError(caught, "Não foi possível gerar a senha."),
   });
@@ -125,7 +135,11 @@ export function UsersPage() {
       {credential && (
         <div className="mb-6">
           <Alert tone="success" title={`Credencial de ${credential.name}`}>
-            <p>Anote e entregue em mãos. Esta senha não aparece de novo.</p>
+            <p>
+              {credential.emailSent
+                ? "Enviada também para o e-mail cadastrado. Anote mesmo assim — esta senha não aparece de novo aqui."
+                : "Anote e entregue em mãos. Esta senha não aparece de novo."}
+            </p>
 
             <dl className="mt-3 grid gap-2 rounded-md bg-surface p-4 sm:grid-cols-2">
               <div>
@@ -178,6 +192,14 @@ export function UsersPage() {
             value={name}
             onChange={(event) => setName(event.target.value)}
             required
+          />
+
+          <Field
+            label="E-mail (opcional)"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            hint="Só para receber a credencial e avisos. Não serve para entrar no sistema — o login é sempre pela matrícula."
           />
 
           <div className="flex flex-col gap-1.5">

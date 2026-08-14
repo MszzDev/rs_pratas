@@ -1,14 +1,32 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Building2, Clock, FileText, LogOut, Menu, Tablet, Users, X } from "lucide-react";
+import {
+  Building2,
+  CalendarClock,
+  Clock,
+  CreditCard,
+  FileCheck,
+  FileText,
+  LogOut,
+  Menu,
+  MonitorSmartphone,
+  ScrollText,
+  Settings,
+  Tablet,
+  Users,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-context";
+
+type NavSection = "dia-a-dia" | "gestao";
 
 interface NavItem {
   to: string;
   label: string;
   icon: typeof Users;
+  section: NavSection;
   /** Perfis que enxergam o item. Ausente = todos. */
   roles?: string[];
 }
@@ -16,20 +34,73 @@ interface NavItem {
 /**
  * A navegação esconde o que o perfil não usa — conveniência, não segurança.
  * Quem chamar a rota direto continua sendo barrado pelo backend.
+ *
+ * Agrupado em duas seções porque a lista vai crescer bastante com PDV, produtos,
+ * estoque e relatórios. Separar o que o vendedor usa todo dia do que só a
+ * gestão abre evita que o item mais frequente se perca numa lista longa.
  */
 const NAV_ITEMS: NavItem[] = [
-  { to: "/ponto", label: "Ponto", icon: Clock },
-  { to: "/meus-documentos", label: "Meus documentos", icon: FileText },
+  { to: "/ponto", label: "Ponto", icon: Clock, section: "dia-a-dia" },
+  { to: "/meus-documentos", label: "Meus documentos", icon: FileText, section: "dia-a-dia" },
+  { to: "/espelho-de-ponto", label: "Espelho de ponto", icon: CalendarClock, section: "dia-a-dia" },
+  { to: "/sessoes", label: "Meus acessos", icon: MonitorSmartphone, section: "dia-a-dia" },
+
   {
     to: "/documentos",
     label: "Conferir documentos",
-    icon: FileText,
+    icon: FileCheck,
+    section: "gestao",
     roles: ["DONO", "GERENTE", "DESENVOLVEDOR"],
   },
-  { to: "/funcionarios", label: "Funcionários", icon: Users },
-  { to: "/lojas", label: "Lojas", icon: Building2, roles: ["DONO", "DESENVOLVEDOR"] },
-  { to: "/tablets", label: "Tablets", icon: Tablet, roles: ["DONO", "GERENTE", "DESENVOLVEDOR"] },
+  { to: "/funcionarios", label: "Funcionários", icon: Users, section: "gestao" },
+  {
+    to: "/lojas",
+    label: "Lojas",
+    icon: Building2,
+    section: "gestao",
+    roles: ["DONO", "DESENVOLVEDOR"],
+  },
+  {
+    to: "/tablets",
+    label: "Tablets",
+    icon: Tablet,
+    section: "gestao",
+    roles: ["DONO", "GERENTE", "DESENVOLVEDOR"],
+  },
+  {
+    to: "/jornadas",
+    label: "Jornadas",
+    icon: CalendarClock,
+    section: "gestao",
+    roles: ["DONO", "GERENTE", "DESENVOLVEDOR"],
+  },
+  {
+    to: "/maquininhas",
+    label: "Maquininhas",
+    icon: CreditCard,
+    section: "gestao",
+    roles: ["DONO", "GERENTE", "DESENVOLVEDOR"],
+  },
+  {
+    to: "/auditoria",
+    label: "Auditoria",
+    icon: ScrollText,
+    section: "gestao",
+    roles: ["DONO", "GERENTE", "DESENVOLVEDOR"],
+  },
+  {
+    to: "/configuracoes",
+    label: "Configurações",
+    icon: Settings,
+    section: "gestao",
+    roles: ["DONO", "DESENVOLVEDOR"],
+  },
 ];
+
+const SECTION_LABELS: Record<NavSection, string> = {
+  "dia-a-dia": "Dia a dia",
+  gestao: "Gestão",
+};
 
 export function PageShell({
   title,
@@ -106,6 +177,36 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? "bg-rose-soft text-rose-dark" : "text-text-secondary hover:bg-background-secondary",
   );
 
+/** Lista agrupada, usada no menu lateral e na gaveta do celular. */
+function GroupedNav({ items }: { items: NavItem[] }) {
+  const sections: NavSection[] = ["dia-a-dia", "gestao"];
+
+  return (
+    <nav className="space-y-5" aria-label="Navegação principal">
+      {sections.map((section) => {
+        const sectionItems = items.filter((item) => item.section === section);
+        if (sectionItems.length === 0) return null;
+
+        return (
+          <div key={section}>
+            <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
+              {SECTION_LABELS[section]}
+            </p>
+            <div className="space-y-1">
+              {sectionItems.map((item) => (
+                <NavLink key={item.to} to={item.to} className={linkClass}>
+                  <item.icon className="h-5 w-5 shrink-0" aria-hidden />
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
 /** Só no computador (lg em diante). */
 function Sidebar({
   items,
@@ -122,14 +223,9 @@ function Sidebar({
         <span className="text-xl font-semibold text-rose-primary">RS Pratas</span>
       </div>
 
-      <nav className="flex-1 space-y-1 p-3" aria-label="Navegação principal">
-        {items.map((item) => (
-          <NavLink key={item.to} to={item.to} className={linkClass}>
-            <item.icon className="h-5 w-5 shrink-0" aria-hidden />
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
+      <div className="flex-1 overflow-y-auto p-3">
+        <GroupedNav items={items} />
+      </div>
 
       <div className="border-t border-border p-3">
         <p className="px-3 pb-2 text-sm text-text-secondary">{userName}</p>
@@ -219,14 +315,9 @@ function MobileBar({
               </button>
             </div>
 
-            <nav className="flex-1 space-y-1 p-3" aria-label="Navegação principal">
-              {items.map((item) => (
-                <NavLink key={item.to} to={item.to} className={linkClass}>
-                  <item.icon className="h-5 w-5 shrink-0" aria-hidden />
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
+            <div className="flex-1 overflow-y-auto p-3">
+              <GroupedNav items={items} />
+            </div>
 
             <div className="border-t border-border p-3">
               <p className="px-3 pb-2 text-sm text-text-secondary">{userName}</p>

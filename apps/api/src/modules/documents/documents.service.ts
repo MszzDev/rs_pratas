@@ -5,8 +5,17 @@ import { audit } from "../../core/audit.service.js";
 import { badRequest, forbidden, notFound } from "../../core/errors.js";
 import type { StorageProvider } from "../../core/storage/storage.provider.js";
 import type { DocumentAnalysisProvider } from "../../core/documents/analysis.provider.js";
+import { sendEmail } from "../../core/email/index.js";
+import { documentReviewedEmail } from "../../core/email/templates.js";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+const DOCUMENT_TYPE_LABELS: Record<EmployeeDocumentType, string> = {
+  MEDICAL_CERTIFICATE: "Atestado médico",
+  HOURS_PROOF: "Comprovante de horas",
+  ABSENCE_JUSTIFICATION: "Justificativa de falta",
+  OTHER: "Documento",
+};
 
 export async function uploadDocument(params: {
   input: {
@@ -300,6 +309,25 @@ export async function reviewDocument(params: {
     // auditar se ela influenciou a decisão.
     metadata: { analysisVerdict: document.analysisVerdict, decision: "human" },
   });
+
+  // Aviso ao funcionário. Depois da auditoria de propósito: se o e-mail falhar,
+  // a decisão já está registrada e não se perde.
+  const owner = await prisma.user.findUnique({
+    where: { id: document.userId },
+    select: { name: true, email: true },
+  });
+
+  if (owner?.email) {
+    await sendEmail(
+      documentReviewedEmail({
+        to: owner.email,
+        name: owner.name,
+        documentLabel: DOCUMENT_TYPE_LABELS[document.type],
+        approved: approve,
+        note: comment,
+      }),
+    );
+  }
 
   return updated;
 }

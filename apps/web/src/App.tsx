@@ -13,6 +13,12 @@ import { StoresPage } from "./features/stores/StoresPage";
 import { DevicesPage } from "./features/devices/DevicesPage";
 import { MyDocumentsPage } from "./features/documents/MyDocumentsPage";
 import { ReviewDocumentsPage } from "./features/documents/ReviewDocumentsPage";
+import { TimeSheetPage } from "./features/timeclock/TimeSheetPage";
+import { AuditPage } from "./features/audit/AuditPage";
+import { SessionsPage } from "./features/auth/SessionsPage";
+import { SchedulesPage } from "./features/timeclock/SchedulesPage";
+import { SettingsPage } from "./features/settings/SettingsPage";
+import { TerminalsPage } from "./features/terminals/TerminalsPage";
 
 /**
  * Guarda de rota — conveniência de navegação, NUNCA controle de acesso.
@@ -100,6 +106,55 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <DevicesPage />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/espelho-de-ponto"
+        element={
+          <RequireAuth>
+            <TimeSheetPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/auditoria"
+        element={
+          <RequireAuth>
+            <AuditPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/sessoes"
+        element={
+          <RequireAuth>
+            <SessionsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/jornadas"
+        element={
+          <RequireAuth>
+            <SchedulesPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/maquininhas"
+        element={
+          <RequireAuth>
+            <TerminalsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/configuracoes"
+        element={
+          <RequireAuth>
+            <SettingsPage />
           </RequireAuth>
         }
       />

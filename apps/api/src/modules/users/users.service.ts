@@ -7,6 +7,8 @@ import { badRequest, forbidden, notFound } from "../../core/errors.js";
 import { hashSecret } from "../../core/security/password.service.js";
 import { invalidatePermissionCache } from "../../core/rbac/permissions.engine.js";
 import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
+import { sendEmail } from "../../core/email/index.js";
+import { credentialsEmail, credentialsResetEmail } from "../../core/email/templates.js";
 import { generateEmployeeCode, generateTemporaryPassword } from "./credentials.js";
 
 /**
@@ -51,6 +53,7 @@ export async function createUser(params: {
         companyId,
         employeeCode,
         name: input.name,
+        email: input.email ?? null,
         role: input.role,
         status: "PENDING_FIRST_ACCESS",
         passwordHash,
@@ -73,6 +76,23 @@ export async function createUser(params: {
     return created;
   });
 
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: companyId },
+    select: { tradeName: true },
+  });
+
+  const emailSent = user.email
+    ? await sendEmail(
+        credentialsEmail({
+          to: user.email,
+          name: user.name,
+          employeeCode: user.employeeCode,
+          temporaryPassword,
+          companyName: company.tradeName,
+        }),
+      )
+    : false;
+
   await audit(request, {
     action: "USER_CREATE",
     result: "SUCCESS",
@@ -84,8 +104,10 @@ export async function createUser(params: {
     newData: {
       name: user.name,
       employeeCode: user.employeeCode,
+      email: user.email,
       role: user.role,
       storeIds: input.storeIds,
+      credentialsEmailSent: emailSent,
     },
   });
 
@@ -94,17 +116,21 @@ export async function createUser(params: {
       id: user.id,
       name: user.name,
       employeeCode: user.employeeCode,
+      email: user.email,
       role: user.role,
       status: user.status,
     },
     /**
      * Única vez que a senha em claro existe fora do hash.
      *
-     * Sem e-mail no sistema, o dono anota e entrega em mãos. Não fica guardada
-     * em lugar nenhum: se ele perder, o caminho é gerar outra, que invalida
-     * esta.
+     * Vai para a tela mesmo quando o e-mail é enviado: e-mail cai em spam,
+     * atrasa, ou o endereço está errado — e o dono precisa poder entregar a
+     * credencial em mãos ali mesmo. Não fica guardada em lugar nenhum: se
+     * sumir, o caminho é gerar outra, que invalida esta.
      */
     temporaryPassword,
+    /** A tela avisa se a entrega por e-mail funcionou. */
+    emailSent,
   };
 }
 
@@ -141,6 +167,23 @@ export async function regenerateTemporaryPassword(params: {
     data: { passwordHash: await hashSecret(temporaryPassword), mustChangePassword: true },
   });
 
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: user.companyId },
+    select: { tradeName: true },
+  });
+
+  const emailSent = user.email
+    ? await sendEmail(
+        credentialsResetEmail({
+          to: user.email,
+          name: user.name,
+          employeeCode: user.employeeCode,
+          temporaryPassword,
+          companyName: company.tradeName,
+        }),
+      )
+    : false;
+
   await audit(request, {
     action: "PASSWORD_CHANGE",
     result: "SUCCESS",
@@ -150,9 +193,10 @@ export async function regenerateTemporaryPassword(params: {
     entityType: "User",
     entityId: user.id,
     reason: "nova senha temporária gerada pelo dono",
+    newData: { credentialsEmailSent: emailSent },
   });
 
-  return { employeeCode: user.employeeCode, temporaryPassword };
+  return { employeeCode: user.employeeCode, temporaryPassword, emailSent };
 }
 
 export async function listUsers(request: FastifyRequest) {
@@ -189,6 +233,7 @@ export async function listUsers(request: FastifyRequest) {
     id: user.id,
     name: user.name,
     employeeCode: user.employeeCode,
+    email: user.email,
     role: user.role,
     status: user.status,
     storeIds: user.userStores.map((link) => link.storeId),
@@ -231,6 +276,8 @@ export async function updateUser(params: {
       where: { id: user.id },
       data: {
         ...(input.name ? { name: input.name } : {}),
+        // String vazia é o gesto de "apagar o e-mail", distinto de "não mexer".
+        ...(input.email !== undefined ? { email: input.email || null } : {}),
       },
     });
 
@@ -260,9 +307,14 @@ export async function updateUser(params: {
     entityId: user.id,
     previousData: {
       name: user.name,
+      email: user.email,
       storeIds: user.userStores.map((link) => link.storeId),
     },
-    newData: { name: updated.name, storeIds: input.storeIds ?? undefined },
+    newData: {
+      name: updated.name,
+      email: updated.email,
+      storeIds: input.storeIds ?? undefined,
+    },
   });
 
   return updated;

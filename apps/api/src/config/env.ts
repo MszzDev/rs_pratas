@@ -40,6 +40,16 @@ const envSchema = z.object({
    */
   DOCUMENT_STORAGE_DIR: z.string().default("./storage/documents"),
 
+  /**
+   * Canal de e-mail. Fica em "log" por padrão: sem SMTP configurado o sistema
+   * segue funcionando e a credencial continua aparecendo na tela do dono, que
+   * é a entrega garantida. O e-mail é o atalho, não a única via.
+   */
+  MAIL_TRANSPORT: z.enum(["log", "smtp"]).default("log"),
+  /** Ex.: smtps://loja%40dominio.com.br:SENHA_DE_APP@smtp.dominio.com.br:465 */
+  SMTP_URL: z.string().optional(),
+  MAIL_FROM: z.string().default("RS Pratas <nao-responda@rspratas.com.br>"),
+
   CORS_ALLOWED_ORIGINS: z
     .string()
     .default("")
