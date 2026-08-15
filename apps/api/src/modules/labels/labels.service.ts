@@ -401,7 +401,7 @@ export async function buildBatchFromStock(params: {
       product: { deletedAt: null, isActive: true, ...(categoryId ? { categoryId } : {}) },
     },
     include: {
-      product: { select: { name: true, sku: true, salePrice: true } },
+      product: { select: { name: true, sku: true, salePrice: true, imageChecksum: true } },
       variation: { select: { sku: true, size: true } },
     },
     orderBy: { product: { name: "asc" } },
@@ -417,6 +417,7 @@ export async function buildBatchFromStock(params: {
     /** Sugere uma etiqueta por peça em estoque — o funcionário ajusta. */
     copies: item.quantity,
     salePrice: item.product.salePrice,
+    imageChecksum: item.product.imageChecksum,
   }));
 }
 

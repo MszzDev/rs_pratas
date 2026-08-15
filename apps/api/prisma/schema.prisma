@@ -188,6 +188,8 @@ enum AuditAction {
   GOAL_DELETE
   POS_STATION_DELETE
   CASH_REGISTER_DELETE
+  PRODUCT_IMAGE_SET
+  PRODUCT_IMAGE_REMOVE
 }
 
 // =====================================================================
@@ -1024,6 +1026,17 @@ model Product {
 
   costPrice Decimal @default(0) @db.Decimal(12, 2)
   salePrice Decimal @default(0) @db.Decimal(12, 2)
+
+  /// Foto da peça.
+  ///
+  /// O arquivo fica fora da raiz web, como os documentos: o download passa
+  /// pela API para a permissão ser conferida. Guardar só a chave (e não o
+  /// binário no banco) mantém o dump de backup no tamanho do texto.
+  imageStorageKey String?
+  imageMimeType   String?
+  /// SHA-256 do arquivo — serve de etiqueta de cache no navegador. Sem ele, a
+  /// foto trocada continuaria aparecendo a antiga até alguém limpar o cache.
+  imageChecksum String?
 
   /// Produto com variação não é vendido direto: quem sai do estoque é a
   /// variação (o anel tamanho 18, não "o anel").

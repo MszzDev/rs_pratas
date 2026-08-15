@@ -1,6 +1,14 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
+import { badRequest } from "../../core/errors.js";
+import { env } from "../../config/env.js";
+import { LocalDiskStorage } from "../../core/storage/local-disk.storage.js";
+import {
+  readProductImage,
+  removeProductImage,
+  setProductImage,
+} from "./product-image.service.js";
 import {
   addVariations,
   createCategory,
@@ -60,6 +68,10 @@ const updateProductSchema = z.object({
 });
 
 export async function catalogRoutes(app: FastifyInstance) {
+  // Mesma pasta dos documentos, em subpasta propria: fica fora da raiz web e
+  // entra na mesma rotina de backup.
+  const storage = new LocalDiskStorage(env.DOCUMENT_STORAGE_DIR);
+
   app.get(
     "/categories",
     { preHandler: [app.requireAuth, requirePermission("PRODUCT_VIEW")] },
@@ -144,6 +156,66 @@ export async function catalogRoutes(app: FastifyInstance) {
         .parse(request.body);
 
       return reply.status(201).send(await addVariations({ productId: id, sizes, request }));
+    },
+  );
+
+  // ------------------------------------------------------- foto da peça
+
+  app.post(
+    "/products/:id/image",
+    { preHandler: [app.requireAuth, requirePermission("PRODUCT_EDIT")] },
+    async (request, reply) => {
+      const { id } = idParamSchema.parse(request.params);
+      const file = await request.file();
+
+      if (!file) {
+        throw badRequest("FILE_REQUIRED", "Escolha a foto da peça.");
+      }
+
+      const result = await setProductImage({
+        productId: id,
+        file: {
+          content: await file.toBuffer(),
+          fileName: file.filename,
+          mimeType: file.mimetype,
+        },
+        request,
+        storage,
+      });
+
+      return reply.status(201).send(result);
+    },
+  );
+
+  /**
+   * Serve a foto.
+   *
+   * Passa pela API e não por pasta pública: uma pasta servida direto entrega
+   * arquivo sem autenticação nenhuma, e vira hospedagem do que subirem nela.
+   * O checksum vira ETag — foto trocada invalida o cache do navegador na hora.
+   */
+  app.get(
+    "/products/:id/image",
+    { preHandler: [app.requireAuth, requirePermission("PRODUCT_VIEW")] },
+    async (request, reply) => {
+      const { id } = idParamSchema.parse(request.params);
+      const image = await readProductImage({ productId: id, request, storage });
+
+      return reply
+        .header("content-type", image.mimeType)
+        .header("etag", `"${image.checksum}"`)
+        // Privado: e catalogo da empresa, nao deve ficar em cache de proxy.
+        .header("cache-control", "private, max-age=86400")
+        .send(image.content);
+    },
+  );
+
+  app.delete(
+    "/products/:id/image",
+    { preHandler: [app.requireAuth, requirePermission("PRODUCT_EDIT")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      return removeProductImage({ productId: id, request, storage });
     },
   );
 

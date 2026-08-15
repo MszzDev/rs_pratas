@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { ProductPhoto } from "@/components/ui/product-photo";
 import { formatMoney } from "@/lib/money";
 import { PaymentDialog } from "./PaymentDialog";
 import type { CartLine, StockRow } from "./types";
@@ -119,6 +120,7 @@ export function PosPage() {
               size: row.size,
               sku: row.sku,
               salePrice: row.salePrice,
+              imageChecksum: row.imageChecksum,
               available: row.availableQuantity,
               quantity: 1,
             },
@@ -253,9 +255,16 @@ export function PosPage() {
                     type="button"
                     onClick={() => addToCart(row)}
                     disabled={row.availableQuantity === 0}
-                    className="flex w-full min-h-[64px] items-center justify-between gap-4 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-rose-primary disabled:opacity-50"
+                    className="flex w-full min-h-[64px] items-center justify-between gap-4 rounded-lg border border-border bg-surface p-3 text-left transition-colors hover:border-rose-primary disabled:opacity-50"
                   >
-                    <div>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <ProductPhoto
+                        productId={row.productId}
+                        checksum={row.imageChecksum}
+                        alt={row.name}
+                        size="md"
+                      />
+                      <div className="min-w-0">
                       <p className="font-medium text-text-primary">
                         {row.name}
                         {row.size ? ` — tamanho ${row.size}` : ""}
@@ -264,6 +273,7 @@ export function PosPage() {
                         {row.sku} · {row.availableQuantity} disponível(is)
                         {row.reservedQuantity > 0 ? ` · ${row.reservedQuantity} reservada(s)` : ""}
                       </p>
+                      </div>
                     </div>
                     <span className="shrink-0 font-medium text-text-primary">
                       {formatMoney(row.salePrice)}
@@ -298,7 +308,14 @@ export function PosPage() {
               {cart.map((line) => (
                 <li key={line.stockItemId} className="border-b border-border pb-3 last:border-0">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <ProductPhoto
+                        productId={line.productId}
+                        checksum={line.imageChecksum}
+                        alt={line.name}
+                        size="sm"
+                      />
+                      <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-text-primary">
                         {line.name}
                         {line.size ? ` — ${line.size}` : ""}
@@ -306,6 +323,7 @@ export function PosPage() {
                       <p className="text-sm text-text-secondary">
                         {formatMoney(line.salePrice)} cada
                       </p>
+                      </div>
                     </div>
                     <button
                       type="button"

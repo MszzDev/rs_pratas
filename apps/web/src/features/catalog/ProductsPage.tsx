@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, Plus, Search } from "lucide-react";
+import { ImagePlus, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { ProductPhoto } from "@/components/ui/product-photo";
 
 interface Variation {
   id: string;
@@ -23,6 +24,8 @@ interface Product {
   salePrice: string | null;
   hasVariations: boolean;
   isActive: boolean;
+  /** Nulo = sem foto. Também é a chave de cache da imagem. */
+  imageChecksum: string | null;
   category: { name: string } | null;
   variations: Variation[];
 }
@@ -86,6 +89,38 @@ export function ProductsPage() {
   });
 
   const selectedGrade = grades.data?.find((grade) => grade.id === form.sizeGradeId);
+
+  /**
+   * Envio da foto. Multipart, e a validação de verdade é no servidor: o
+   * `accept` do input só filtra o que o seletor de arquivos mostra.
+   */
+  const enviarFoto = useMutation({
+    mutationFn: async (params: { productId: string; file: File }) => {
+      const form = new FormData();
+      form.append("file", params.file);
+      return apiFetch(`/api/v1/products/${params.productId}/image`, {
+        method: "POST",
+        body: form,
+      });
+    },
+    onSuccess: () => {
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível enviar a foto."),
+  });
+
+  const removerFoto = useMutation({
+    mutationFn: (productId: string) =>
+      apiFetch(`/api/v1/products/${productId}/image`, { method: "DELETE" }),
+    onSuccess: () => {
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível remover a foto."),
+  });
 
   const create = useMutation({
     mutationFn: () =>
@@ -310,8 +345,13 @@ export function ProductsPage() {
         {products.data?.map((product) => (
           <li key={product.id} className="rounded-lg border border-border bg-surface p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <Package className="mt-1 h-5 w-5 text-text-secondary" aria-hidden />
+              <div className="flex items-start gap-4">
+                <ProductPhoto
+                  productId={product.id}
+                  checksum={product.imageChecksum}
+                  alt={product.name}
+                  size="lg"
+                />
                 <div>
                   <p className="font-medium text-text-primary">{product.name}</p>
                   <p className="text-sm text-text-secondary">
@@ -343,6 +383,34 @@ export function ProductsPage() {
                     Inativo
                   </span>
                 )}
+
+                <div className="mt-2 flex justify-end gap-1">
+                  <label className="flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm text-text-secondary hover:bg-background-secondary">
+                    <ImagePlus className="h-4 w-4" aria-hidden />
+                    {product.imageChecksum ? "Trocar foto" : "Adicionar foto"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) enviarFoto.mutate({ productId: product.id, file });
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+
+                  {product.imageChecksum && (
+                    <button
+                      type="button"
+                      aria-label={`Remover foto de ${product.name}`}
+                      onClick={() => removerFoto.mutate(product.id)}
+                      className="flex min-h-[36px] items-center rounded-md px-2 text-text-muted hover:bg-background-secondary"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </li>

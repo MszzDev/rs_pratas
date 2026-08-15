@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-context";
+import { Logo, LogoMark } from "@/components/ui/logo";
 
 type NavSection = "dia-a-dia" | "gestao" | "sistema";
 
@@ -274,8 +275,8 @@ function Sidebar({
 }) {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border/70 bg-surface lg:sticky lg:top-0 lg:flex lg:h-screen">
-      <div className="flex h-16 items-center border-b border-border/70 px-5">
-        <span className="text-lg font-semibold tracking-tight text-rose-primary">RS Pratas</span>
+      <div className="flex h-[4.5rem] items-center border-b border-border/70 px-5">
+        <Logo size="md" />
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
@@ -315,7 +316,7 @@ function MobileBar({
             <Menu className="h-6 w-6" aria-hidden />
           </button>
 
-          <span className="shrink-0 text-lg font-semibold text-rose-primary">RS Pratas</span>
+          <LogoMark className="h-8 w-8 shrink-0" />
 
           {/*
             No tablet as abas do dia a dia ficam à mão — é o que o vendedor usa
@@ -347,8 +348,8 @@ function MobileBar({
           />
 
           <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-surface shadow-lifted">
-            <div className="flex h-16 items-center justify-between border-b border-border/70 px-4">
-              <span className="text-lg font-semibold text-rose-primary">RS Pratas</span>
+            <div className="flex h-[4.5rem] items-center justify-between border-b border-border/70 px-4">
+              <Logo size="sm" />
               <button
                 type="button"
                 onClick={onToggle}

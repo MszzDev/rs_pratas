@@ -26,6 +26,7 @@ import { QuotesPage } from "./features/pos/QuotesPage";
 import { CashPage } from "./features/cash/CashPage";
 import { CustomersPage } from "./features/customers/CustomersPage";
 import { LabelsPage } from "./features/labels/LabelsPage";
+import { Logo } from "./components/ui/logo";
 import { ReportsPage } from "./features/reports/ReportsPage";
 import { AfterSalesPage } from "./features/aftersales/AfterSalesPage";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
@@ -295,7 +296,7 @@ export function App() {
           aria-hidden
           className="fixed inset-0 z-50 flex items-center justify-center bg-background"
         >
-          <span className="text-2xl font-semibold text-rose-primary">RS Pratas</span>
+          <Logo size="lg" />
         </div>
       )}
     </AuthProvider>

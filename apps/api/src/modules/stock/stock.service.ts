@@ -278,7 +278,7 @@ export async function listStock(params: {
         : {}),
     },
     include: {
-      product: { select: { sku: true, name: true, salePrice: true } },
+      product: { select: { sku: true, name: true, salePrice: true, imageChecksum: true } },
       variation: { select: { sku: true, size: true } },
       store: { select: { name: true } },
     },
@@ -308,6 +308,8 @@ export async function listStock(params: {
     minQuantity: item.minQuantity,
     lowStock: item.minQuantity > 0 && item.quantity <= item.minQuantity,
     salePrice: item.product.salePrice,
+    /** Nulo = sem foto. O valor serve de chave de cache na tela. */
+    imageChecksum: item.product.imageChecksum,
   }));
 }
 

@@ -11,6 +11,8 @@ export interface StockRow {
   availableQuantity: number;
   /** Pode vir null: o servidor mascara valores para o perfil desenvolvedor. */
   salePrice: string | null;
+  /** Nulo = sem foto. Também é a chave de cache da imagem. */
+  imageChecksum: string | null;
 }
 
 export interface CartLine {
@@ -21,6 +23,7 @@ export interface CartLine {
   size: string | null;
   sku: string;
   salePrice: string | null;
+  imageChecksum: string | null;
   /** Teto do que dá para vender agora — já desconta o que está reservado. */
   available: number;
   quantity: number;

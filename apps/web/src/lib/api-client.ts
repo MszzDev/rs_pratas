@@ -59,6 +59,31 @@ export async function requestStepUpToken(params: {
   return result.stepUpToken;
 }
 
+/**
+ * Busca um arquivo protegido e devolve uma URL de objeto para usar em `<img>`.
+ *
+ * `<img src>` não manda cabeçalho, e a rota da foto exige o token — então o
+ * arquivo é buscado por fetch e vira um blob local. Quem chama é responsável
+ * por revogar a URL: sem isso o navegador segura cada foto na memória até a
+ * aba fechar, e uma lista de duzentas peças rolada duas vezes já pesa.
+ */
+export async function fetchProtectedObjectUrl(path: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+
+  if (response.status === 401) {
+    const renewed = await refreshAccessToken();
+    if (renewed) return fetchProtectedObjectUrl(path);
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, "IMAGE_FAILED", "Não foi possível carregar a imagem.");
+  }
+
+  return URL.createObjectURL(await response.blob());
+}
+
 interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
   /** Token de reautenticação para ações sensíveis. */
@@ -72,15 +97,25 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     headers: {
-      // Só declara JSON quando há corpo: o Fastify recusa uma requisição que
-      // anuncia application/json e chega vazia, o que quebraria todo POST sem
-      // corpo (confirmar 2FA, encerrar sessões, reenviar credenciais).
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      // Só declara JSON quando há corpo JSON.
+      //
+      // Sem corpo: o Fastify recusa uma requisição que anuncia
+      // application/json e chega vazia, o que quebraria todo POST sem corpo
+      // (confirmar 2FA, encerrar sessões, reenviar credenciais).
+      //
+      // Com FormData: quem define o Content-Type é o navegador, porque ele
+      // precisa incluir o `boundary` que separa as partes. Declarar aqui
+      // apagaria o boundary e o servidor não conseguiria ler o arquivo.
+      ...(body !== undefined && !(body instanceof FormData)
+        ? { "Content-Type": "application/json" }
+        : {}),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(stepUpToken ? { "X-Step-Up-Token": stepUpToken } : {}),
       ...headers,
     },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(body !== undefined
+      ? { body: body instanceof FormData ? body : JSON.stringify(body) }
+      : {}),
   });
 
   // Access token expirado: renova uma vez e repete. Um único refresh em voo

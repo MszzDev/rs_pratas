@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
+import { ProductPhoto } from "@/components/ui/product-photo";
 
 interface Template {
   id: string;
@@ -54,6 +55,7 @@ interface BatchRow {
   size: string | null;
   copies: number;
   salePrice: string | null;
+  imageChecksum: string | null;
 }
 
 /** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
@@ -404,7 +406,14 @@ export function LabelsPage() {
 
                   return (
                     <li key={key} className="flex items-center justify-between gap-4 py-2.5">
-                      <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <ProductPhoto
+                          productId={row.productId}
+                          checksum={row.imageChecksum}
+                          alt={row.name}
+                          size="sm"
+                        />
+                        <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-text-primary">
                           {row.name}
                           {row.size ? ` — tamanho ${row.size}` : ""}
@@ -412,6 +421,7 @@ export function LabelsPage() {
                         <p className="text-sm text-text-secondary">
                           {row.sku} · {formatMoney(row.salePrice)}
                         </p>
+                        </div>
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2">

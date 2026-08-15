@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { ProductPhoto } from "@/components/ui/product-photo";
 
 interface StockRow {
   id: string;
@@ -21,6 +22,7 @@ interface StockRow {
   availableQuantity: number;
   minQuantity: number;
   lowStock: boolean;
+  imageChecksum: string | null;
 }
 
 interface Movement {
@@ -261,7 +263,14 @@ export function StockPage() {
             key={row.id}
             className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-surface p-5"
           >
-            <div>
+            <div className="flex items-start gap-3">
+              <ProductPhoto
+                productId={row.productId}
+                checksum={row.imageChecksum}
+                alt={row.name}
+                size="md"
+              />
+              <div>
               <p className="font-medium text-text-primary">
                 {row.name}
                 {row.size ? ` — tamanho ${row.size}` : ""}
@@ -276,6 +285,7 @@ export function StockPage() {
                   Abaixo do mínimo de {row.minQuantity}
                 </span>
               )}
+              </div>
             </div>
 
             <div className="flex items-center gap-6">

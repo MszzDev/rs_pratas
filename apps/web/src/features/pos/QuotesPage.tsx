@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { ProductPhoto } from "@/components/ui/product-photo";
 import { formatMoney } from "@/lib/money";
 import type { StockRow } from "./types";
 
@@ -33,6 +34,7 @@ interface QuoteLine {
   name: string;
   size: string | null;
   salePrice: string | null;
+  imageChecksum: string | null;
   quantity: number;
 }
 
@@ -144,6 +146,7 @@ export function QuotesPage() {
               name: row.name,
               size: row.size,
               salePrice: row.salePrice,
+              imageChecksum: row.imageChecksum,
               quantity: 1,
             },
           ];
@@ -233,11 +236,19 @@ export function QuotesPage() {
                     <button
                       type="button"
                       onClick={() => addLine(row)}
-                      className="flex w-full min-h-[56px] items-center justify-between gap-4 rounded-md border border-border p-3 text-left hover:border-rose-primary"
+                      className="flex w-full min-h-[56px] items-center justify-between gap-4 rounded-md border border-border p-2.5 text-left hover:border-rose-primary"
                     >
-                      <span className="text-text-primary">
-                        {row.name}
-                        {row.size ? ` — ${row.size}` : ""}
+                      <span className="flex min-w-0 items-center gap-3 text-text-primary">
+                        <ProductPhoto
+                          productId={row.productId}
+                          checksum={row.imageChecksum}
+                          alt={row.name}
+                          size="sm"
+                        />
+                        <span className="truncate">
+                          {row.name}
+                          {row.size ? ` — ${row.size}` : ""}
+                        </span>
                       </span>
                       <span className="shrink-0 text-text-secondary">
                         {formatMoney(row.salePrice)}
@@ -253,9 +264,17 @@ export function QuotesPage() {
             <ul className="mb-4 space-y-2 border-t border-border pt-4">
               {lines.map((line, index) => (
                 <li key={index} className="flex items-center justify-between gap-3">
-                  <span className="text-text-primary">
-                    {line.quantity}× {line.name}
-                    {line.size ? ` — ${line.size}` : ""}
+                  <span className="flex min-w-0 items-center gap-2 text-text-primary">
+                    <ProductPhoto
+                      productId={line.productId}
+                      checksum={line.imageChecksum}
+                      alt={line.name}
+                      size="sm"
+                    />
+                    <span className="truncate">
+                      {line.quantity}× {line.name}
+                      {line.size ? ` — ${line.size}` : ""}
+                    </span>
                   </span>
                   <div className="flex items-center gap-3">
                     <span className="text-text-secondary">
