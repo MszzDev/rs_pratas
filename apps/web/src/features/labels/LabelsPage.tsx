@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Crosshair, Layers, Printer, Tag, Trash2 } from "lucide-react";
+import { LabelSheet } from "./LabelSheet";
+import type { LabelPayload, LabelToPrint } from "./LabelSheet";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -34,12 +36,7 @@ interface PrintJob {
   copies: number;
   lastError: string | null;
   createdAt: string;
-  payload: {
-    productName: string | null;
-    sku: string | null;
-    price: string | null;
-    size: string | null;
-  };
+  payload: LabelPayload;
 }
 
 interface StoreRow {
@@ -82,6 +79,15 @@ export function LabelsPage() {
   const [batchOpen, setBatchOpen] = useState(false);
   const [batch, setBatch] = useState<Record<string, number>>({});
   const [aviso, setAviso] = useState<string | null>(null);
+
+  /**
+   * O que está na folha de impressão neste instante.
+   *
+   * Fica em estado próprio porque a folha precisa estar montada no DOM ANTES
+   * de `window.print()` ser chamado — o navegador imprime o que existe na
+   * página naquele momento, não o que vai existir depois do próximo render.
+   */
+  const [paraImprimir, setParaImprimir] = useState<LabelToPrint[]>([]);
 
   const [form, setForm] = useState({
     code: "",
@@ -203,6 +209,33 @@ export function LabelsPage() {
       setError(null);
       setAviso(result.mensagem);
       void queryClient.invalidateQueries({ queryKey: ["label-templates"] });
+    },
+    onError: handleError,
+  });
+
+  /**
+   * Relata à fila o que aconteceu com cada etiqueta.
+   *
+   * O navegador não conta se a impressão saiu — o diálogo fecha do mesmo jeito
+   * se a pessoa imprimiu ou cancelou. Por isso quem confirma é o operador: ele
+   * olha o rolo e diz. Marcar como impresso sozinho encheria o histórico de
+   * etiquetas que nunca existiram.
+   */
+  const relatarResultado = useMutation({
+    mutationFn: async (params: { jobIds: string[]; sucesso: boolean }) => {
+      for (const jobId of params.jobIds) {
+        await apiFetch(`/api/v1/print-jobs/${jobId}/result`, {
+          method: "POST",
+          body: {
+            success: params.sucesso,
+            ...(params.sucesso ? {} : { error: "operador informou que não saiu" }),
+          },
+        });
+      }
+    },
+    onSuccess: () => {
+      setParaImprimir([]);
+      void queryClient.invalidateQueries({ queryKey: ["print-queue"] });
     },
     onError: handleError,
   });
@@ -558,7 +591,82 @@ export function LabelsPage() {
         </Alert>
       )}
 
-      <h2 className="mb-3 font-medium text-text-primary">Fila de impressão</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-medium text-text-primary">Fila de impressão</h2>
+
+        {storeId && (queue.data?.length ?? 0) > 0 && paraImprimir.length === 0 && (
+          <Button
+            type="button"
+            onClick={() => {
+              const fila = (queue.data ?? []).filter((job) => job.type === "ETIQUETA");
+              setParaImprimir(
+                fila.map((job) => ({
+                  jobId: job.id,
+                  copies: job.copies,
+                  payload: job.payload,
+                })),
+              );
+
+              // O navegador precisa ter a folha montada antes de abrir o
+              // diálogo; o próximo quadro garante que o React já pintou.
+              requestAnimationFrame(() => window.print());
+            }}
+          >
+            <Printer className="h-5 w-5" aria-hidden />
+            Imprimir a fila
+          </Button>
+        )}
+      </div>
+
+      {/*
+        Depois do diálogo de impressão, quem confirma é o operador: o navegador
+        não conta se o papel saiu, e marcar como impresso sozinho encheria o
+        histórico de etiquetas que nunca existiram.
+      */}
+      {paraImprimir.length > 0 && (
+        <div className="mb-4">
+          <Alert tone="info" title="Saiu tudo certo?">
+            <p className="mb-3">
+              Confira o rolo. Se a impressão falhou, as etiquetas continuam na fila para tentar
+              de novo.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                disabled={relatarResultado.isPending}
+                onClick={() =>
+                  relatarResultado.mutate({
+                    jobIds: paraImprimir.map((label) => label.jobId),
+                    sucesso: true,
+                  })
+                }
+              >
+                Saiu, pode dar baixa
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={relatarResultado.isPending}
+                onClick={() =>
+                  relatarResultado.mutate({
+                    jobIds: paraImprimir.map((label) => label.jobId),
+                    sucesso: false,
+                  })
+                }
+              >
+                Não saiu
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => requestAnimationFrame(() => window.print())}
+              >
+                Imprimir de novo
+              </Button>
+            </div>
+          </Alert>
+        </div>
+      )}
 
       <div className="mb-4 max-w-xs">
         <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="loja">
@@ -623,6 +731,9 @@ export function LabelsPage() {
       {storeId && queue.data?.length === 0 && (
         <Alert tone="success">Nada esperando impressão nesta loja.</Alert>
       )}
+
+      {/* Fora da tela; só existe durante a impressão. */}
+      <LabelSheet labels={paraImprimir} />
     </PageShell>
   );
 }
