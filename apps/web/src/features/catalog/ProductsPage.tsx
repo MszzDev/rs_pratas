@@ -96,6 +96,23 @@ export function ProductsPage() {
   const selectedGrade = grades.data?.find((grade) => grade.id === form.sizeGradeId);
 
   /**
+   * Código sugerido pelo sistema, atualizado conforme a categoria muda.
+   *
+   * Quem cadastra peça no balcão inventa o padrão que lembra na hora, e em
+   * três meses o catálogo tem "AN1", "an-002" e "ANEL 3" apontando para coisas
+   * parecidas. O sugerido é previsível e não colide — mas continua editável,
+   * porque loja que já tem numeração própria não deveria ser obrigada a mudar.
+   */
+  const sugestaoSku = useQuery({
+    queryKey: ["next-sku", form.categoryId],
+    queryFn: () =>
+      apiFetch<{ sku: string }>(
+        `/api/v1/products/next-sku${form.categoryId ? `?categoryId=${form.categoryId}` : ""}`,
+      ),
+    enabled: adding,
+  });
+
+  /**
    * Envio da foto. Multipart, e a validação de verdade é no servidor: o
    * `accept` do input só filtra o que o seletor de arquivos mostra.
    */
@@ -185,7 +202,8 @@ export function ProductsPage() {
       apiFetch("/api/v1/products", {
         method: "POST",
         body: {
-          sku: form.sku.trim(),
+          // Vazio deixa o servidor gerar o próximo da categoria.
+          ...(form.sku.trim() ? { sku: form.sku.trim() } : {}),
           name: form.name.trim(),
           costPrice: Number(form.costPrice),
           salePrice: Number(form.salePrice),
@@ -298,14 +316,16 @@ export function ProductsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Código (SKU)"
-              required
               disabled={editingId !== null}
               value={form.sku}
               onChange={(event) => setForm({ ...form, sku: event.target.value.toUpperCase() })}
+              placeholder={sugestaoSku.data?.sku ?? ""}
               hint={
                 editingId
                   ? "Não muda: já está impresso nas etiquetas das peças na vitrine."
-                  : "É o que vai na etiqueta. Ex.: AN-001."
+                  : sugestaoSku.data
+                    ? `Deixe vazio para usar ${sugestaoSku.data.sku}, que o sistema gerou.`
+                    : "É o que vai na etiqueta."
               }
             />
             <Field

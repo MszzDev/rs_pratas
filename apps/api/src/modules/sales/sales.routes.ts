@@ -8,6 +8,13 @@ import {
   listReservations,
 } from "./reservations.service.js";
 import {
+  cancelPieceRequest,
+  createPieceRequest,
+  demandSummary,
+  listPieceRequests,
+  updatePieceRequest,
+} from "./piece-requests.service.js";
+import {
   createQuote,
   getQuote,
   listQuotes,
@@ -161,6 +168,89 @@ export async function saleRoutes(app: FastifyInstance) {
         .parse(request.body);
 
       return cancelReservation({ reservationId: id, reason, request });
+    },
+  );
+
+  // ------------------------------------------------- solicitação de peça
+
+  app.get(
+    "/piece-requests",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request) => {
+      const query = z
+        .object({
+          storeId: z.string().uuid().optional(),
+          status: z
+            .enum(["ABERTA", "PROCURANDO", "ENCONTRADA", "AVISADO", "CONCLUIDA", "CANCELADA"])
+            .optional(),
+          emAberto: z.coerce.boolean().optional(),
+        })
+        .parse(request.query);
+
+      return listPieceRequests({ request, ...query });
+    },
+  );
+
+  /** O que as pessoas pedem e a loja não tem — base da próxima compra. */
+  app.get(
+    "/piece-requests/demand",
+    { preHandler: [app.requireAuth, requirePermission("REPORT_VIEW_STORE")] },
+    async (request) => {
+      const { storeId } = z.object({ storeId: z.string().uuid().optional() }).parse(request.query);
+      return demandSummary({ request, storeId });
+    },
+  );
+
+  app.post(
+    "/piece-requests",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request, reply) => {
+      const input = z
+        .object({
+          storeId: z.string().uuid(),
+          customerName: z.string().min(2, "Informe o nome de quem pediu.").max(120),
+          customerPhone: z.string().min(10, "Informe o telefone com DDD.").max(20),
+          description: z.string().min(3, "Descreva a peça que o cliente quer.").max(1000),
+          customerId: z.string().uuid().optional(),
+          productId: z.string().uuid().optional(),
+          size: z.string().max(10).optional(),
+          budgetAmount: moneySchema.optional(),
+          notes: z.string().max(1000).optional(),
+        })
+        .parse(request.body);
+
+      return reply.status(201).send(await createPieceRequest({ input, request }));
+    },
+  );
+
+  app.patch(
+    "/piece-requests/:id",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      const input = z
+        .object({
+          status: z
+            .enum(["ABERTA", "PROCURANDO", "ENCONTRADA", "AVISADO", "CONCLUIDA"])
+            .optional(),
+          notes: z.string().max(1000).optional(),
+        })
+        .parse(request.body);
+
+      return updatePieceRequest({ requestId: id, input, request });
+    },
+  );
+
+  app.post(
+    "/piece-requests/:id/cancel",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      const { reason } = z
+        .object({ reason: z.string().min(3, "Informe o motivo.").max(500) })
+        .parse(request.body);
+
+      return cancelPieceRequest({ requestId: id, reason, request });
     },
   );
 

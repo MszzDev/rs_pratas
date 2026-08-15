@@ -190,6 +190,9 @@ enum AuditAction {
   CASH_REGISTER_DELETE
   PRODUCT_IMAGE_SET
   PRODUCT_IMAGE_REMOVE
+  PIECE_REQUEST_CREATE
+  PIECE_REQUEST_UPDATE
+  PIECE_REQUEST_CANCEL
 }
 
 // =====================================================================
@@ -223,6 +226,7 @@ model Company {
   labelTemplates  LabelTemplate[]
   commissionRules CommissionRule[]
   goals           Goal[]
+  pieceRequests   PieceRequest[]
 
   @@map("companies")
 }
@@ -288,6 +292,7 @@ model Store {
   goals           Goal[]
   saleReturns     SaleReturn[]
   serviceOrders   ServiceOrder[]
+  pieceRequests   PieceRequest[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -364,6 +369,7 @@ model User {
   printJobsRequested   PrintJob[]
   commissionRules      CommissionRule[]
   goals                Goal[]
+  pieceRequestsCreated PieceRequest[]   @relation("PieceRequestCreatedBy")
 
   @@unique([companyId, employeeCode])
   @@index([companyId, role])
@@ -1364,6 +1370,7 @@ model Customer {
   reservations  Reservation[]
   quotes        Quote[]
   serviceOrders ServiceOrder[]
+  pieceRequests PieceRequest[]
 
   createdById String?
   createdAt   DateTime  @default(now())
@@ -2136,4 +2143,71 @@ model ServiceOrder {
   @@index([storeId, status])
   @@index([customerId])
   @@map("service_orders")
+}
+
+// =====================================================================
+// SOLICITAÇÃO DE PEÇA
+// =====================================================================
+
+enum PieceRequestStatus {
+  ABERTA
+  PROCURANDO
+  ENCONTRADA
+  AVISADO
+  CONCLUIDA
+  CANCELADA
+}
+
+/// Peça que o cliente pediu e a loja não tinha.
+///
+/// É o pedido que hoje vira bilhete no caderno e some. Registrado aqui, o
+/// cliente é avisado quando a peça chega — e a loja passa a saber o que estão
+/// procurando e ela não tem, que é a informação que decide a próxima compra
+/// do fornecedor.
+model PieceRequest {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  storeId   String
+  store     Store   @relation(fields: [storeId], references: [id])
+
+  code   String
+  status PieceRequestStatus @default(ABERTA)
+
+  /// Cliente cadastrado, quando já existe. O nome e o telefone abaixo ficam
+  /// gravados de qualquer forma: quem pede uma peça muitas vezes não é
+  /// cliente ainda, e obrigar o cadastro completo trava o atendimento.
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  customerName  String
+  customerPhone String
+
+  /// O que a pessoa pediu, com as palavras dela. Texto livre de propósito:
+  /// "aquele anel de coração com pedrinha azul" é o que o cliente sabe dizer,
+  /// e forçar a escolha de um produto do catálogo impediria registrar
+  /// justamente o que a loja não tem.
+  description String
+  /// Peça do catálogo, quando o pedido é de algo que existe mas está em falta.
+  productId   String?
+  size        String?
+  /// Quanto o cliente topa pagar. Ajuda a decidir se vale encomendar.
+  budgetAmount Decimal? @db.Decimal(12, 2)
+
+  notes String?
+
+  /// Preenchido quando a peça chega e o cliente é avisado.
+  notifiedAt   DateTime?
+  /// Venda gerada quando o cliente veio buscar.
+  convertedSaleId String?
+  cancelReason String?
+
+  createdById String
+  createdBy   User     @relation("PieceRequestCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([storeId, status])
+  @@index([customerPhone])
+  @@map("piece_requests")
 }

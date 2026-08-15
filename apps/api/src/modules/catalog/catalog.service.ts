@@ -106,6 +106,55 @@ export async function createSizeGrade(params: {
   });
 }
 
+/**
+ * Próximo código livre da categoria.
+ *
+ * O código é gerado, não digitado: quem cadastra peça no balcão inventa o
+ * padrão que lembra na hora, e em três meses o catálogo tem "AN1", "an-002" e
+ * "ANEL 3" apontando para coisas parecidas. Um código que o sistema escolhe é
+ * previsível, cabe na etiqueta e não colide.
+ *
+ * O prefixo vem da categoria (ANEL → AN); sem categoria, usa PC de peça. A
+ * numeração é por prefixo e não global, para o código dizer o que é a peça
+ * antes mesmo de alguém ler o nome.
+ */
+export async function suggestSku(params: {
+  companyId: string;
+  categoryId?: string | undefined;
+}): Promise<string> {
+  let prefixo = "PC";
+
+  if (params.categoryId) {
+    const category = await prisma.category.findFirst({
+      where: { id: params.categoryId, companyId: params.companyId },
+      select: { code: true },
+    });
+
+    if (category) {
+      // Duas primeiras letras do código da categoria, só A-Z: o código da
+      // etiqueta é lido por gente e por leitor, e nenhum dos dois lida bem
+      // com acento ou símbolo.
+      const limpo = category.code.toUpperCase().replace(/[^A-Z]/g, "");
+      if (limpo.length >= 2) prefixo = limpo.slice(0, 2);
+    }
+  }
+
+  // Procura o maior número JÁ USADO no prefixo em vez de contar quantos
+  // existem: com produto removido no meio, a contagem devolveria um número
+  // que já foi de outra peça.
+  const usados = await prisma.product.findMany({
+    where: { companyId: params.companyId, sku: { startsWith: `${prefixo}-` } },
+    select: { sku: true },
+  });
+
+  const maior = usados.reduce((maximo, produto) => {
+    const numero = Number(produto.sku.slice(prefixo.length + 1));
+    return Number.isFinite(numero) && numero > maximo ? numero : maximo;
+  }, 0);
+
+  return `${prefixo}-${String(maior + 1).padStart(4, "0")}`;
+}
+
 export async function listProducts(params: {
   request: FastifyRequest;
   search?: string | undefined;
@@ -165,7 +214,8 @@ export async function getProduct(params: { productId: string; request: FastifyRe
 
 export async function createProduct(params: {
   input: {
-    sku: string;
+    /** Opcional: sem ele, o sistema gera o próximo livre da categoria. */
+    sku?: string | undefined;
     name: string;
     description?: string | undefined;
     categoryId?: string | undefined;
@@ -182,8 +232,12 @@ export async function createProduct(params: {
   const { input, request } = params;
   const companyId = request.user.companyId;
 
+  const sku =
+    input.sku?.trim() ||
+    (await suggestSku({ companyId, categoryId: input.categoryId }));
+
   const taken = await prisma.product.findFirst({
-    where: { companyId, sku: input.sku },
+    where: { companyId, sku },
     select: { id: true },
   });
   if (taken) {
@@ -240,7 +294,7 @@ export async function createProduct(params: {
     const created = await tx.product.create({
       data: {
         companyId,
-        sku: input.sku,
+        sku,
         name: input.name,
         description: input.description ?? null,
         categoryId: input.categoryId ?? null,
@@ -260,7 +314,7 @@ export async function createProduct(params: {
         data: (input.sizes ?? []).map((size) => ({
           productId: created.id,
           companyId,
-          sku: `${input.sku}-${size}`,
+          sku: `${sku}-${size}`,
           size,
         })),
       });

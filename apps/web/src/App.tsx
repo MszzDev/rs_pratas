@@ -23,6 +23,7 @@ import { ProductsPage } from "./features/catalog/ProductsPage";
 import { StockPage } from "./features/stock/StockPage";
 import { PosPage } from "./features/pos/PosPage";
 import { QuotesPage } from "./features/pos/QuotesPage";
+import { PieceRequestsPage } from "./features/pos/PieceRequestsPage";
 import { CashPage } from "./features/cash/CashPage";
 import { CustomersPage } from "./features/customers/CustomersPage";
 import { LabelsPage } from "./features/labels/LabelsPage";
@@ -211,6 +212,14 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <QuotesPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/solicitar-peca"
+        element={
+          <RequireAuth>
+            <PieceRequestsPage />
           </RequireAuth>
         }
       />

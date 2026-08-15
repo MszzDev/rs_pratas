@@ -10,6 +10,7 @@ import {
   CreditCard,
   FileCheck,
   FileText,
+  HandHeart,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -46,45 +47,99 @@ const GESTAO = ["DONO", "GERENTE", "DESENVOLVEDOR"];
 const DONO = ["DONO", "DESENVOLVEDOR"];
 
 /**
+ * Só o que se abre por si mesmo.
+ *
+ * Tudo que é DETALHE de outra tela saiu daqui e virou atalho lá dentro:
+ * jornada é assunto de funcionário, espelho de ponto é assunto de ponto,
+ * tablet e maquininha são assunto de loja, orçamento e solicitação de peça são
+ * abas da venda. Vinte e dois itens numa lista fazem o vendedor procurar;
+ * catorze ele decora.
+ *
  * A navegação esconde o que o perfil não usa — conveniência, não segurança.
  * Quem chamar a rota direto continua sendo barrado pelo backend.
- *
- * Três seções em vez de duas: com PDV, estoque, relatórios e configuração na
- * mesma lista, o item que o vendedor abre trinta vezes por dia se perdia entre
- * os que o dono abre uma vez por mês.
  */
 const NAV_ITEMS: NavItem[] = [
   { to: "/painel", label: "Painel", icon: LayoutDashboard, section: "dia-a-dia", roles: GESTAO },
   { to: "/venda", label: "Venda", icon: ShoppingCart, section: "dia-a-dia" },
-  { to: "/orcamentos", label: "Orçamentos", icon: Calculator, section: "dia-a-dia" },
   { to: "/caixa", label: "Caixa", icon: Wallet, section: "dia-a-dia" },
   { to: "/clientes", label: "Clientes", icon: UserRound, section: "dia-a-dia" },
   { to: "/pos-venda", label: "Pós-venda", icon: RotateCcw, section: "dia-a-dia" },
   { to: "/ponto", label: "Ponto", icon: Clock, section: "dia-a-dia" },
-  { to: "/meus-documentos", label: "Meus documentos", icon: FileText, section: "dia-a-dia" },
 
   { to: "/produtos", label: "Produtos", icon: Package, section: "gestao" },
   { to: "/estoque", label: "Estoque", icon: Boxes, section: "gestao" },
   { to: "/etiquetas", label: "Etiquetas", icon: Tag, section: "gestao", roles: GESTAO },
   { to: "/relatorios", label: "Relatórios", icon: TrendingUp, section: "gestao", roles: GESTAO },
   { to: "/funcionarios", label: "Funcionários", icon: Users, section: "gestao" },
-  {
-    to: "/documentos",
-    label: "Conferir documentos",
-    icon: FileCheck,
-    section: "gestao",
-    roles: GESTAO,
-  },
-  { to: "/espelho-de-ponto", label: "Espelho de ponto", icon: CalendarClock, section: "gestao" },
-  { to: "/jornadas", label: "Jornadas", icon: CalendarClock, section: "gestao", roles: GESTAO },
 
   { to: "/lojas", label: "Lojas", icon: Building2, section: "sistema", roles: DONO },
-  { to: "/tablets", label: "Tablets", icon: Tablet, section: "sistema", roles: GESTAO },
-  { to: "/maquininhas", label: "Maquininhas", icon: CreditCard, section: "sistema", roles: GESTAO },
   { to: "/auditoria", label: "Auditoria", icon: ScrollText, section: "sistema", roles: GESTAO },
-  { to: "/sessoes", label: "Meus acessos", icon: MonitorSmartphone, section: "sistema" },
   { to: "/configuracoes", label: "Configurações", icon: Settings, section: "sistema", roles: DONO },
 ];
+
+/**
+ * Atalhos que cada tela oferece para as suas telas-filhas.
+ *
+ * Aparecem no topo da tela-mãe, onde a pessoa já está quando precisa deles —
+ * em vez de exigirem uma volta ao menu. É por isso que o mapa é recíproco:
+ * de Produtos se chega a Estoque, e de Estoque se volta a Produtos.
+ */
+const SUBPAGINAS: Record<string, Array<{ to: string; label: string; icon: typeof Users }>> = {
+  "/venda": [
+    { to: "/orcamentos", label: "Orçamentos", icon: Calculator },
+    { to: "/solicitar-peca", label: "Solicitar peça", icon: HandHeart },
+  ],
+  "/orcamentos": [
+    { to: "/venda", label: "Venda", icon: ShoppingCart },
+    { to: "/solicitar-peca", label: "Solicitar peça", icon: HandHeart },
+  ],
+  "/solicitar-peca": [
+    { to: "/venda", label: "Venda", icon: ShoppingCart },
+    { to: "/orcamentos", label: "Orçamentos", icon: Calculator },
+  ],
+  "/ponto": [
+    { to: "/espelho-de-ponto", label: "Meu espelho", icon: CalendarClock },
+    { to: "/meus-documentos", label: "Meus documentos", icon: FileText },
+    { to: "/sessoes", label: "Meus acessos", icon: MonitorSmartphone },
+  ],
+  "/espelho-de-ponto": [
+    { to: "/ponto", label: "Bater ponto", icon: Clock },
+    { to: "/jornadas", label: "Jornadas", icon: CalendarClock },
+  ],
+  "/meus-documentos": [{ to: "/ponto", label: "Ponto", icon: Clock }],
+  "/sessoes": [{ to: "/ponto", label: "Ponto", icon: Clock }],
+  "/funcionarios": [
+    { to: "/jornadas", label: "Jornadas", icon: CalendarClock },
+    { to: "/documentos", label: "Conferir documentos", icon: FileCheck },
+    { to: "/espelho-de-ponto", label: "Espelho de ponto", icon: CalendarClock },
+  ],
+  "/jornadas": [{ to: "/funcionarios", label: "Funcionários", icon: Users }],
+  "/documentos": [{ to: "/funcionarios", label: "Funcionários", icon: Users }],
+  "/lojas": [
+    { to: "/tablets", label: "Tablets", icon: Tablet },
+    { to: "/maquininhas", label: "Maquininhas", icon: CreditCard },
+  ],
+  "/tablets": [
+    { to: "/lojas", label: "Lojas", icon: Building2 },
+    { to: "/maquininhas", label: "Maquininhas", icon: CreditCard },
+  ],
+  "/maquininhas": [
+    { to: "/lojas", label: "Lojas", icon: Building2 },
+    { to: "/tablets", label: "Tablets", icon: Tablet },
+  ],
+  "/produtos": [
+    { to: "/estoque", label: "Estoque", icon: Boxes },
+    { to: "/etiquetas", label: "Etiquetas", icon: Tag },
+  ],
+  "/estoque": [
+    { to: "/produtos", label: "Produtos", icon: Package },
+    { to: "/etiquetas", label: "Etiquetas", icon: Tag },
+  ],
+  "/etiquetas": [
+    { to: "/produtos", label: "Produtos", icon: Package },
+    { to: "/estoque", label: "Estoque", icon: Boxes },
+  ],
+};
 
 const SECTION_LABELS: Record<NavSection, string> = {
   "dia-a-dia": "Dia a dia",
@@ -119,6 +174,8 @@ export function PageShell({
   const items = NAV_ITEMS.filter(
     (item) => !item.roles || (user && item.roles.includes(user.role)),
   );
+
+  const atalhos = SUBPAGINAS[location.pathname] ?? [];
 
   // Fecha ao navegar: sem isso o menu fica por cima da tela que acabou de abrir.
   useEffect(() => setDrawerOpen(false), [location.pathname]);
@@ -167,6 +224,25 @@ export function PageShell({
               </div>
             )}
           </header>
+
+          {/* Atalhos para as telas-filhas desta, onde a pessoa já está. */}
+          {atalhos.length > 0 && (
+            <nav
+              className="mb-6 flex flex-wrap gap-2 border-b border-border/70 pb-4"
+              aria-label="Telas relacionadas"
+            >
+              {atalhos.map((atalho) => (
+                <NavLink
+                  key={atalho.to}
+                  to={atalho.to}
+                  className="flex min-h-[38px] items-center gap-2 rounded-full border border-border/70 bg-surface px-3.5 text-sm font-medium text-text-secondary transition-colors hover:border-rose-primary hover:text-rose-dark"
+                >
+                  <atalho.icon className="h-4 w-4 shrink-0" aria-hidden />
+                  {atalho.label}
+                </NavLink>
+              ))}
+            </nav>
+          )}
 
           {children}
         </main>

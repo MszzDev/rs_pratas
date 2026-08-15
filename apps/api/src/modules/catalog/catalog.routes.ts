@@ -19,6 +19,7 @@ import {
   listCategories,
   listProducts,
   listSizeGrades,
+  suggestSku,
   updateProduct,
 } from "./catalog.service.js";
 
@@ -44,7 +45,8 @@ const createSizeGradeSchema = z.object({
 const moneySchema = z.number().min(0).max(9_999_999).multipleOf(0.01);
 
 const createProductSchema = z.object({
-  sku: z.string().min(1).max(40),
+  /** Deixe vazio para o sistema gerar o próximo código da categoria. */
+  sku: z.string().min(1).max(40).optional(),
   name: z.string().min(2).max(160),
   description: z.string().max(2000).optional(),
   categoryId: z.string().uuid().optional(),
@@ -115,6 +117,19 @@ export async function catalogRoutes(app: FastifyInstance) {
         .parse(request.query);
 
       return listProducts({ request, ...query });
+    },
+  );
+
+  /** O código que o sistema daria à próxima peça — a tela mostra antes de salvar. */
+  app.get(
+    "/products/next-sku",
+    { preHandler: [app.requireAuth, requirePermission("PRODUCT_CREATE")] },
+    async (request) => {
+      const { categoryId } = z
+        .object({ categoryId: z.string().uuid().optional() })
+        .parse(request.query);
+
+      return { sku: await suggestSku({ companyId: request.user.companyId, categoryId }) };
     },
   );
 
