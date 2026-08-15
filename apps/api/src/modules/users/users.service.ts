@@ -12,6 +12,39 @@ import { credentialsEmail, credentialsResetEmail } from "../../core/email/templa
 import { generateEmployeeCode, generateTemporaryPassword } from "./credentials.js";
 
 /**
+ * O que pode sair do servidor sobre um usuário.
+ *
+ * Existe porque devolver o objeto do Prisma inteiro entrega `passwordHash` e
+ * `pinHash` na resposta. Eles não servem para nada na tela e, uma vez fora do
+ * servidor, passam a existir no histórico do navegador, em log de proxy e em
+ * qualquer ferramenta de rede aberta no balcão. Hash de senha não sai daqui.
+ */
+/** Recorta o usuário para o que pode ser exibido. */
+function toPublicUser(user: {
+  id: string;
+  name: string;
+  employeeCode: string;
+  email: string | null;
+  role: string;
+  status: string;
+  lastLoginAt?: Date | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+}) {
+  return {
+    id: user.id,
+    name: user.name,
+    employeeCode: user.employeeCode,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    lastLoginAt: user.lastLoginAt ?? null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
+/**
  * Só o DONO cria usuários — o GERENTE nunca, conforme a especificação. E entre
  * os perfis, DONO e DESENVOLVEDOR são os que dão visão irrestrita da empresa,
  * então sua criação exige reautenticação (step-up) na camada de rota.
@@ -317,7 +350,7 @@ export async function updateUser(params: {
     },
   });
 
-  return updated;
+  return toPublicUser(updated);
 }
 
 export async function changeUserRole(params: {
@@ -381,7 +414,7 @@ export async function changeUserRole(params: {
     reason: input.reason,
   });
 
-  return updated;
+  return toPublicUser(updated);
 }
 
 export async function setUserBlocked(params: {
@@ -445,5 +478,5 @@ export async function setUserBlocked(params: {
     reason,
   });
 
-  return updated;
+  return toPublicUser(updated);
 }

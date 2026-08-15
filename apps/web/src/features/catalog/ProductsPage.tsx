@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Plus, Search, Trash2 } from "lucide-react";
+import { ImagePlus, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -57,7 +57,12 @@ export function ProductsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  /** Tamanhos que o produto em edição ainda pode ganhar. */
+  const [novosTamanhos, setNovosTamanhos] = useState<string[]>([]);
 
   const [form, setForm] = useState({
     sku: "",
@@ -122,6 +127,59 @@ export function ProductsPage() {
       setError(caught instanceof ApiError ? caught.message : "Não foi possível remover a foto."),
   });
 
+  const editar = useMutation({
+    mutationFn: () =>
+      apiFetch(`/api/v1/products/${editingId}`, {
+        method: "PATCH",
+        body: {
+          name: form.name.trim(),
+          costPrice: Number(form.costPrice),
+          salePrice: Number(form.salePrice),
+          ...(form.categoryId ? { categoryId: form.categoryId } : {}),
+          ...(form.weightGrams ? { weightGrams: Number(form.weightGrams) } : {}),
+        },
+      }),
+    onSuccess: () => {
+      setError(null);
+      fecharFormulario();
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível salvar."),
+  });
+
+  /** Acrescenta tamanhos a um produto que já existe — a loja passou a girar o 30. */
+  const adicionarTamanhos = useMutation({
+    mutationFn: (productId: string) =>
+      apiFetch(`/api/v1/products/${productId}/variations`, {
+        method: "POST",
+        body: { sizes: novosTamanhos },
+      }),
+    onSuccess: () => {
+      setError(null);
+      setNovosTamanhos([]);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível adicionar."),
+  });
+
+  const ativar = useMutation({
+    mutationFn: (params: { id: string; ativo: boolean }) =>
+      params.ativo
+        ? apiFetch(`/api/v1/products/${params.id}`, { method: "PATCH", body: { isActive: true } })
+        : apiFetch<{ id: string }>(`/api/v1/products/${params.id}/deactivate`, {
+            method: "POST",
+            body: { reason: "retirado do mostruário" },
+          }),
+    onSuccess: () => {
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível concluir."),
+  });
+
   const create = useMutation({
     mutationFn: () =>
       apiFetch("/api/v1/products", {
@@ -156,13 +214,56 @@ export function ProductsPage() {
       setError(caught instanceof ApiError ? caught.message : "Não foi possível cadastrar."),
   });
 
+  function fecharFormulario() {
+    setAdding(false);
+    setEditingId(null);
+    setSelectedSizes([]);
+    setNovosTamanhos([]);
+    setForm({
+      sku: "",
+      name: "",
+      categoryId: "",
+      sizeGradeId: "",
+      weightGrams: "",
+      costPrice: "",
+      salePrice: "",
+    });
+  }
+
+  function abrirEdicao(product: Product) {
+    setEditingId(product.id);
+    setAdding(false);
+    setNovosTamanhos([]);
+    setForm({
+      // O SKU não é editável: ele já está impresso nas etiquetas das peças na
+      // vitrine, e trocá-lo faria a leitura no PDV parar de encontrar a peça.
+      sku: product.sku,
+      name: product.name,
+      categoryId: "",
+      sizeGradeId: "",
+      weightGrams: product.weightGrams ?? "",
+      costPrice: product.costPrice ?? "",
+      salePrice: product.salePrice ?? "",
+    });
+  }
+
+  const produtoEmEdicao = products.data?.find((product) => product.id === editingId);
+  const formularioAberto = adding || editingId !== null;
+
   return (
     <PageShell
+      eyebrow="Catálogo"
       title="Produtos"
       description="O catálogo vale para todas as lojas. O que muda de loja para loja é o estoque."
       actions={
-        adding ? null : (
-          <Button type="button" onClick={() => setAdding(true)}>
+        formularioAberto ? null : (
+          <Button
+            type="button"
+            onClick={() => {
+              fecharFormulario();
+              setAdding(true);
+            }}
+          >
             <Plus className="h-5 w-5" aria-hidden />
             Novo produto
           </Button>
@@ -175,21 +276,37 @@ export function ProductsPage() {
         </div>
       )}
 
-      {adding && (
+      {aviso && (
+        <div className="mb-5">
+          <Alert tone="success">{aviso}</Alert>
+        </div>
+      )}
+
+      {formularioAberto && (
         <form
-          className="mb-6 rounded-lg border border-border bg-surface p-5"
+          className="mb-6 rounded-lg border border-border bg-surface p-5 shadow-soft"
           onSubmit={(event) => {
             event.preventDefault();
-            create.mutate();
+            if (editingId) editar.mutate();
+            else create.mutate();
           }}
         >
+          <h2 className="mb-4 font-medium text-text-primary">
+            {editingId ? `Editar ${produtoEmEdicao?.name ?? "produto"}` : "Novo produto"}
+          </h2>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Código (SKU)"
               required
+              disabled={editingId !== null}
               value={form.sku}
               onChange={(event) => setForm({ ...form, sku: event.target.value.toUpperCase() })}
-              hint="É o que vai na etiqueta. Ex.: AN-001."
+              hint={
+                editingId
+                  ? "Não muda: já está impresso nas etiquetas das peças na vitrine."
+                  : "É o que vai na etiqueta. Ex.: AN-001."
+              }
             />
             <Field
               label="Nome"
@@ -249,6 +366,7 @@ export function ProductsPage() {
               onChange={(event) => setForm({ ...form, salePrice: event.target.value })}
             />
 
+            {!editingId && (
             <div className="sm:col-span-2">
               <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="grade">
                 Grade de tamanhos
@@ -270,8 +388,9 @@ export function ProductsPage() {
                 ))}
               </select>
             </div>
+            )}
 
-            {selectedGrade && (
+            {!editingId && selectedGrade && (
               <fieldset className="sm:col-span-2">
                 <legend className="mb-2 text-sm font-medium text-text-primary">
                   Tamanhos que a loja trabalha
@@ -312,11 +431,58 @@ export function ProductsPage() {
             )}
           </div>
 
+          {/* Em edição, acrescentar tamanhos é ato próprio: o produto já tem
+              estoque nos tamanhos antigos, e recriar a lista os apagaria. */}
+          {editingId && produtoEmEdicao?.hasVariations && (
+            <fieldset className="mt-5 border-t border-border/70 pt-5">
+              <legend className="sr-only">Acrescentar tamanhos</legend>
+              <p className="mb-2 text-sm font-medium text-text-primary">
+                Tamanhos já cadastrados
+              </p>
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {produtoEmEdicao.variations.map((variation) => (
+                  <span
+                    key={variation.id}
+                    className="rounded bg-background-secondary px-2 py-0.5 text-sm text-text-secondary"
+                  >
+                    {variation.size}
+                  </span>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="w-40">
+                  <Field
+                    label="Novo tamanho"
+                    value={novosTamanhos.join(", ")}
+                    onChange={(event) =>
+                      setNovosTamanhos(
+                        event.target.value
+                          .split(",")
+                          .map((size) => size.trim())
+                          .filter(Boolean),
+                      )
+                    }
+                    hint="Separe por vírgula."
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={novosTamanhos.length === 0 || adicionarTamanhos.isPending}
+                  onClick={() => adicionarTamanhos.mutate(editingId)}
+                >
+                  Acrescentar
+                </Button>
+              </div>
+            </fieldset>
+          )}
+
           <div className="mt-5 flex gap-3">
-            <Button type="submit" disabled={create.isPending}>
-              Cadastrar
+            <Button type="submit" disabled={create.isPending || editar.isPending}>
+              {editingId ? "Salvar alterações" : "Cadastrar"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setAdding(false)}>
+            <Button type="button" variant="outline" onClick={fecharFormulario}>
               Cancelar
             </Button>
           </div>
@@ -384,7 +550,28 @@ export function ProductsPage() {
                   </span>
                 )}
 
-                <div className="mt-2 flex justify-end gap-1">
+                <div className="mt-2 flex flex-wrap justify-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => abrirEdicao(product)}
+                    className="flex min-h-[36px] items-center gap-1.5 rounded-md px-2 text-sm text-text-secondary hover:bg-background-secondary"
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden />
+                    Editar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAviso(null);
+                      ativar.mutate({ id: product.id, ativo: !product.isActive });
+                    }}
+                    className="flex min-h-[36px] items-center gap-1.5 rounded-md px-2 text-sm text-text-secondary hover:bg-background-secondary"
+                  >
+                    <Power className="h-4 w-4" aria-hidden />
+                    {product.isActive ? "Desativar" : "Reativar"}
+                  </button>
+
                   <label className="flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm text-text-secondary hover:bg-background-secondary">
                     <ImagePlus className="h-4 w-4" aria-hidden />
                     {product.imageChecksum ? "Trocar foto" : "Adicionar foto"}
