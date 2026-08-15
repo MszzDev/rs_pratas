@@ -8,6 +8,7 @@ import { badRequest, forbidden, tooManyRequests, unauthorized } from "../../core
 import { burnVerificationTime, verifySecret } from "../../core/security/password.service.js";
 import type { IssuedSession, SignAccessToken } from "./auth.service.js";
 import { issueSessionForUser } from "./auth.service.js";
+import { openStoreOnDeviceLogin } from "../stores/store-opening.service.js";
 
 async function registerFailedPinAttempt(user: User): Promise<void> {
   const attempts = user.pinFailedAttempts + 1;
@@ -167,6 +168,16 @@ export async function loginWithPin(params: {
     deviceId: device.id,
     userRoleSnapshot: user.role,
     metadata: { method: "PIN" },
+  });
+
+  // A loja abre sozinha: alguém chegou, ligou o tablet e passou o PIN. Pedir
+  // um "abrir loja" logo depois seria um passo que não informa nada.
+  // Não lança — se a abertura falhar, o funcionário ainda precisa entrar.
+  await openStoreOnDeviceLogin({
+    storeId: device.storeId,
+    userId: user.id,
+    deviceId: device.id,
+    request,
   });
 
   return issued;

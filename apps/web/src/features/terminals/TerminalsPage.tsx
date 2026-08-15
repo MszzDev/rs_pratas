@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CreditCard, Plus } from "lucide-react";
+import { CreditCard, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -98,6 +98,19 @@ export function TerminalsPage() {
       apiFetch(`/api/v1/terminals/${params.id}/status`, {
         method: "PATCH",
         body: { status: params.status, reason: params.reason },
+      }),
+    onSuccess: () => {
+      setError(null);
+      invalidate();
+    },
+    onError: handleError,
+  });
+
+  const remove = useMutation({
+    mutationFn: (params: { id: string; reason: string }) =>
+      apiFetch<{ mensagem: string }>(`/api/v1/terminals/${params.id}`, {
+        method: "DELETE",
+        body: { reason: params.reason },
       }),
     onSuccess: () => {
       setError(null);
@@ -249,6 +262,21 @@ export function TerminalsPage() {
                 {terminal.status === "ACTIVE" ? "Bloquear" : "Liberar"}
               </Button>
               )}
+
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={remove.isPending}
+                onClick={() => {
+                  const reason = window.prompt("Remover esta maquininha. Por quê?");
+                  if (reason && reason.trim().length >= 3) {
+                    remove.mutate({ id: terminal.id, reason: reason.trim() });
+                  }
+                }}
+              >
+                <Trash2 className="h-5 w-5" aria-hidden />
+                Remover
+              </Button>
             </div>
           </li>
         ))}

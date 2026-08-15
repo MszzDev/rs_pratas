@@ -301,6 +301,125 @@ function buildLabelPayload(params: {
   };
 }
 
+/**
+ * Lote: várias peças de uma vez, cada uma com sua quantidade.
+ *
+ * É o caso de quando a mercadoria chega — vinte anéis, dez correntes, tudo
+ * precisa de etiqueta antes de ir para a vitrine. Pedir peça por peça faria o
+ * funcionário abrir a mesma tela vinte vezes e errar a conta no meio.
+ *
+ * Cada peça vira um trabalho próprio na fila, e não um trabalho gigante: se a
+ * impressora falhar no décimo item, os nove primeiros continuam impressos e só
+ * o que faltou é retentado.
+ */
+export async function queueLabelBatch(params: {
+  input: {
+    storeId: string;
+    templateId?: string | undefined;
+    deviceId?: string | undefined;
+    items: Array<{
+      productId: string;
+      variationId?: string | undefined;
+      copies: number;
+    }>;
+  };
+  request: FastifyRequest;
+}) {
+  const { input, request } = params;
+  await assertStoreAccess(request, input.storeId);
+
+  if (input.items.length === 0) {
+    throw badRequest("EMPTY_BATCH", "Escolha ao menos uma peça para etiquetar.");
+  }
+
+  const total = input.items.reduce((sum, item) => sum + item.copies, 0);
+  if (total > 500) {
+    throw badRequest(
+      "BATCH_TOO_LARGE",
+      `São ${total} etiquetas de uma vez. Divida em lotes menores — um rolo não aguenta tudo isso.`,
+    );
+  }
+
+  const jobs = [];
+  const problemas: Array<{ productId: string; motivo: string }> = [];
+
+  for (const item of input.items) {
+    try {
+      const job = await queueProductLabels({
+        input: {
+          storeId: input.storeId,
+          productId: item.productId,
+          ...(item.variationId ? { variationId: item.variationId } : {}),
+          copies: item.copies,
+          ...(input.templateId ? { templateId: input.templateId } : {}),
+          ...(input.deviceId ? { deviceId: input.deviceId } : {}),
+        },
+        request,
+      });
+      jobs.push(job);
+    } catch (error) {
+      // Uma peça com problema não derruba o lote inteiro: o funcionário
+      // recebe o que deu certo e a lista do que não deu, em vez de ter que
+      // adivinhar qual das vinte travou.
+      problemas.push({
+        productId: item.productId,
+        motivo: error instanceof Error ? error.message : "erro desconhecido",
+      });
+    }
+  }
+
+  return {
+    enfileirados: jobs.length,
+    etiquetas: jobs.reduce((sum, job) => sum + job.copies, 0),
+    problemas,
+    jobs,
+  };
+}
+
+/**
+ * Monta o lote a partir do estoque da loja: uma etiqueta por peça existente.
+ *
+ * Atalho para o inventário de vitrine — quando a loja decide reetiquetar tudo
+ * depois de uma mudança de preço, contar item a item na mão é o caminho para
+ * esquecer metade.
+ */
+export async function buildBatchFromStock(params: {
+  request: FastifyRequest;
+  storeId: string;
+  categoryId?: string | undefined;
+  onlyWithStock?: boolean | undefined;
+}) {
+  const { request, storeId, categoryId, onlyWithStock } = params;
+  await assertStoreAccess(request, storeId);
+
+  const items = await prisma.stockItem.findMany({
+    where: {
+      storeId,
+      companyId: request.user.companyId,
+      ...(onlyWithStock === false ? {} : { quantity: { gt: 0 } }),
+      ...(categoryId ? { product: { categoryId } } : {}),
+      product: { deletedAt: null, isActive: true, ...(categoryId ? { categoryId } : {}) },
+    },
+    include: {
+      product: { select: { name: true, sku: true, salePrice: true } },
+      variation: { select: { sku: true, size: true } },
+    },
+    orderBy: { product: { name: "asc" } },
+    take: 300,
+  });
+
+  return items.map((item) => ({
+    productId: item.productId,
+    variationId: item.variationId,
+    sku: item.variation?.sku ?? item.product.sku,
+    name: item.product.name,
+    size: item.variation?.size ?? null,
+    /** Sugere uma etiqueta por peça em estoque — o funcionário ajusta. */
+    copies: item.quantity,
+    salePrice: item.product.salePrice,
+  }));
+}
+
 /** Enfileira o comprovante de uma venda. */
 export async function queueReceipt(params: {
   saleId: string;

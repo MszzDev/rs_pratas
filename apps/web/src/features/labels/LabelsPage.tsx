@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Crosshair, Printer, Tag } from "lucide-react";
+import { AlertTriangle, Crosshair, Layers, Printer, Tag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -46,6 +46,20 @@ interface StoreRow {
   name: string;
 }
 
+interface BatchRow {
+  productId: string;
+  variationId: string | null;
+  sku: string;
+  name: string;
+  size: string | null;
+  copies: number;
+  salePrice: string | null;
+}
+
+/** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
+const keyOf = (row: { productId: string; variationId: string | null }) =>
+  `${row.productId}:${row.variationId ?? ""}`;
+
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
@@ -63,6 +77,9 @@ export function LabelsPage() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [calibrating, setCalibrating] = useState<Template | null>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batch, setBatch] = useState<Record<string, number>>({});
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     code: "",
@@ -100,6 +117,18 @@ export function LabelsPage() {
     refetchInterval: 10_000,
   });
 
+  /**
+   * Sugestão de lote: uma etiqueta por peça em estoque na loja. O funcionário
+   * ajusta as quantidades antes de mandar — a sugestão é ponto de partida, não
+   * decisão.
+   */
+  const batchSuggestion = useQuery({
+    queryKey: ["batch-suggestion", storeId],
+    queryFn: () =>
+      apiFetch<BatchRow[]>(`/api/v1/print-jobs/batch-suggestion?storeId=${storeId}`),
+    enabled: batchOpen && storeId !== "",
+  });
+
   const handleError = (caught: unknown) =>
     setError(caught instanceof ApiError ? caught.message : "Não foi possível concluir.");
 
@@ -135,6 +164,47 @@ export function LabelsPage() {
     onError: handleError,
   });
 
+  const sendBatch = useMutation({
+    mutationFn: () =>
+      apiFetch<{ enfileirados: number; etiquetas: number; problemas: unknown[] }>(
+        "/api/v1/print-jobs/labels/batch",
+        {
+          method: "POST",
+          body: {
+            storeId,
+            items: (batchSuggestion.data ?? [])
+              .map((row) => ({
+                productId: row.productId,
+                ...(row.variationId ? { variationId: row.variationId } : {}),
+                copies: batch[keyOf(row)] ?? row.copies,
+              }))
+              .filter((item) => item.copies > 0),
+          },
+        },
+      ),
+    onSuccess: () => {
+      setError(null);
+      setBatchOpen(false);
+      setBatch({});
+      void queryClient.invalidateQueries({ queryKey: ["print-queue"] });
+    },
+    onError: handleError,
+  });
+
+  const removeTemplate = useMutation({
+    mutationFn: (params: { id: string; reason: string }) =>
+      apiFetch<{ mensagem: string }>(`/api/v1/label-templates/${params.id}`, {
+        method: "DELETE",
+        body: { reason: params.reason },
+      }),
+    onSuccess: (result) => {
+      setError(null);
+      setAviso(result.mensagem);
+      void queryClient.invalidateQueries({ queryKey: ["label-templates"] });
+    },
+    onError: handleError,
+  });
+
   const cancelJob = useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/api/v1/print-jobs/${id}/cancel`, { method: "POST" }),
@@ -161,17 +231,36 @@ export function LabelsPage() {
       title="Etiquetas"
       description="Modelos, calibração da impressora e a fila do que está por imprimir."
       actions={
-        creating ? null : (
-          <Button type="button" onClick={() => setCreating(true)}>
-            <Tag className="h-5 w-5" aria-hidden />
-            Novo modelo
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setBatchOpen((current) => !current);
+              setCreating(false);
+            }}
+          >
+            <Layers className="h-5 w-5" aria-hidden />
+            Imprimir em lote
           </Button>
-        )
+          {!creating && (
+            <Button type="button" onClick={() => setCreating(true)}>
+              <Tag className="h-5 w-5" aria-hidden />
+              Novo modelo
+            </Button>
+          )}
+        </>
       }
     >
       {error && (
         <div className="mb-5">
           <Alert tone="error">{error}</Alert>
+        </div>
+      )}
+
+      {aviso && (
+        <div className="mb-5">
+          <Alert tone="success">{aviso}</Alert>
         </div>
       )}
 
@@ -296,6 +385,101 @@ export function LabelsPage() {
         </form>
       )}
 
+      {batchOpen && (
+        <div className="mb-6 rounded-lg border border-border bg-surface p-5 shadow-soft">
+          <h2 className="mb-1 font-medium text-text-primary">Imprimir em lote</h2>
+          <p className="mb-4 text-sm text-text-secondary">
+            Escolha a loja e ajuste a quantidade de cada peça. A sugestão é uma etiqueta por
+            peça em estoque.
+          </p>
+
+          {!storeId && <Alert tone="info">Escolha a loja no filtro abaixo primeiro.</Alert>}
+
+          {storeId && (
+            <>
+              <ul className="mb-4 max-h-96 divide-y divide-border/70 overflow-y-auto">
+                {batchSuggestion.data?.map((row) => {
+                  const key = keyOf(row);
+                  const copies = batch[key] ?? row.copies;
+
+                  return (
+                    <li key={key} className="flex items-center justify-between gap-4 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-text-primary">
+                          {row.name}
+                          {row.size ? ` — tamanho ${row.size}` : ""}
+                        </p>
+                        <p className="text-sm text-text-secondary">
+                          {row.sku} · {formatMoney(row.salePrice)}
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          aria-label={`Menos etiquetas de ${row.name}`}
+                          onClick={() => setBatch({ ...batch, [key]: Math.max(0, copies - 1) })}
+                          className="flex h-10 w-10 items-center justify-center rounded-md border border-border text-text-secondary"
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          aria-label={`Etiquetas de ${row.name}`}
+                          value={copies}
+                          onChange={(event) =>
+                            setBatch({ ...batch, [key]: Number(event.target.value) })
+                          }
+                          className="h-10 w-16 rounded-md border border-border bg-surface text-center text-text-primary"
+                        />
+                        <button
+                          type="button"
+                          aria-label={`Mais etiquetas de ${row.name}`}
+                          onClick={() => setBatch({ ...batch, [key]: Math.min(100, copies + 1) })}
+                          className="flex h-10 w-10 items-center justify-center rounded-md border border-border text-text-secondary"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {batchSuggestion.data?.length === 0 && (
+                <Alert tone="info">Nenhuma peça em estoque nesta loja.</Alert>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border/70 pt-4">
+                <span className="text-sm text-text-secondary">
+                  {(batchSuggestion.data ?? []).reduce(
+                    (sum, row) => sum + (batch[keyOf(row)] ?? row.copies),
+                    0,
+                  )}{" "}
+                  etiqueta(s) no total
+                </span>
+
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    disabled={sendBatch.isPending || (batchSuggestion.data?.length ?? 0) === 0}
+                    onClick={() => sendBatch.mutate()}
+                  >
+                    <Printer className="h-5 w-5" aria-hidden />
+                    Mandar para a fila
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setBatchOpen(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <h2 className="mb-3 font-medium text-text-primary">Modelos</h2>
       <ul className="mb-8 space-y-3">
         {templates.data?.map((template) => (
@@ -321,19 +505,38 @@ export function LabelsPage() {
               </p>
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setCalibrating(template);
-                setOffsetX(template.offsetXMm);
-                setOffsetY(template.offsetYMm);
-                setCreating(false);
-              }}
-            >
-              <Crosshair className="h-5 w-5" aria-hidden />
-              Calibrar
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setCalibrating(template);
+                  setOffsetX(template.offsetXMm);
+                  setOffsetY(template.offsetYMm);
+                  setCreating(false);
+                }}
+              >
+                <Crosshair className="h-5 w-5" aria-hidden />
+                Calibrar
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={removeTemplate.isPending}
+                onClick={() => {
+                  const reason = window.prompt(
+                    `Remover o modelo "${template.name}". Por quê?`,
+                  );
+                  if (reason && reason.trim().length >= 3) {
+                    removeTemplate.mutate({ id: template.id, reason: reason.trim() });
+                  }
+                }}
+              >
+                <Trash2 className="h-5 w-5" aria-hidden />
+                Remover
+              </Button>
+            </div>
           </li>
         ))}
       </ul>

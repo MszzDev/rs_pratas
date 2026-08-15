@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, UserRound } from "lucide-react";
+import { Plus, Trash2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -51,6 +51,7 @@ export function CustomersPage() {
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const [form, setForm] = useState({ name: "", phone: "", cpf: "", ringSize: "", notes: "" });
 
@@ -66,6 +67,22 @@ export function CustomersPage() {
     queryKey: ["customer", openId],
     queryFn: () => apiFetch<CustomerDetail>(`/api/v1/customers/${openId}`),
     enabled: openId !== null,
+  });
+
+  const remove = useMutation({
+    mutationFn: (params: { id: string; reason: string }) =>
+      apiFetch<{ mensagem: string }>(`/api/v1/customers/${params.id}`, {
+        method: "DELETE",
+        body: { reason: params.reason },
+      }),
+    onSuccess: (result) => {
+      setError(null);
+      setAviso(result.mensagem);
+      setOpenId(null);
+      void queryClient.invalidateQueries({ queryKey: ["customers"] });
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível remover."),
   });
 
   const create = useMutation({
@@ -106,6 +123,12 @@ export function CustomersPage() {
       {error && (
         <div className="mb-5">
           <Alert tone="error">{error}</Alert>
+        </div>
+      )}
+
+      {aviso && (
+        <div className="mb-5">
+          <Alert tone="success">{aviso}</Alert>
         </div>
       )}
 
@@ -209,6 +232,25 @@ export function CustomersPage() {
                     </ul>
                   </div>
                 )}
+
+                <div className="mb-3 flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={remove.isPending}
+                    onClick={() => {
+                      const reason = window.prompt(
+                        `Remover ${customer.name} do cadastro. Por quê?`,
+                      );
+                      if (reason && reason.trim().length >= 3) {
+                        remove.mutate({ id: customer.id, reason: reason.trim() });
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-5 w-5" aria-hidden />
+                    Remover cliente
+                  </Button>
+                </div>
 
                 <h3 className="mb-1 text-sm font-medium text-text-primary">Últimas compras</h3>
                 {detail.data.sales.length === 0 ? (

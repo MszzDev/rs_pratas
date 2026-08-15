@@ -23,7 +23,7 @@ interface SetupResponse {
  */
 export function TwoFactorSetupPage() {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, loading, markTwoFactorResolved } = useAuth();
 
   const [step, setStep] = useState<Step>("scan");
   const [setup, setSetup] = useState<SetupResponse | null>(null);
@@ -222,7 +222,16 @@ export function TwoFactorSetupPage() {
               <span>Guardei os códigos em lugar seguro.</span>
             </label>
 
-            <Button size="lg" disabled={!savedConfirmed} onClick={() => navigate("/")}>
+            <Button
+              size="lg"
+              disabled={!savedConfirmed}
+              onClick={() => {
+                // Libera a sessão atual antes de navegar, senão o guarda de
+                // rota devolve para esta mesma tela.
+                markTwoFactorResolved();
+                navigate("/", { replace: true });
+              }}
+            >
               Continuar para o sistema
             </Button>
           </div>

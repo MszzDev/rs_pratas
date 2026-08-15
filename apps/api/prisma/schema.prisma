@@ -176,6 +176,18 @@ enum AuditAction {
   SALE_RETURN
   SERVICE_ORDER_CREATE
   SERVICE_ORDER_UPDATE
+  STORE_OPEN
+  STORE_CLOSE
+  CATEGORY_DELETE
+  SIZE_GRADE_DELETE
+  VARIATION_DELETE
+  CUSTOMER_DELETE
+  TERMINAL_DELETE
+  LABEL_TEMPLATE_DELETE
+  COMMISSION_RULE_DELETE
+  GOAL_DELETE
+  POS_STATION_DELETE
+  CASH_REGISTER_DELETE
 }
 
 // =====================================================================
@@ -224,7 +236,27 @@ model Store {
   timezone    String  @default("America/Sao_Paulo")
   phone       String?
   addressJson Json?
+  /// Cadastro ativo — a loja existe. Diferente de estar ABERTA agora.
   isActive    Boolean @default(true)
+
+  /// Loja aberta neste momento.
+  ///
+  /// Abre sozinha quando alguém entra por PIN num tablet dela — o funcionário
+  /// chegou e ligou o tablet, a loja está funcionando. Não faz sentido pedir
+  /// que alguém aperte "abrir loja" depois de já ter passado o PIN.
+  ///
+  /// O dono abre e fecha qualquer loja de onde estiver, e é ele quem fecha no
+  /// fim do dia: deixar a loja fechar sozinha por inatividade esconderia o
+  /// tablet que ficou ligado a noite toda.
+  isOpen        Boolean   @default(false)
+  openedAt      DateTime?
+  openedById    String?
+  openedBy      User?     @relation("StoreOpenedBy", fields: [openedById], references: [id])
+  /// Tablet cujo login abriu a loja. Nulo quando o dono abriu manualmente.
+  openedByDeviceId String?
+  closedAt      DateTime?
+  closedById    String?
+  closedBy      User?     @relation("StoreClosedBy", fields: [closedById], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -318,6 +350,8 @@ model User {
 
   stockMovements StockMovement[]
 
+  storesOpened         Store[]        @relation("StoreOpenedBy")
+  storesClosed         Store[]        @relation("StoreClosedBy")
   cashSessionsOpened   CashSession[]  @relation("CashSessionOpenedBy")
   cashSessionsClosed   CashSession[]  @relation("CashSessionClosedBy")
   cashMovements        CashMovement[]

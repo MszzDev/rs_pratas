@@ -5,7 +5,9 @@ import {
   cashDifferences,
   paymentBreakdown,
   salesBySeller,
+  salesByStore,
   salesSummary,
+  salesTrend,
   topProducts,
 } from "./reports.service.js";
 import {
@@ -28,6 +30,25 @@ export async function reportRoutes(app: FastifyInstance) {
   app.get("/reports/sales-summary", { preHandler: canView }, async (request) => {
     const query = rangeSchema.parse(request.query);
     return salesSummary({ request, ...query });
+  });
+
+  app.get("/reports/sales-trend", { preHandler: canView }, async (request) => {
+    const query = z
+      .object({
+        storeId: z.string().uuid().optional(),
+        days: z.coerce.number().int().optional(),
+      })
+      .parse(request.query);
+
+    return salesTrend({ request, ...query });
+  });
+
+  app.get("/reports/sales-by-store", { preHandler: canView }, async (request) => {
+    const query = z
+      .object({ from: z.string().datetime().optional(), to: z.string().datetime().optional() })
+      .parse(request.query);
+
+    return salesByStore({ request, ...query });
   });
 
   app.get("/reports/sales-by-seller", { preHandler: canView }, async (request) => {

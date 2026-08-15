@@ -2,9 +2,11 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
 import {
+  buildBatchFromStock,
   calibrateTemplate,
   cancelPrintJob,
   createTemplate,
+  queueLabelBatch,
   listQueue,
   listTemplates,
   queueProductLabels,
@@ -79,6 +81,49 @@ export async function labelRoutes(app: FastifyInstance) {
         .parse(request.body);
 
       return reply.status(201).send(await queueProductLabels({ input, request }));
+    },
+  );
+
+  /** Sugestão de lote a partir do estoque da loja — uma etiqueta por peça. */
+  app.get(
+    "/print-jobs/batch-suggestion",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request) => {
+      const query = z
+        .object({
+          storeId: z.string().uuid(),
+          categoryId: z.string().uuid().optional(),
+          onlyWithStock: z.coerce.boolean().optional(),
+        })
+        .parse(request.query);
+
+      return buildBatchFromStock({ request, ...query });
+    },
+  );
+
+  app.post(
+    "/print-jobs/labels/batch",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request, reply) => {
+      const input = z
+        .object({
+          storeId: z.string().uuid(),
+          templateId: z.string().uuid().optional(),
+          deviceId: z.string().uuid().optional(),
+          items: z
+            .array(
+              z.object({
+                productId: z.string().uuid(),
+                variationId: z.string().uuid().optional(),
+                copies: z.number().int().min(1).max(100),
+              }),
+            )
+            .min(1)
+            .max(200),
+        })
+        .parse(request.body);
+
+      return reply.status(201).send(await queueLabelBatch({ input, request }));
     },
   );
 

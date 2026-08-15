@@ -53,7 +53,7 @@ export default tseslint.config(
 
   {
     // O seed e os scripts de teste imprimem no console de propósito.
-    files: ["apps/api/prisma/seed.ts", "apps/api/test/**/*.ts"],
+    files: ["apps/api/prisma/seed.ts", "apps/api/prisma/demo-seed.ts", "apps/api/test/**/*.ts"],
     rules: { "no-console": "off" },
   },
 );

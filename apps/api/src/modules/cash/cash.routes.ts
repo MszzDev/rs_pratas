@@ -6,6 +6,7 @@ import {
   getOpenSessionForRegister,
   getSession,
   getSessionForClosing,
+  listOverdueSessions,
   listSessions,
   openSession,
   registerSupply,
@@ -29,6 +30,17 @@ export async function cashRoutes(app: FastifyInstance) {
 
       return listSessions({ request, ...query });
     },
+  );
+
+  /**
+   * Caixas que passaram do dia sem fechar. O painel mostra isso em destaque:
+   * o fechamento é diário, e um turno de ontem ainda aberto significa que o
+   * dinheiro de dois dias está na mesma gaveta.
+   */
+  app.get(
+    "/cash/sessions/overdue",
+    { preHandler: [app.requireAuth, requirePermission("CASH_CLOSE")] },
+    async (request) => listOverdueSessions(request),
   );
 
   /** Chamado pelo PDV antes de vender: existe turno aberto neste caixa? */

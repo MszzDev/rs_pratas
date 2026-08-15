@@ -80,9 +80,25 @@ export async function createTestCompany(name = "Empresa Teste") {
   });
 }
 
-export async function createTestStore(companyId: string, code = "L01") {
+/**
+ * Loja de teste já ABERTA por padrão.
+ *
+ * Em produção a loja abre quando alguém entra por PIN no tablet dela, e o
+ * caixa só abre com a loja aberta. Aqui ela nasce aberta para que os testes de
+ * OUTROS assuntos não precisem simular a chegada do funcionário a cada caso.
+ *
+ * A regra de verdade tem cobertura dedicada em store-opening.test.ts — passe
+ * `false` para exercitá-la.
+ */
+export async function createTestStore(companyId: string, code = "L01", isOpen = true) {
   return prisma.store.create({
-    data: { companyId, code, name: `Loja ${code}` },
+    data: {
+      companyId,
+      code,
+      name: `Loja ${code}`,
+      isOpen,
+      ...(isOpen ? { openedAt: new Date() } : {}),
+    },
   });
 }
 
@@ -107,6 +123,8 @@ export async function createTestUser(params: {
    * — passe `false` para exercitá-la.
    */
   allowOffDevice?: boolean;
+  /** PIN do tablet. Só definido quando o teste exercita o login por PIN. */
+  pin?: string;
 }) {
   const password = params.password ?? "senha-de-teste-12345";
   const suffix = crypto.randomUUID().slice(0, 8);
@@ -120,6 +138,7 @@ export async function createTestUser(params: {
       role,
       status: params.status ?? "ACTIVE",
       passwordHash: await hashSecret(password),
+      ...(params.pin ? { pinHash: await hashSecret(params.pin) } : {}),
       mustChangePassword: false,
       mustCreatePin: false,
     },

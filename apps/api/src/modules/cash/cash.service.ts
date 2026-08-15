@@ -4,6 +4,7 @@ import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
 import { badRequest, conflict, forbidden, notFound } from "../../core/errors.js";
 import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
+import { assertStoreOpen } from "../stores/store-opening.service.js";
 
 /**
  * Caixa: abertura, sangria, suprimento e fechamento CEGO.
@@ -38,6 +39,11 @@ export async function openSession(params: {
 
   const storeId = register.posStation.store.id;
   await assertStoreAccess(request, storeId);
+
+  // Caixa aberto com a loja fechada geraria venda que ninguém consegue
+  // explicar depois — e é o padrão que aparece quando o sistema é usado fora
+  // do expediente.
+  await assertStoreOpen(storeId);
 
   if (input.openingAmount < 0) {
     throw badRequest("INVALID_AMOUNT", "O fundo de troco não pode ser negativo.");
@@ -314,6 +320,49 @@ export async function closeSession(params: {
     ...(differenceReason ? { reason: differenceReason } : {}),
   });
 
+  /**
+   * Fechar o último caixa fecha a loja.
+   *
+   * O fechamento do caixa É o fim do expediente: não faz sentido conferir a
+   * gaveta, guardar o dinheiro e deixar a loja marcada como aberta. Deixar
+   * isso para um segundo botão significa que alguém vai esquecer, e a loja
+   * amanhece "aberta" desde ontem — o que apagaria justamente o sinal do
+   * tablet que ficou ligado a noite toda.
+   */
+  const aindaAbertos = await prisma.cashSession.count({
+    where: { storeId: session.storeId, status: "ABERTO" },
+  });
+
+  let lojaFechada = false;
+  if (aindaAbertos === 0) {
+    const store = await prisma.store.findUnique({
+      where: { id: session.storeId },
+      select: { isOpen: true },
+    });
+
+    if (store?.isOpen) {
+      await prisma.store.update({
+        where: { id: session.storeId },
+        data: { isOpen: false, closedAt: new Date(), closedById: request.user.sub },
+      });
+
+      await audit(request, {
+        action: "STORE_CLOSE",
+        result: "SUCCESS",
+        userId: request.user.sub,
+        companyId: session.companyId,
+        storeId: session.storeId,
+        userRoleSnapshot: request.user.role,
+        entityType: "Store",
+        entityId: session.storeId,
+        newData: { isOpen: false },
+        reason: `loja fechada junto com o último caixa (${session.code})`,
+      });
+
+      lojaFechada = true;
+    }
+  }
+
   return {
     id: closed.id,
     code: closed.code,
@@ -322,7 +371,53 @@ export async function closeSession(params: {
     differenceAmount: closed.differenceAmount,
     /** Só agora, com a contagem já gravada, o número aparece. */
     conferido: difference.isZero(),
+    lojaFechada,
+    caixasAindaAbertos: aindaAbertos,
   };
+}
+
+/**
+ * Turnos que passaram do dia sem fechar.
+ *
+ * O fechamento é diário: um caixa aberto desde ontem não tem como ser
+ * conferido — o dinheiro de dois dias está misturado na mesma gaveta, e a
+ * diferença, se houver, não se sabe de qual dia veio.
+ *
+ * O sistema não fecha sozinho: fechar sem alguém contar inventaria um número.
+ * O que ele faz é não deixar passar despercebido.
+ */
+export async function listOverdueSessions(request: FastifyRequest) {
+  const seesEverything = request.user.role === "DONO" || request.user.role === "DESENVOLVEDOR";
+
+  const inicioDeHoje = new Date();
+  inicioDeHoje.setHours(0, 0, 0, 0);
+
+  const sessions = await prisma.cashSession.findMany({
+    where: {
+      companyId: request.user.companyId,
+      status: "ABERTO",
+      openedAt: { lt: inicioDeHoje },
+      ...(seesEverything ? {} : { storeId: { in: request.user.storeIds } }),
+    },
+    include: {
+      store: { select: { name: true } },
+      cashRegister: { select: { name: true } },
+      openedBy: { select: { name: true } },
+      _count: { select: { sales: true } },
+    },
+    orderBy: { openedAt: "asc" },
+  });
+
+  return sessions.map((session) => ({
+    id: session.id,
+    code: session.code,
+    loja: session.store.name,
+    caixa: session.cashRegister.name,
+    abertoPor: session.openedBy.name,
+    abertoEm: session.openedAt,
+    diasEmAberto: Math.floor((Date.now() - session.openedAt.getTime()) / 86_400_000),
+    vendas: session._count.sales,
+  }));
 }
 
 export async function listSessions(params: {

@@ -1,0 +1,17 @@
+-- Acoes de abertura/fechamento de loja e de remocao dos cadastros.
+--
+-- Migracao propria e IF NOT EXISTS: o Postgres nao permite usar um valor de
+-- enum na mesma transacao em que ele e adicionado, e juntar enum com ALTER
+-- TABLE deixa a migracao pela metade quando algo falha.
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'STORE_OPEN';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'STORE_CLOSE';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'CATEGORY_DELETE';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'SIZE_GRADE_DELETE';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'VARIATION_DELETE';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'CUSTOMER_DELETE';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'TERMINAL_DELETE';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'LABEL_TEMPLATE_DELETE';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'COMMISSION_RULE_DELETE';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'GOAL_DELETE';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'POS_STATION_DELETE';
+ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'CASH_REGISTER_DELETE';

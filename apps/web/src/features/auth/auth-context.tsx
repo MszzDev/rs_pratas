@@ -10,6 +10,15 @@ interface AuthContextValue {
   loginWithPassword: (identifier: string, password: string) => Promise<void>;
   loginWithPin: (deviceId: string, employeeCode: string, pin: string) => Promise<void>;
   logout: () => Promise<void>;
+  /**
+   * Marca o segundo fator como resolvido nesta sessão.
+   *
+   * Sem isso, confirmar o 2FA levava de volta à própria tela de 2FA: o token
+   * de acesso continua o mesmo (ele só é reemitido no próximo refresh), então
+   * o guarda de rota ainda lia `twoFactorPending` e devolvia o usuário para
+   * onde ele acabara de sair.
+   */
+  markTwoFactorResolved: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -99,9 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const markTwoFactorResolved = useCallback(() => {
+    setUser((current) => (current ? { ...current, twoFactorPending: false } : current));
+  }, []);
+
   const value = useMemo(
-    () => ({ user, loading, loginWithPassword, loginWithPin, logout }),
-    [user, loading, loginWithPassword, loginWithPin, logout],
+    () => ({ user, loading, loginWithPassword, loginWithPin, logout, markTwoFactorResolved }),
+    [user, loading, loginWithPassword, loginWithPin, logout, markTwoFactorResolved],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

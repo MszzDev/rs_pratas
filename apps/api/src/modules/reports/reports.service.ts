@@ -101,6 +101,99 @@ export async function salesSummary(params: {
   };
 }
 
+/**
+ * Faturamento dia a dia — a série que o gráfico desenha.
+ *
+ * Os dias sem venda entram com zero em vez de sumirem. Uma série que pula a
+ * segunda-feira vazia desenha uma linha que sobe suave, escondendo justo o
+ * buraco que interessa ver.
+ */
+export async function salesTrend(params: {
+  request: FastifyRequest;
+  storeId?: string | undefined;
+  days?: number | undefined;
+}) {
+  const { request, storeId } = params;
+  const stores = await reachableStores(request, storeId);
+  const days = Math.min(Math.max(params.days ?? 14, 2), 90);
+
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+  start.setHours(0, 0, 0, 0);
+
+  const sales = await prisma.sale.findMany({
+    where: {
+      companyId: request.user.companyId,
+      status: "CONCLUIDA",
+      completedAt: { gte: start, lte: end },
+      ...(stores ? { storeId: { in: stores } } : {}),
+    },
+    select: { completedAt: true, totalAmount: true },
+  });
+
+  const byDay = new Map<string, Prisma.Decimal>();
+  for (const sale of sales) {
+    if (!sale.completedAt) continue;
+    const key = sale.completedAt.toISOString().slice(0, 10);
+    byDay.set(key, (byDay.get(key) ?? new Prisma.Decimal(0)).plus(sale.totalAmount));
+  }
+
+  const serie = [];
+  for (let index = 0; index < days; index += 1) {
+    const day = new Date(start);
+    day.setDate(day.getDate() + index);
+    const key = day.toISOString().slice(0, 10);
+
+    serie.push({
+      date: key,
+      label: `${String(day.getDate()).padStart(2, "0")}/${String(day.getMonth() + 1).padStart(2, "0")}`,
+      value: Number((byDay.get(key) ?? new Prisma.Decimal(0)).toFixed(2)),
+    });
+  }
+
+  return serie;
+}
+
+/** Faturamento por loja no período — barras do painel. */
+export async function salesByStore(params: {
+  request: FastifyRequest;
+  from?: string | undefined;
+  to?: string | undefined;
+}) {
+  const { request, from, to } = params;
+  const stores = await reachableStores(request);
+  const { start, end } = parseRange(from, to);
+
+  const grouped = await prisma.sale.groupBy({
+    by: ["storeId"],
+    where: {
+      companyId: request.user.companyId,
+      status: "CONCLUIDA",
+      completedAt: { gte: start, lte: end },
+      ...(stores ? { storeId: { in: stores } } : {}),
+    },
+    _sum: { totalAmount: true },
+    _count: true,
+  });
+
+  const names = await prisma.store.findMany({
+    where: { id: { in: grouped.map((row) => row.storeId) } },
+    select: { id: true, name: true },
+  });
+  const byId = new Map(names.map((store) => [store.id, store.name]));
+
+  return grouped
+    .map((row) => ({
+      storeId: row.storeId,
+      nome: byId.get(row.storeId) ?? "—",
+      vendas: row._count,
+      faturamento: (row._sum.totalAmount ?? new Prisma.Decimal(0)).toFixed(2),
+    }))
+    .sort((a, b) => Number(b.faturamento) - Number(a.faturamento));
+}
+
 export async function salesBySeller(params: {
   request: FastifyRequest;
   storeId?: string | undefined;

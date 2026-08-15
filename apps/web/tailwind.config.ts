@@ -38,6 +38,16 @@ export default {
         md: "0.5rem",
         sm: "0.375rem",
       },
+      /**
+       * Sombras longas e muito claras. Num sistema que fica aberto o dia
+       * inteiro num tablet, borda dura em toda caixa cansa a vista — a sombra
+       * separa os blocos sem riscar a tela.
+       */
+      boxShadow: {
+        soft: "0 18px 45px rgba(38, 35, 35, 0.07)",
+        rose: "0 12px 30px rgba(155, 79, 83, 0.16)",
+        lifted: "0 2px 6px rgba(38, 35, 35, 0.05), 0 12px 28px rgba(38, 35, 35, 0.06)",
+      },
     },
   },
   plugins: [animate],

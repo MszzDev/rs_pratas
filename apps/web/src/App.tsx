@@ -28,6 +28,7 @@ import { CustomersPage } from "./features/customers/CustomersPage";
 import { LabelsPage } from "./features/labels/LabelsPage";
 import { ReportsPage } from "./features/reports/ReportsPage";
 import { AfterSalesPage } from "./features/aftersales/AfterSalesPage";
+import { DashboardPage } from "./features/dashboard/DashboardPage";
 
 /**
  * Guarda de rota — conveniência de navegação, NUNCA controle de acesso.
@@ -57,6 +58,19 @@ function RequireAuth({ children }: { children: ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
+/**
+ * A raiz depende de quem entrou.
+ *
+ * O vendedor abre o sistema para vender; o dono, para saber como a rede está.
+ * Mandar os dois para a mesma tela obrigaria um deles a navegar toda vez.
+ */
+function HomeRedirect() {
+  const { user } = useAuth();
+  const vaiParaPainel = user?.role === "DONO" || user?.role === "GERENTE" || user?.role === "DESENVOLVEDOR";
+
+  return <Navigate to={vaiParaPainel ? "/painel" : "/venda"} replace />;
 }
 
 function AppRoutes() {
@@ -176,6 +190,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/painel"
+        element={
+          <RequireAuth>
+            <DashboardPage />
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/venda"
         element={
           <RequireAuth>
@@ -240,8 +262,7 @@ function AppRoutes() {
         }
       />
 
-      {/* A venda é o que se abre o dia inteiro — é ela que merece a raiz. */}
-      <Route path="/" element={<Navigate to="/venda" replace />} />
+      <Route path="/" element={<HomeRedirect />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

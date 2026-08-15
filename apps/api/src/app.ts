@@ -29,6 +29,7 @@ import { saleRoutes } from "./modules/sales/sales.routes.js";
 import { labelRoutes } from "./modules/labels/labels.routes.js";
 import { reportRoutes } from "./modules/reports/reports.routes.js";
 import { afterSalesRoutes } from "./modules/aftersales/aftersales.routes.js";
+import { storeOperationRoutes } from "./modules/stores/stores-extra.routes.js";
 
 const REDACTED_LOG_PATHS = [
   "req.headers.authorization",
@@ -138,6 +139,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(labelRoutes, { prefix: "/api/v1" });
   await app.register(reportRoutes, { prefix: "/api/v1" });
   await app.register(afterSalesRoutes, { prefix: "/api/v1" });
+  await app.register(storeOperationRoutes, { prefix: "/api/v1" });
 
   app.get("/health", async () => ({ status: "ok" }));
 
