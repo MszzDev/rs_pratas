@@ -168,6 +168,14 @@ enum AuditAction {
   GOAL_CREATE
   GOAL_UPDATE
   REPORT_VIEW
+  WARRANTY_ISSUE
+  WARRANTY_CLAIM
+  WARRANTY_VOID
+  CERTIFICATE_ISSUE
+  CERTIFICATE_REISSUE
+  SALE_RETURN
+  SERVICE_ORDER_CREATE
+  SERVICE_ORDER_UPDATE
 }
 
 // =====================================================================
@@ -242,6 +250,8 @@ model Store {
   printJobs       PrintJob[]
   commissionRules CommissionRule[]
   goals           Goal[]
+  saleReturns     SaleReturn[]
+  serviceOrders   ServiceOrder[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -1301,9 +1311,10 @@ model Customer {
 
   isActive Boolean @default(true)
 
-  sales        Sale[]
-  reservations Reservation[]
-  quotes       Quote[]
+  sales         Sale[]
+  reservations  Reservation[]
+  quotes        Quote[]
+  serviceOrders ServiceOrder[]
 
   createdById String?
   createdAt   DateTime  @default(now())
@@ -1442,6 +1453,7 @@ model Sale {
 
   items    SaleItem[]
   payments SalePayment[]
+  returns  SaleReturn[] @relation("ReturnOriginalSale")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1479,6 +1491,10 @@ model SaleItem {
   /// Custo congelado, para a margem do relatório não mudar quando o custo do
   /// produto for atualizado.
   unitCostSnapshot Decimal? @db.Decimal(12, 2)
+
+  warranty    Warranty?
+  certificate Certificate?
+  returnItems SaleReturnItem[]
 
   createdAt DateTime @default(now())
 
@@ -1826,4 +1842,249 @@ model Goal {
   @@unique([storeId, scope, userId, periodStart])
   @@index([companyId, periodStart])
   @@map("goals")
+}
+
+// =====================================================================
+// GARANTIAS, CERTIFICADOS E TROCAS (Fase 8)
+// =====================================================================
+
+enum ReturnType {
+  /// Dinheiro de volta.
+  DEVOLUCAO
+  /// Leva outra peça no lugar. A diferença é cobrada ou devolvida.
+  TROCA
+}
+
+enum ReturnStatus {
+  PENDENTE
+  CONCLUIDA
+  RECUSADA
+}
+
+enum ServiceOrderStatus {
+  ABERTA
+  EM_ANALISE
+  AGUARDANDO_CLIENTE
+  EM_REPARO
+  PRONTA
+  ENTREGUE
+  CANCELADA
+}
+
+/// Garantia de uma peça vendida.
+///
+/// Vinculada ao ITEM da venda, não ao produto: a garantia é daquela peça que
+/// aquele cliente levou naquele dia. Ligar ao produto faria toda unidade
+/// vendida compartilhar um prazo só, o que não significa nada.
+model Warranty {
+  id        String @id @default(uuid())
+  companyId String
+
+  saleItemId String   @unique
+  saleItem   SaleItem @relation(fields: [saleItemId], references: [id])
+
+  code String
+
+  months    Int
+  startsAt  DateTime
+  /// Calculada na emissão e congelada. Recalcular na leitura faria o prazo
+  /// mudar se alguém corrigisse a data da venda depois.
+  expiresAt DateTime
+
+  /// O texto que valia quando a peça foi vendida. Congelado pelo mesmo motivo
+  /// do preço no item: mudar os termos depois reescreveria o que foi
+  /// prometido ao cliente.
+  terms String
+
+  voidedAt    DateTime?
+  voidReason  String?
+
+  claims WarrantyClaim[]
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([expiresAt])
+  @@map("warranties")
+}
+
+/// Acionamento da garantia — o cliente voltou com defeito.
+model WarrantyClaim {
+  id         String   @id @default(uuid())
+  warrantyId String
+  warranty   Warranty @relation(fields: [warrantyId], references: [id])
+
+  companyId String
+  storeId   String
+
+  description String
+  /// Se o defeito estava coberto. Nulo enquanto ninguém decidiu.
+  approved       Boolean?
+  decisionReason String?
+
+  /// Ordem de serviço aberta a partir deste acionamento, quando houve reparo.
+  serviceOrderId String?
+
+  openedById  String
+  decidedById String?
+  decidedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([warrantyId])
+  @@index([companyId, createdAt])
+  @@map("warranty_claims")
+}
+
+/// Certificado de autenticidade da prata.
+///
+/// É o papel que o cliente leva junto com a peça atestando o teor do metal.
+/// Guardado porque a loja precisa poder reemitir uma segunda via com os mesmos
+/// dados — e porque um certificado emitido é uma afirmação da loja sobre o que
+/// vendeu.
+model Certificate {
+  id        String @id @default(uuid())
+  companyId String
+
+  saleItemId String?   @unique
+  saleItem   SaleItem? @relation(fields: [saleItemId], references: [id])
+
+  code String
+
+  productName String
+  productSku  String
+  material    String
+  weightGrams Decimal? @db.Decimal(10, 3)
+  /// Descrição livre de pedras, banho, acabamento.
+  details String?
+
+  customerName String?
+  issuedAt     DateTime @default(now())
+
+  /// Quantas segundas vias já saíram. Reemissão não gera certificado novo:
+  /// dois certificados com códigos diferentes para a mesma peça permitiriam
+  /// apresentar dois documentos como se fossem duas peças.
+  reissueCount Int @default(0)
+
+  issuedById String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@map("certificates")
+}
+
+/// Troca ou devolução de uma venda já concluída.
+///
+/// Não altera a venda original. É um fato novo, com data própria, que aponta
+/// para ela — o comprovante que o cliente levou continua valendo, e o caixa do
+/// dia em que a peça voltou é o que recebe a saída do dinheiro.
+model SaleReturn {
+  id        String @id @default(uuid())
+  companyId String
+  storeId   String
+  store     Store  @relation(fields: [storeId], references: [id])
+
+  originalSaleId String
+  originalSale   Sale   @relation("ReturnOriginalSale", fields: [originalSaleId], references: [id])
+
+  /// Venda nova gerada pela troca, quando o cliente levou outra peça.
+  replacementSaleId String?
+
+  /// Turno em que a devolução aconteceu — não o da venda original.
+  sessionId String?
+
+  code   String
+  type   ReturnType
+  status ReturnStatus @default(PENDENTE)
+
+  /// Quanto voltou para o cliente em dinheiro. Numa troca, é a diferença
+  /// quando a peça nova custa menos.
+  refundAmount Decimal @default(0) @db.Decimal(12, 2)
+
+  reason String
+
+  /// Quem autorizou. Devolução mexe em dinheiro que já entrou, então precisa
+  /// de alguém com a permissão, e o nome fica registrado.
+  authorizedById String?
+
+  items SaleReturnItem[]
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([originalSaleId])
+  @@index([storeId, createdAt])
+  @@map("sale_returns")
+}
+
+model SaleReturnItem {
+  id       String     @id @default(uuid())
+  returnId String
+  return   SaleReturn @relation(fields: [returnId], references: [id])
+
+  saleItemId String
+  saleItem   SaleItem @relation(fields: [saleItemId], references: [id])
+
+  quantity Int
+  /// Valor devolvido por este item — o que foi pago por ele, não o preço de
+  /// hoje.
+  refundAmount Decimal @db.Decimal(12, 2)
+
+  /// Peça danificada não volta para a prateleira. Vai para PERDA, e o motivo
+  /// fica no movimento de estoque.
+  returnedToStock Boolean @default(true)
+  condition       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([returnId])
+  @@map("sale_return_items")
+}
+
+/// Ordem de serviço — conserto, ajuste de tamanho, banho.
+model ServiceOrder {
+  id        String @id @default(uuid())
+  companyId String
+  storeId   String
+  store     Store  @relation(fields: [storeId], references: [id])
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  code   String
+  status ServiceOrderStatus @default(ABERTA)
+
+  /// Peça da loja, quando é de venda própria. Nulo quando o cliente trouxe
+  /// uma peça de fora.
+  productId String?
+
+  description  String
+  /// Estado em que a peça chegou. Descrito na entrada para não virar
+  /// discussão na retirada.
+  intakeCondition String
+
+  estimatedAmount Decimal? @db.Decimal(12, 2)
+  finalAmount     Decimal? @db.Decimal(12, 2)
+  /// Coberto pela garantia — nesse caso não se cobra do cliente.
+  underWarranty Boolean @default(false)
+
+  promisedFor DateTime?
+  deliveredAt DateTime?
+
+  notes String?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([storeId, status])
+  @@index([customerId])
+  @@map("service_orders")
 }
