@@ -185,7 +185,12 @@ export async function listProducts(params: {
       variations: {
         where: { deletedAt: null },
         orderBy: { size: "asc" },
+        // O saldo de cada tamanho vem junto: sem ele a tela mostraria os
+        // tamanhos cadastrados sem dizer quais existem de verdade na gaveta,
+        // que é a única pergunta que importa antes de vender.
+        include: { stockItems: { select: { quantity: true, reservedQuantity: true } } },
       },
+      stockItems: { select: { quantity: true, reservedQuantity: true } },
     },
     orderBy: { name: "asc" },
     take: 200,

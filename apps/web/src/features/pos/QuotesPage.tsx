@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, FileText, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -9,6 +9,7 @@ import { apiFetch, ApiError } from "@/lib/api-client";
 import { ProductPhoto } from "@/components/ui/product-photo";
 import { formatMoney } from "@/lib/money";
 import type { StockRow } from "./types";
+import { groupByProduct } from "./group-stock";
 
 interface Quote {
   id: string;
@@ -71,6 +72,7 @@ export function QuotesPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<QuoteLine[]>([]);
+  const [tamanhosAbertos, setTamanhosAbertos] = useState<string | null>(null);
 
   const stores = useQuery({
     queryKey: ["stores"],
@@ -91,6 +93,9 @@ export function QuotesPage() {
       ),
     enabled: creating && storeId !== "",
   });
+
+  // Mesma regra do PDV: uma peça por linha, tamanho escolhido ao tocar.
+  const grupos = useMemo(() => groupByProduct(stock.data ?? []), [stock.data]);
 
   const create = useMutation({
     mutationFn: () =>
@@ -126,6 +131,7 @@ export function QuotesPage() {
   );
 
   function addLine(row: StockRow) {
+    setTamanhosAbertos(null);
     setLines((current) => {
       const key = `${row.productId}:${row.variationId ?? ""}`;
       const existing = current.find(
@@ -230,32 +236,77 @@ export function QuotesPage() {
                 />
               </div>
 
-              <ul className="mb-4 max-h-64 space-y-2 overflow-y-auto">
-                {stock.data?.map((row) => (
-                  <li key={row.id}>
-                    <button
-                      type="button"
-                      onClick={() => addLine(row)}
-                      className="flex w-full min-h-[56px] items-center justify-between gap-4 rounded-md border border-border p-2.5 text-left hover:border-rose-primary"
-                    >
-                      <span className="flex min-w-0 items-center gap-3 text-text-primary">
-                        <ProductPhoto
-                          productId={row.productId}
-                          checksum={row.imageChecksum}
-                          alt={row.name}
-                          size="sm"
-                        />
-                        <span className="truncate">
-                          {row.name}
-                          {row.size ? ` — ${row.size}` : ""}
+              <ul className="mb-4 max-h-72 space-y-2 overflow-y-auto">
+                {grupos.map((grupo) => {
+                  const aberto = tamanhosAbertos === grupo.productId;
+                  const unico = grupo.variacoes[0];
+
+                  return (
+                    <li key={grupo.productId}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!grupo.temTamanhos && unico) {
+                            addLine(unico);
+                            return;
+                          }
+                          setTamanhosAbertos(aberto ? null : grupo.productId);
+                        }}
+                        aria-expanded={grupo.temTamanhos ? aberto : undefined}
+                        className="flex w-full min-h-[56px] items-center justify-between gap-4 rounded-md border border-border p-2.5 text-left hover:border-rose-primary"
+                      >
+                        <span className="flex min-w-0 items-center gap-3 text-text-primary">
+                          <ProductPhoto
+                            productId={grupo.productId}
+                            checksum={grupo.imageChecksum}
+                            alt={grupo.name}
+                            size="sm"
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate">{grupo.name}</span>
+                            {grupo.temTamanhos && (
+                              <span className="block text-sm text-text-muted">
+                                {grupo.variacoes.length} tamanho(s)
+                              </span>
+                            )}
+                          </span>
                         </span>
-                      </span>
-                      <span className="shrink-0 text-text-secondary">
-                        {formatMoney(row.salePrice)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+
+                        <span className="flex shrink-0 items-center gap-2 text-text-secondary">
+                          {grupo.precoMin === grupo.precoMax
+                            ? formatMoney(String(grupo.precoMin))
+                            : `${formatMoney(String(grupo.precoMin))} a ${formatMoney(String(grupo.precoMax))}`}
+                          {grupo.temTamanhos && (
+                            <ChevronDown
+                              className={`h-4 w-4 transition-transform ${aberto ? "rotate-180" : ""}`}
+                              aria-hidden
+                            />
+                          )}
+                        </span>
+                      </button>
+
+                      {grupo.temTamanhos && aberto && (
+                        <div className="mt-1 flex flex-wrap gap-2 rounded-md border border-border/70 bg-background-secondary p-2.5">
+                          {grupo.variacoes.map((variacao) => (
+                            <button
+                              key={variacao.id}
+                              type="button"
+                              onClick={() => addLine(variacao)}
+                              className="flex min-h-[48px] min-w-[64px] flex-col items-center justify-center rounded-md border border-border bg-surface px-3 text-sm hover:border-rose-primary"
+                            >
+                              <span className="font-medium text-text-primary">
+                                {variacao.size}
+                              </span>
+                              <span className="text-xs text-text-muted">
+                                {variacao.availableQuantity} un.
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </>
           )}

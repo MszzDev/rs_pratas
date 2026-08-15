@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Minus, Plus, Search, ShoppingCart, Trash2, X } from "lucide-react";
+import { Bell, ChevronDown, Minus, Plus, Search, ShoppingCart, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -10,6 +10,7 @@ import { ProductPhoto } from "@/components/ui/product-photo";
 import { formatMoney } from "@/lib/money";
 import { PaymentDialog } from "./PaymentDialog";
 import type { CartLine, StockRow } from "./types";
+import { groupByProduct } from "./group-stock";
 
 interface StoreRow {
   id: string;
@@ -47,6 +48,8 @@ export function PosPage() {
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<{ code: string; total: string } | null>(null);
+  /** Peça com os tamanhos abertos. Uma de cada vez: duas listas abertas viram rolagem. */
+  const [tamanhosAbertos, setTamanhosAbertos] = useState<string | null>(null);
 
   const stores = useQuery({
     queryKey: ["stores"],
@@ -85,6 +88,8 @@ export function PosPage() {
     enabled: storeId !== "",
   });
 
+  const grupos = useMemo(() => groupByProduct(stock.data ?? []), [stock.data]);
+
   const subtotal = useMemo(
     () => cart.reduce((sum, line) => sum + Number(line.salePrice ?? 0) * line.quantity, 0),
     [cart],
@@ -92,6 +97,7 @@ export function PosPage() {
 
   function addToCart(row: StockRow) {
     setError(null);
+    setTamanhosAbertos(null);
 
     const existing = cart.find((line) => line.stockItemId === row.id);
     const alreadyInCart = existing?.quantity ?? 0;
@@ -249,41 +255,92 @@ export function PosPage() {
             </div>
 
             <ul className="space-y-2">
-              {stock.data?.map((row) => (
-                <li key={row.id}>
-                  <button
-                    type="button"
-                    onClick={() => addToCart(row)}
-                    disabled={row.availableQuantity === 0}
-                    className="flex w-full min-h-[64px] items-center justify-between gap-4 rounded-lg border border-border bg-surface p-3 text-left transition-colors hover:border-rose-primary disabled:opacity-50"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <ProductPhoto
-                        productId={row.productId}
-                        checksum={row.imageChecksum}
-                        alt={row.name}
-                        size="md"
-                      />
-                      <div className="min-w-0">
-                      <p className="font-medium text-text-primary">
-                        {row.name}
-                        {row.size ? ` — tamanho ${row.size}` : ""}
-                      </p>
-                      <p className="text-sm text-text-secondary">
-                        {row.sku} · {row.availableQuantity} disponível(is)
-                        {row.reservedQuantity > 0 ? ` · ${row.reservedQuantity} reservada(s)` : ""}
-                      </p>
+              {grupos.map((grupo) => {
+                const aberto = tamanhosAbertos === grupo.productId;
+                const unico = grupo.variacoes[0];
+
+                return (
+                  <li key={grupo.productId}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Peça sem tamanho vai direto ao carrinho; com tamanho,
+                        // abre a escolha. Um toque a mais só onde ele decide
+                        // alguma coisa.
+                        if (!grupo.temTamanhos && unico) {
+                          addToCart(unico);
+                          return;
+                        }
+                        setTamanhosAbertos(aberto ? null : grupo.productId);
+                      }}
+                      disabled={grupo.disponivelTotal === 0}
+                      aria-expanded={grupo.temTamanhos ? aberto : undefined}
+                      className="flex w-full min-h-[64px] items-center justify-between gap-4 rounded-lg border border-border bg-surface p-3 text-left transition-colors hover:border-rose-primary disabled:opacity-50"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <ProductPhoto
+                          productId={grupo.productId}
+                          checksum={grupo.imageChecksum}
+                          alt={grupo.name}
+                          size="md"
+                        />
+                        <div className="min-w-0">
+                          <p className="font-medium text-text-primary">{grupo.name}</p>
+                          <p className="text-sm text-text-secondary">
+                            {grupo.sku} · {grupo.disponivelTotal} disponível(is)
+                            {grupo.temTamanhos
+                              ? ` em ${grupo.variacoes.length} tamanho(s)`
+                              : ""}
+                            {grupo.reservadoTotal > 0
+                              ? ` · ${grupo.reservadoTotal} reservada(s)`
+                              : ""}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <span className="shrink-0 font-medium text-text-primary">
-                      {formatMoney(row.salePrice)}
-                    </span>
-                  </button>
-                </li>
-              ))}
+
+                      <span className="flex shrink-0 items-center gap-2 font-medium text-text-primary">
+                        {/* Faixa de preço só quando os tamanhos custam
+                            diferente — anel 30 leva mais prata que o 12. */}
+                        {grupo.precoMin === grupo.precoMax
+                          ? formatMoney(String(grupo.precoMin))
+                          : `${formatMoney(String(grupo.precoMin))} a ${formatMoney(String(grupo.precoMax))}`}
+                        {grupo.temTamanhos && (
+                          <ChevronDown
+                            className={`h-4 w-4 text-text-muted transition-transform ${aberto ? "rotate-180" : ""}`}
+                            aria-hidden
+                          />
+                        )}
+                      </span>
+                    </button>
+
+                    {/* Escolha do tamanho: botões grandes, porque no tablet
+                        isso é tocado com o dedo e o cliente está esperando. */}
+                    {grupo.temTamanhos && aberto && (
+                      <div className="mt-1 flex flex-wrap gap-2 rounded-lg border border-border/70 bg-background-secondary p-3">
+                        {grupo.variacoes.map((variacao) => (
+                          <button
+                            key={variacao.id}
+                            type="button"
+                            disabled={variacao.availableQuantity === 0}
+                            onClick={() => addToCart(variacao)}
+                            className="flex min-h-[52px] min-w-[68px] flex-col items-center justify-center rounded-md border border-border bg-surface px-3 text-sm transition-colors hover:border-rose-primary disabled:opacity-40"
+                          >
+                            <span className="font-medium text-text-primary">{variacao.size}</span>
+                            <span className="text-xs text-text-muted">
+                              {variacao.availableQuantity === 0
+                                ? "esgotado"
+                                : `${variacao.availableQuantity} un.`}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
 
-            {stock.data?.length === 0 && (
+            {grupos.length === 0 && (
               <Alert tone="info">
                 <span className="flex items-center gap-2">
                   <Search className="h-4 w-4" aria-hidden />

@@ -12,6 +12,7 @@ interface Variation {
   id: string;
   sku: string;
   size: string | null;
+  stockItems: Array<{ quantity: number; reservedQuantity: number }>;
 }
 
 interface Product {
@@ -28,7 +29,12 @@ interface Product {
   imageChecksum: string | null;
   category: { name: string } | null;
   variations: Variation[];
+  stockItems: Array<{ quantity: number; reservedQuantity: number }>;
 }
+
+/** Soma o disponível de todas as lojas — é o número da rede, não de uma loja. */
+const disponivel = (items: Array<{ quantity: number; reservedQuantity: number }>) =>
+  items.reduce((total, item) => total + item.quantity - item.reservedQuantity, 0);
 
 interface Category {
   id: string;
@@ -546,17 +552,33 @@ export function ProductsPage() {
                     {product.weightGrams ? ` · ${product.weightGrams} g` : ""}
                   </p>
 
-                  {product.hasVariations && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {product.variations.map((variation) => (
-                        <span
-                          key={variation.id}
-                          className="rounded bg-background-secondary px-2 py-0.5 text-sm text-text-secondary"
-                        >
-                          {variation.size}
-                        </span>
-                      ))}
+                  {product.hasVariations ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {product.variations.map((variation) => {
+                        const saldo = disponivel(variation.stockItems);
+                        return (
+                          <span
+                            key={variation.id}
+                            title={`${saldo} disponível(is) na rede`}
+                            className={`rounded px-2 py-0.5 text-sm ${
+                              saldo > 0
+                                ? "bg-rose-soft text-rose-dark"
+                                : "bg-background-secondary text-text-muted line-through"
+                            }`}
+                          >
+                            {/* O separador não é enfeite: "16" com "5" colado
+                                do lado vira "165" e o tamanho some. */}
+                            {variation.size}
+                            <span className="mx-1 opacity-40">·</span>
+                            <span className="text-xs opacity-70">{saldo}</span>
+                          </span>
+                        );
+                      })}
                     </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-text-secondary">
+                      {disponivel(product.stockItems)} disponível(is) na rede
+                    </p>
                   )}
                 </div>
               </div>
