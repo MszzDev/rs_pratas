@@ -84,6 +84,14 @@ export async function fetchProtectedObjectUrl(path: string): Promise<string> {
   return URL.createObjectURL(await response.blob());
 }
 
+/** Primeira mensagem específica de um erro de validação, se houver. */
+function firstValidationMessage(body: ApiErrorBody | null): string | null {
+  const issues = (body?.error?.details as { issues?: Array<{ message?: string }> } | undefined)
+    ?.issues;
+
+  return issues?.[0]?.message ?? null;
+}
+
 interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
   /** Token de reautenticação para ações sensíveis. */
@@ -136,10 +144,16 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (!response.ok) {
     const errorBody = payload as ApiErrorBody | null;
+
     throw new ApiError(
       response.status,
       errorBody?.error?.code ?? "UNKNOWN",
-      errorBody?.error?.message ?? "Não foi possível concluir a operação. Tente novamente.",
+      // Erro de validação vem com a lista de campos que falharam; usar a
+      // mensagem genérica desperdiça isso e deixa a pessoa adivinhando qual
+      // dos campos está errado.
+      firstValidationMessage(errorBody) ??
+        errorBody?.error?.message ??
+        "Não foi possível concluir a operação. Tente novamente.",
       errorBody?.error?.details,
     );
   }

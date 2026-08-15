@@ -55,12 +55,31 @@ export const revokePermissionSchema = z.object({
   reason: z.string().min(3, "Informe o motivo da revogação.").max(500),
 });
 
+/**
+ * Endereço da loja.
+ *
+ * Guardado como JSON e não em colunas soltas: o endereço aparece inteiro no
+ * comprovante e na etiqueta, nunca é filtrado por campo, e um bloco JSON
+ * evita seis colunas que só existem para serem lidas juntas.
+ */
+export const storeAddressSchema = z.object({
+  cep: z.string().max(10).optional(),
+  logradouro: z.string().max(160).optional(),
+  numero: z.string().max(20).optional(),
+  complemento: z.string().max(80).optional(),
+  bairro: z.string().max(80).optional(),
+  cidade: z.string().max(80).optional(),
+  uf: z.string().max(2).optional(),
+});
+
 export const createStoreSchema = z.object({
   code: z.string().min(1).max(20),
   name: z.string().min(2).max(120),
   cnpj: z.string().max(20).optional(),
   phone: z.string().max(30).optional(),
+  email: z.string().email().max(160).optional(),
   timezone: z.string().max(60).default("America/Sao_Paulo"),
+  address: storeAddressSchema.optional(),
 });
 
 export const updateStoreSchema = createStoreSchema.partial();
@@ -68,6 +87,7 @@ export const updateStoreSchema = createStoreSchema.partial();
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type ChangeUserRoleInput = z.infer<typeof changeUserRoleSchema>;
+export type StoreAddress = z.infer<typeof storeAddressSchema>;
 export type CreateStoreInput = z.infer<typeof createStoreSchema>;
 export type UpdateStoreInput = z.infer<typeof updateStoreSchema>;
 export type UserSummary = z.infer<typeof userSummarySchema>;

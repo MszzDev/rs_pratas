@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowDownToLine, History, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, ArrowDownToLine, History, PackagePlus, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -74,6 +74,16 @@ export function StockPage() {
   const [reason, setReason] = useState("");
   const [historyOf, setHistoryOf] = useState<StockRow | null>(null);
 
+  /**
+   * Entrada de peça que JÁ existe no catálogo — a chegada de mercadoria do
+   * fornecedor. Reaproveita o produto cadastrado: quem repõe não deveria ter
+   * que passar pela tela de cadastro só para somar dez peças.
+   */
+  const [entryOf, setEntryOf] = useState<StockRow | null>(null);
+  const [entryQuantity, setEntryQuantity] = useState("");
+  const [entryCost, setEntryCost] = useState("");
+  const [entryReason, setEntryReason] = useState("");
+
   const stores = useQuery({
     queryKey: ["stores"],
     queryFn: () => apiFetch<StoreRow[]>("/api/v1/stores"),
@@ -119,8 +129,34 @@ export function StockPage() {
       setError(caught instanceof ApiError ? caught.message : "Não foi possível ajustar."),
   });
 
+  const registrarEntrada = useMutation({
+    mutationFn: () =>
+      apiFetch("/api/v1/stock/entries", {
+        method: "POST",
+        body: {
+          storeId: entryOf?.storeId,
+          productId: entryOf?.productId,
+          ...(entryOf?.variationId ? { variationId: entryOf.variationId } : {}),
+          quantity: Number(entryQuantity),
+          reason: entryReason,
+          ...(entryCost ? { unitCost: Number(entryCost) } : {}),
+        },
+      }),
+    onSuccess: () => {
+      setError(null);
+      setEntryOf(null);
+      setEntryQuantity("");
+      setEntryCost("");
+      setEntryReason("");
+      void queryClient.invalidateQueries({ queryKey: ["stock"] });
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível registrar."),
+  });
+
   return (
     <PageShell
+      eyebrow="Operação"
       title="Estoque"
       description="Saldo por loja. Cada mudança fica registrada com autor e motivo."
     >
@@ -169,6 +205,62 @@ export function StockPage() {
           Só estoque baixo
         </label>
       </div>
+
+      {entryOf && (
+        <form
+          className="mb-6 rounded-lg border border-border bg-surface p-5 shadow-soft"
+          onSubmit={(event) => {
+            event.preventDefault();
+            registrarEntrada.mutate();
+          }}
+        >
+          <h2 className="mb-1 font-medium text-text-primary">
+            Entrada de {entryOf.name}
+            {entryOf.size ? ` — tamanho ${entryOf.size}` : ""}
+          </h2>
+          <p className="mb-4 text-sm text-text-secondary">
+            Em {entryOf.storeName}. Hoje há {entryOf.quantity} peça(s); o que você informar é
+            somado ao que já existe.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field
+              label="Quantas chegaram"
+              type="number"
+              min={1}
+              required
+              autoFocus
+              value={entryQuantity}
+              onChange={(event) => setEntryQuantity(event.target.value)}
+            />
+            <Field
+              label="Custo por peça (R$)"
+              type="number"
+              step="0.01"
+              min={0}
+              value={entryCost}
+              onChange={(event) => setEntryCost(event.target.value)}
+              hint="Opcional. Fica no movimento, para a margem do relatório."
+            />
+            <Field
+              label="De onde veio"
+              required
+              value={entryReason}
+              onChange={(event) => setEntryReason(event.target.value)}
+              hint="Ex.: nota 4471 do fornecedor."
+            />
+          </div>
+
+          <div className="mt-5 flex gap-3">
+            <Button type="submit" disabled={registrarEntrada.isPending}>
+              Registrar entrada
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setEntryOf(null)}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      )}
 
       {adjusting && (
         <form
@@ -304,6 +396,7 @@ export function StockPage() {
                   onClick={() => {
                     setHistoryOf(row);
                     setAdjusting(null);
+                    setEntryOf(null);
                   }}
                 >
                   <History className="h-5 w-5" aria-hidden />
@@ -313,7 +406,24 @@ export function StockPage() {
                   type="button"
                   variant="outline"
                   onClick={() => {
+                    setEntryOf(row);
+                    setAdjusting(null);
+                    setHistoryOf(null);
+                    setEntryQuantity("");
+                    setEntryCost("");
+                    setEntryReason("");
+                  }}
+                >
+                  <PackagePlus className="h-5 w-5" aria-hidden />
+                  Entrada
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
                     setAdjusting(row);
+                    setEntryOf(null);
                     setHistoryOf(null);
                     setNewQuantity(String(row.quantity));
                     setReason("");

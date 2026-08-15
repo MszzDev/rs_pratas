@@ -38,11 +38,28 @@ export function FirstAccessPage() {
     try {
       await action();
     } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : "Não foi possível concluir agora. Tente novamente.",
-      );
+      /**
+       * O token do primeiro acesso vale 15 minutos. Quem parou no meio para
+       * procurar o papel com a senha volta e esbarra nele — e "sessão
+       * expirada" no passo 2 não diz o que fazer. Devolve ao começo com a
+       * matrícula preenchida, que é o único caminho possível daqui.
+       */
+      const expirou = caught instanceof ApiError && caught.status === 401;
+
+      if (expirou) {
+        setStep("credentials");
+        setOnboardingToken("");
+        setTempPassword("");
+        setError(
+          "O prazo desta tela venceu. Digite a senha temporária de novo para continuar.",
+        );
+      } else {
+        setError(
+          caught instanceof ApiError
+            ? caught.message
+            : "Não foi possível concluir agora. Tente novamente.",
+        );
+      }
     } finally {
       setSubmitting(false);
     }
@@ -136,7 +153,11 @@ export function FirstAccessPage() {
               type="password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
-              hint="Ao menos 12 caracteres. Precisa ser diferente da temporária."
+              hint={
+                newPassword.length > 0 && newPassword.length < 12
+                  ? `Faltam ${12 - newPassword.length} caractere(s).`
+                  : "Ao menos 12 caracteres. Precisa ser diferente da temporária."
+              }
               autoComplete="new-password"
               required
             />
@@ -145,10 +166,23 @@ export function FirstAccessPage() {
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
+              // Confere antes de enviar: descobrir que as senhas não batem
+              // depois de um ida e volta ao servidor é irritante à toa.
+              error={
+                confirmPassword.length > 0 && confirmPassword !== newPassword
+                  ? "As senhas não conferem."
+                  : undefined
+              }
               autoComplete="new-password"
               required
             />
-            <Button type="submit" size="lg" disabled={submitting}>
+            <Button
+              type="submit"
+              size="lg"
+              disabled={
+                submitting || newPassword.length < 12 || newPassword !== confirmPassword
+              }
+            >
               Continuar
             </Button>
           </form>

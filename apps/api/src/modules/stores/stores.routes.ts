@@ -91,6 +91,10 @@ export async function storeRoutes(app: FastifyInstance) {
         ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
         ...(input.cnpj !== undefined ? { cnpj: input.cnpj } : {}),
         ...(input.phone !== undefined ? { phone: input.phone } : {}),
+        ...(input.email !== undefined ? { email: input.email } : {}),
+        // O endereço vai inteiro: substituir o bloco é mais previsível que
+        // mesclar campo a campo, e é assim que a tela manda.
+        ...(input.address !== undefined ? { addressJson: input.address } : {}),
       },
     });
 

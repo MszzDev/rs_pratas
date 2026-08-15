@@ -237,6 +237,8 @@ model Store {
   cnpj        String?
   timezone    String  @default("America/Sao_Paulo")
   phone       String?
+  /// Contato da loja — vai no comprovante para o cliente saber onde reclamar.
+  email       String?
   addressJson Json?
   /// Cadastro ativo — a loja existe. Diferente de estar ABERTA agora.
   isActive    Boolean @default(true)
