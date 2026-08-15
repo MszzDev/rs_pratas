@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Target, TrendingUp } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
@@ -83,10 +83,21 @@ const PAYMENT_LABELS: Record<string, string> = {
   CREDIARIO: "Crediário",
 };
 
-/** Últimos N dias em ISO — o intervalo que a API espera. */
+/**
+ * Últimos N dias, ancorados nas bordas do dia.
+ *
+ * O arredondamento não é cosmético: o intervalo entra na chave da consulta, e
+ * um valor com precisão de milissegundo mudaria a cada render, fazendo o
+ * React Query refazer a busca sem parar.
+ */
 function lastDays(days: number) {
   const to = new Date();
-  const from = new Date(to.getTime() - days * 86_400_000);
+  to.setHours(23, 59, 59, 999);
+
+  const from = new Date(to);
+  from.setDate(from.getDate() - days);
+  from.setHours(0, 0, 0, 0);
+
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
@@ -94,8 +105,10 @@ export function ReportsPage() {
   const [days, setDays] = useState(30);
   const [storeId, setStoreId] = useState("");
 
-  const range = lastDays(days);
-  const query = `from=${range.from}&to=${range.to}${storeId ? `&storeId=${storeId}` : ""}`;
+  const query = useMemo(() => {
+    const range = lastDays(days);
+    return `from=${range.from}&to=${range.to}${storeId ? `&storeId=${storeId}` : ""}`;
+  }, [days, storeId]);
 
   const stores = useQuery({
     queryKey: ["stores"],

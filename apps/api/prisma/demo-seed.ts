@@ -253,10 +253,27 @@ function randomBetween(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+/**
+ * Loja de demonstração já ABERTA.
+ *
+ * Em produção ela abre quando alguém entra por PIN no tablet dela. Aqui a
+ * demonstração começa com a loja funcionando, senão o caixa não abre e não há
+ * como vender para ver as telas.
+ */
 async function upsertStore(companyId: string, code: string, name: string) {
   const existing = await prisma.store.findFirst({ where: { companyId, code } });
-  if (existing) return existing;
-  return prisma.store.create({ data: { companyId, code, name } });
+  if (existing) {
+    return existing.isOpen
+      ? existing
+      : prisma.store.update({
+          where: { id: existing.id },
+          data: { isOpen: true, openedAt: new Date(), closedAt: null },
+        });
+  }
+
+  return prisma.store.create({
+    data: { companyId, code, name, isOpen: true, openedAt: new Date() },
+  });
 }
 
 async function upsertCategory(companyId: string, code: string, name: string) {

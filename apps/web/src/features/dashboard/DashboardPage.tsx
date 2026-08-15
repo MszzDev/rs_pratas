@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -99,11 +99,25 @@ const PAYMENT_LABELS: Record<string, string> = {
 const formatTime = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—";
 
-const last30 = () => {
+/**
+ * Intervalo dos últimos 30 dias, ancorado no COMEÇO do dia.
+ *
+ * Sem o arredondamento, `new Date()` a cada render produzia uma string
+ * diferente por milissegundo. Como o intervalo entra na chave da consulta, o
+ * React Query entendia cada render como uma consulta nova: refazia, o estado
+ * mudava, renderizava de novo — um laço que só parava quando o servidor
+ * respondia 429.
+ */
+function last30Days(): string {
   const to = new Date();
-  const from = new Date(to.getTime() - 30 * 86_400_000);
+  to.setHours(23, 59, 59, 999);
+
+  const from = new Date(to);
+  from.setDate(from.getDate() - 30);
+  from.setHours(0, 0, 0, 0);
+
   return `from=${from.toISOString()}&to=${to.toISOString()}`;
-};
+}
 
 /**
  * Painel do dono.
@@ -116,7 +130,9 @@ const last30 = () => {
 export function DashboardPage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const range = last30();
+  // Memorizado por garantia: mesmo com o arredondamento, recalcular a cada
+  // render seria trabalho à toa numa tela que atualiza sozinha.
+  const range = useMemo(() => last30Days(), []);
 
   const network = useQuery({
     queryKey: ["network-status"],
