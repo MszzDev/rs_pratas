@@ -24,6 +24,25 @@ export default {
           secondary: "#6F6868",
           muted: "#A6A0A0",
         },
+        /**
+         * Acentos por área do sistema.
+         *
+         * Um vinho só em tudo deixava as telas iguais entre si: quem estava no
+         * estoque e quem estava no caixa via a mesma tela cinza com um detalhe
+         * vinho. Cada área ganhou um tom próprio, todos puxados para o lado
+         * quente e dessaturado que combina com prata — nada de azul de sistema
+         * operacional nem verde de planilha.
+         *
+         * O vinho continua sendo a cor da marca: é dele o botão principal, o
+         * item ativo do menu e a logo. Os acentos identificam a área, não
+         * competem com ele.
+         */
+        gold: { DEFAULT: "#B8873B", soft: "#FBF1DF", dark: "#8A6423" },
+        sage: { DEFAULT: "#4F7D63", soft: "#E6F0E9", dark: "#3A5F4A" },
+        ocean: { DEFAULT: "#3F6C8F", soft: "#E4EDF4", dark: "#2E5069" },
+        plum: { DEFAULT: "#7A5080", soft: "#F0E7F1", dark: "#5C3B61" },
+        clay: { DEFAULT: "#A45D45", soft: "#F7E9E3", dark: "#7C4432" },
+
         border: "#E7DFE0",
         success: "#2E7D5B",
         warning: "#C88A2C",

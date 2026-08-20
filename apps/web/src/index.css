@@ -36,8 +36,13 @@
   }
 
   /* Esconde a interface e mostra só a folha. `visibility` em vez de `display`
-     porque preserva o posicionamento dos elementos filhos. */
-  body * {
+     porque preserva o posicionamento dos elementos filhos.
+
+     A regra só vale quando existe uma folha de etiqueta na página: sem o
+     `:has`, imprimir QUALQUER outra tela — o espelho de ponto, por exemplo —
+     saía em branco, porque a regra apagava tudo e não havia folha para
+     mostrar no lugar. */
+  body:has(.print-sheet) * {
     visibility: hidden;
   }
 
@@ -113,5 +118,27 @@
   .print-label-size,
   .print-label-weight {
     opacity: 0.75;
+  }
+}
+
+/* Impressão de documento (espelho de ponto, relatório): sai a folha, não o
+   aplicativo. Menu, botões e filtros não têm o que fazer no papel — e o papel
+   é justamente onde alguém vai assinar. */
+@media print {
+  aside,
+  header nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  /* Um dia por página, quando couber: cortar a jornada no meio da folha é o
+     tipo de detalhe que faz o documento ser recusado na conferência. */
+  section {
+    break-inside: avoid;
   }
 }

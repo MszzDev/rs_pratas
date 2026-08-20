@@ -11,11 +11,7 @@ import { formatMoney } from "@/lib/money";
 import { PaymentDialog } from "./PaymentDialog";
 import type { CartLine, StockRow } from "./types";
 import { groupByProduct } from "./group-stock";
-
-interface StoreRow {
-  id: string;
-  name: string;
-}
+import { StorePicker } from "../stores/store-picker";
 
 interface Reservation {
   id: string;
@@ -50,11 +46,6 @@ export function PosPage() {
   const [lastSale, setLastSale] = useState<{ code: string; total: string } | null>(null);
   /** Peça com os tamanhos abertos. Uma de cada vez: duas listas abertas viram rolagem. */
   const [tamanhosAbertos, setTamanhosAbertos] = useState<string | null>(null);
-
-  const stores = useQuery({
-    queryKey: ["stores"],
-    queryFn: () => apiFetch<StoreRow[]>("/api/v1/stores"),
-  });
 
   /** Turno aberto da loja escolhida — sem ele não há venda. */
   const session = useQuery({
@@ -192,27 +183,13 @@ export function PosPage() {
         </div>
       )}
 
-      <div className="mb-5 max-w-xs">
-        <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="loja">
-          Loja
-        </label>
-        <select
-          id="loja"
-          value={storeId}
-          onChange={(event) => {
-            setStoreId(event.target.value);
-            setCart([]);
-          }}
-          className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
-        >
-          <option value="">Selecione</option>
-          {stores.data?.map((store) => (
-            <option key={store.id} value={store.id}>
-              {store.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <StorePicker
+        storeId={storeId}
+        onChange={(id) => {
+          setStoreId(id);
+          setCart([]);
+        }}
+      />
 
       {storeId && !openSession && !session.isLoading && (
         <Alert tone="error" title="Caixa fechado">

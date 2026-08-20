@@ -43,7 +43,7 @@ export function suggestNextEventType(last: TimeClockEventType | null): TimeClock
  * cair sempre na mesma loja, senão a jornada de uma pessoa se espalha por
  * várias e ninguém consegue conferir.
  */
-async function resolveStoreForPunch(
+export async function resolveStoreForPunch(
   userId: string,
 ): Promise<{ id: string; timezone: string } | null> {
   const link = await prisma.userStore.findFirst({
@@ -53,6 +53,48 @@ async function resolveStoreForPunch(
   });
 
   return link?.store ?? null;
+}
+
+/**
+ * As marcações de hoje, no fuso da loja onde a pessoa trabalha.
+ *
+ * "Hoje" precisa ser o dia da loja, não o do servidor: com a virada em UTC às
+ * 21h de Brasília, quem fecha a loja às 22h teria o próprio expediente
+ * contado no dia seguinte.
+ */
+export async function getTodayEntries(userId: string, timezone: string) {
+  const agora = new Date();
+  const diaLocal = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(agora);
+
+  // Uma janela generosa em volta do dia local, refinada em memória: comparar a
+  // data no fuso certo dentro do SQL exigiria função específica do banco.
+  const inicio = new Date(`${diaLocal}T00:00:00.000Z`);
+  const janela = new Date(inicio.getTime() - 24 * 3600_000);
+  const fim = new Date(inicio.getTime() + 48 * 3600_000);
+
+  const entries = await prisma.timeClockEntry.findMany({
+    where: {
+      userId,
+      correctsEntryId: null,
+      timestamp: { gte: janela, lte: fim },
+    },
+    orderBy: { timestamp: "asc" },
+  });
+
+  const mesmoDia = (data: Date) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(data) === diaLocal;
+
+  return entries.filter((entry) => mesmoDia(entry.timestamp));
 }
 
 export async function getLastEntry(userId: string) {

@@ -8,6 +8,7 @@ import { Badge, Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
+import { StorePicker } from "@/features/stores/store-picker";
 
 type Status = "ABERTA" | "PROCURANDO" | "ENCONTRADA" | "AVISADO" | "CONCLUIDA" | "CANCELADA";
 
@@ -28,10 +29,6 @@ interface PieceRequest {
   createdBy: { name: string };
 }
 
-interface StoreRow {
-  id: string;
-  name: string;
-}
 
 interface DemandRow {
   termo: string;
@@ -97,10 +94,6 @@ export function PieceRequestsPage() {
     notes: "",
   });
 
-  const stores = useQuery({
-    queryKey: ["stores"],
-    queryFn: () => apiFetch<StoreRow[]>("/api/v1/stores"),
-  });
 
   const pedidos = useQuery({
     queryKey: ["piece-requests", storeId, mostrarTodos],
@@ -206,24 +199,7 @@ export function PieceRequestsPage() {
       )}
 
       <div className="mb-5 flex flex-wrap items-end gap-4">
-        <div className="min-w-[12rem]">
-          <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="loja">
-            Loja
-          </label>
-          <select
-            id="loja"
-            value={storeId}
-            onChange={(event) => setStoreId(event.target.value)}
-            className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
-          >
-            <option value="">Todas</option>
-            {stores.data?.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
-        </div>
+      <StorePicker storeId={storeId} onChange={setStoreId} todas className="min-w-[12rem]" />
 
         <label className="flex min-h-[48px] items-center gap-2 text-sm text-text-secondary">
           <input

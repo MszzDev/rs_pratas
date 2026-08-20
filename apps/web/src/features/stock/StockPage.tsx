@@ -8,6 +8,7 @@ import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { ProductPhoto } from "@/components/ui/product-photo";
 import { useAuth } from "../auth/auth-context";
+import { StorePicker } from "@/features/stores/store-picker";
 
 interface StockRow {
   id: string;
@@ -37,10 +38,6 @@ interface Movement {
   user: { name: string; employeeCode: string } | null;
 }
 
-interface StoreRow {
-  id: string;
-  name: string;
-}
 
 const MOVEMENT_LABELS: Record<string, string> = {
   ENTRADA: "Entrada",
@@ -90,10 +87,6 @@ export function StockPage() {
   const [entryCost, setEntryCost] = useState("");
   const [entryReason, setEntryReason] = useState("");
 
-  const stores = useQuery({
-    queryKey: ["stores"],
-    queryFn: () => apiFetch<StoreRow[]>("/api/v1/stores"),
-  });
 
   const stock = useQuery({
     queryKey: ["stock", storeId, search, lowOnly],
@@ -173,24 +166,7 @@ export function StockPage() {
       )}
 
       <div className="mb-5 flex flex-wrap items-end gap-4">
-        <div className="min-w-[12rem]">
-          <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="loja">
-            Loja
-          </label>
-          <select
-            id="loja"
-            value={storeId}
-            onChange={(event) => setStoreId(event.target.value)}
-            className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
-          >
-            <option value="">Todas</option>
-            {stores.data?.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <StorePicker storeId={storeId} onChange={setStoreId} todas className="min-w-[12rem]" />
 
         <div className="min-w-[14rem] flex-1">
           <Field

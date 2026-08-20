@@ -10,6 +10,7 @@ import { ProductPhoto } from "@/components/ui/product-photo";
 import { formatMoney } from "@/lib/money";
 import type { StockRow } from "./types";
 import { groupByProduct } from "./group-stock";
+import { StorePicker } from "@/features/stores/store-picker";
 
 interface Quote {
   id: string;
@@ -24,10 +25,6 @@ interface Quote {
   items: Array<{ id: string; productName: string; quantity: number; unitPrice: string | null }>;
 }
 
-interface StoreRow {
-  id: string;
-  name: string;
-}
 
 interface QuoteLine {
   productId: string;
@@ -74,10 +71,6 @@ export function QuotesPage() {
   const [lines, setLines] = useState<QuoteLine[]>([]);
   const [tamanhosAbertos, setTamanhosAbertos] = useState<string | null>(null);
 
-  const stores = useQuery({
-    queryKey: ["stores"],
-    queryFn: () => apiFetch<StoreRow[]>("/api/v1/stores"),
-  });
 
   const quotes = useQuery({
     queryKey: ["quotes", storeId],
@@ -178,24 +171,7 @@ export function QuotesPage() {
         </div>
       )}
 
-      <div className="mb-5 max-w-xs">
-        <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="loja">
-          Loja
-        </label>
-        <select
-          id="loja"
-          value={storeId}
-          onChange={(event) => setStoreId(event.target.value)}
-          className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
-        >
-          <option value="">Todas</option>
-          {stores.data?.map((store) => (
-            <option key={store.id} value={store.id}>
-              {store.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <StorePicker storeId={storeId} onChange={setStoreId} todas className="mb-5 max-w-xs" />
 
       {creating && (
         <form

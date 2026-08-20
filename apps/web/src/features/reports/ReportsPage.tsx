@@ -5,6 +5,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
+import { StorePicker } from "@/features/stores/store-picker";
 
 interface Summary {
   vendas: number;
@@ -68,10 +69,6 @@ interface CashDifferences {
   }>;
 }
 
-interface StoreRow {
-  id: string;
-  name: string;
-}
 
 const PAYMENT_LABELS: Record<string, string> = {
   DINHEIRO: "Dinheiro",
@@ -110,10 +107,6 @@ export function ReportsPage() {
     return `from=${range.from}&to=${range.to}${storeId ? `&storeId=${storeId}` : ""}`;
   }, [days, storeId]);
 
-  const stores = useQuery({
-    queryKey: ["stores"],
-    queryFn: () => apiFetch<StoreRow[]>("/api/v1/stores"),
-  });
 
   const summary = useQuery({
     queryKey: ["report-summary", query],
@@ -176,24 +169,7 @@ export function ReportsPage() {
           </select>
         </div>
 
-        <div className="min-w-[12rem]">
-          <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="loja">
-            Loja
-          </label>
-          <select
-            id="loja"
-            value={storeId}
-            onChange={(event) => setStoreId(event.target.value)}
-            className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
-          >
-            <option value="">Todas</option>
-            {stores.data?.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
-        </div>
+      <StorePicker storeId={storeId} onChange={setStoreId} todas className="min-w-[12rem]" />
       </div>
 
       {summary.data && (

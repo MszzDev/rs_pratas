@@ -41,6 +41,14 @@ interface NavItem {
   section: NavSection;
   /** Perfis que enxergam o item. Ausente = todos. */
   roles?: string[];
+  /**
+   * Cor da área. O ícone carrega o tom; o texto continua neutro.
+   *
+   * Serve para achar a tela pela cor antes de ler o nome — depois de uma
+   * semana a vendedora vai para o verde sem soletrar "Venda". Uma lista
+   * inteira em cinza obriga a ler catorze palavras toda vez.
+   */
+  tone: string;
 }
 
 const GESTAO = ["DONO", "GERENTE", "DESENVOLVEDOR"];
@@ -59,24 +67,24 @@ const DONO = ["DONO", "DESENVOLVEDOR"];
  * Quem chamar a rota direto continua sendo barrado pelo backend.
  */
 const NAV_ITEMS: NavItem[] = [
-  { to: "/painel", label: "Painel", icon: LayoutDashboard, section: "dia-a-dia", roles: GESTAO },
-  { to: "/venda", label: "Venda", icon: ShoppingCart, section: "dia-a-dia" },
-  { to: "/caixa", label: "Caixa", icon: Wallet, section: "dia-a-dia" },
-  { to: "/clientes", label: "Clientes", icon: UserRound, section: "dia-a-dia" },
-  { to: "/pos-venda", label: "Pós-venda", icon: RotateCcw, section: "dia-a-dia" },
-  { to: "/ponto", label: "Ponto", icon: Clock, section: "dia-a-dia" },
+  { to: "/painel", label: "Painel", icon: LayoutDashboard, section: "dia-a-dia", roles: GESTAO, tone: "bg-rose-soft text-rose-primary" },
+  { to: "/venda", label: "Venda", icon: ShoppingCart, section: "dia-a-dia", tone: "bg-sage-soft text-sage" },
+  { to: "/caixa", label: "Caixa", icon: Wallet, section: "dia-a-dia", tone: "bg-gold-soft text-gold-dark" },
+  { to: "/clientes", label: "Clientes", icon: UserRound, section: "dia-a-dia", tone: "bg-plum-soft text-plum" },
+  { to: "/pos-venda", label: "Pós-venda", icon: RotateCcw, section: "dia-a-dia", tone: "bg-clay-soft text-clay" },
+  { to: "/ponto", label: "Ponto", icon: Clock, section: "dia-a-dia", tone: "bg-ocean-soft text-ocean" },
 
-  { to: "/produtos", label: "Produtos", icon: Package, section: "gestao" },
-  { to: "/estoque", label: "Estoque", icon: Boxes, section: "gestao" },
-  { to: "/etiquetas", label: "Etiquetas", icon: Tag, section: "gestao", roles: GESTAO },
-  { to: "/relatorios", label: "Relatórios", icon: TrendingUp, section: "gestao", roles: GESTAO },
+  { to: "/produtos", label: "Produtos", icon: Package, section: "gestao", tone: "bg-rose-soft text-rose-primary" },
+  { to: "/estoque", label: "Estoque", icon: Boxes, section: "gestao", tone: "bg-ocean-soft text-ocean" },
+  { to: "/etiquetas", label: "Etiquetas", icon: Tag, section: "gestao", roles: GESTAO, tone: "bg-gold-soft text-gold-dark" },
+  { to: "/relatorios", label: "Relatórios", icon: TrendingUp, section: "gestao", roles: GESTAO, tone: "bg-sage-soft text-sage" },
   // Quem trabalha no balcão não precisa da lista de colegas: matrícula, perfil
   // e situação de cada um são assunto de quem administra.
-  { to: "/funcionarios", label: "Funcionários", icon: Users, section: "gestao", roles: GESTAO },
+  { to: "/funcionarios", label: "Funcionários", icon: Users, section: "gestao", roles: GESTAO, tone: "bg-plum-soft text-plum" },
 
-  { to: "/lojas", label: "Lojas", icon: Building2, section: "sistema", roles: DONO },
-  { to: "/auditoria", label: "Auditoria", icon: ScrollText, section: "sistema", roles: GESTAO },
-  { to: "/configuracoes", label: "Configurações", icon: Settings, section: "sistema", roles: DONO },
+  { to: "/lojas", label: "Lojas", icon: Building2, section: "sistema", roles: DONO, tone: "bg-clay-soft text-clay" },
+  { to: "/auditoria", label: "Auditoria", icon: ScrollText, section: "sistema", roles: GESTAO, tone: "bg-ocean-soft text-ocean" },
+  { to: "/configuracoes", label: "Configurações", icon: Settings, section: "sistema", roles: DONO, tone: "bg-rose-soft text-rose-primary" },
 ];
 
 /**
@@ -344,7 +352,12 @@ function GroupedNav({ items }: { items: NavItem[] }) {
             <div className="space-y-0.5">
               {sectionItems.map((item) => (
                 <NavLink key={item.to} to={item.to} className={linkClass}>
-                  <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${item.tone}`}
+                    aria-hidden
+                  >
+                    <item.icon className="h-[17px] w-[17px]" />
+                  </span>
                   {item.label}
                 </NavLink>
               ))}
@@ -423,7 +436,12 @@ function MobileBar({
               .filter((item) => item.section === "dia-a-dia")
               .map((item) => (
                 <NavLink key={item.to} to={item.to} className={linkClass}>
-                  <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${item.tone}`}
+                    aria-hidden
+                  >
+                    <item.icon className="h-[17px] w-[17px]" />
+                  </span>
                   <span className="whitespace-nowrap">{item.label}</span>
                 </NavLink>
               ))}

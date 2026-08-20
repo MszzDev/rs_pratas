@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
+import { StorePicker } from "@/features/stores/store-picker";
 
 interface Session {
   id: string;
@@ -25,10 +26,6 @@ interface Session {
   _count: { sales: number };
 }
 
-interface StoreRow {
-  id: string;
-  name: string;
-}
 
 interface StationRow {
   id: string;
@@ -76,10 +73,6 @@ export function CashPage() {
     conferido: boolean;
   } | null>(null);
 
-  const stores = useQuery({
-    queryKey: ["stores"],
-    queryFn: () => apiFetch<StoreRow[]>("/api/v1/stores"),
-  });
 
   /**
    * Os caixas vêm por loja: a rota de estações já devolve os caixas de cada
@@ -393,24 +386,7 @@ export function CashPage() {
         </form>
       )}
 
-      <div className="mb-5 max-w-xs">
-        <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="filtro-loja">
-          Loja
-        </label>
-        <select
-          id="filtro-loja"
-          value={storeId}
-          onChange={(event) => setStoreId(event.target.value)}
-          className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
-        >
-          <option value="">Todas</option>
-          {stores.data?.map((store) => (
-            <option key={store.id} value={store.id}>
-              {store.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <StorePicker storeId={storeId} onChange={setStoreId} todas className="mb-5 max-w-xs" />
 
       <ul className="space-y-3">
         {sessions.data?.map((session) => (

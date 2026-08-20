@@ -1,10 +1,13 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import {
+  allowedNextTypes,
   correctEntrySchema,
   createWorkScheduleSchema,
+  JORNADA_MINIMA_MINUTOS,
   mirrorQuerySchema,
   punchSchema,
+  workedMinutes,
 } from "@rs-pratas/shared";
 import { prisma } from "../../db/prisma.js";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
@@ -14,9 +17,12 @@ import {
   deactivateWorkSchedule,
   getLastEntry,
   getMirror,
+  getTodayEntries,
   registerPunch,
+  resolveStoreForPunch,
   suggestNextEventType,
 } from "./timeclock.service.js";
+
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 
@@ -29,12 +35,31 @@ export async function timeClockRoutes(app: FastifyInstance) {
    */
   app.get("/timeclock/next", { preHandler: app.requireAuth }, async (request) => {
     const last = await getLastEntry(request.user.sub);
+    const store = await resolveStoreForPunch(request.user.sub);
+    const hoje = await getTodayEntries(request.user.sub, store?.timezone ?? "America/Sao_Paulo");
+
+    const trabalhados = workedMinutes(hoje, new Date());
 
     return {
       suggestedType: suggestNextEventType(last?.type ?? null),
+      // A tela oferece só o que faz sentido agora — quem já entrou não vê
+      // "registrar entrada". O servidor continua aceitando qualquer tipo: a
+      // sequência é guia de uso, não trava, porque marcação não se recusa.
+      allowedTypes: allowedNextTypes(last?.type ?? null),
       lastEntry: last
         ? { type: last.type, timestamp: last.timestamp, nsr: last.nsr.toString() }
         : null,
+      workedMinutes: trabalhados,
+      /** Abaixo da jornada mínima, sair no meio do turno pede explicação. */
+      shortDay: trabalhados < JORNADA_MINIMA_MINUTOS,
+      minimumMinutes: JORNADA_MINIMA_MINUTOS,
+      todayEntries: hoje.map((entry) => ({
+        id: entry.id,
+        nsr: entry.nsr.toString(),
+        type: entry.type,
+        timestamp: entry.timestamp,
+        justification: entry.justification,
+      })),
     };
   });
 

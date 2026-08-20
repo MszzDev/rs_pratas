@@ -11,6 +11,7 @@ import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
 import { ProductPhoto } from "@/components/ui/product-photo";
 import { useAuth } from "../auth/auth-context";
+import { StorePicker } from "@/features/stores/store-picker";
 
 interface Template {
   id: string;
@@ -40,10 +41,6 @@ interface PrintJob {
   payload: LabelPayload;
 }
 
-interface StoreRow {
-  id: string;
-  name: string;
-}
 
 interface BatchRow {
   productId: string;
@@ -109,10 +106,6 @@ export function LabelsPage() {
   const [offsetX, setOffsetX] = useState("0");
   const [offsetY, setOffsetY] = useState("0");
 
-  const stores = useQuery({
-    queryKey: ["stores"],
-    queryFn: () => apiFetch<StoreRow[]>("/api/v1/stores"),
-  });
 
   const templates = useQuery({
     queryKey: ["label-templates"],
@@ -671,24 +664,7 @@ export function LabelsPage() {
         </div>
       )}
 
-      <div className="mb-4 max-w-xs">
-        <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="loja">
-          Loja
-        </label>
-        <select
-          id="loja"
-          value={storeId}
-          onChange={(event) => setStoreId(event.target.value)}
-          className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
-        >
-          <option value="">Selecione</option>
-          {stores.data?.map((store) => (
-            <option key={store.id} value={store.id}>
-              {store.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <StorePicker storeId={storeId} onChange={setStoreId} className="mb-4 max-w-xs" />
 
       {storeId && (
         <ul className="space-y-3">
