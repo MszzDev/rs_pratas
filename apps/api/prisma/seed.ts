@@ -59,6 +59,22 @@ async function main() {
         create: { roleId: roleRecord.id, permissionId: permission.id },
       });
     }
+
+    // O seed espelha o catálogo — não só acrescenta.
+    //
+    // Sem esta limpeza, tirar uma permissão do perfil no código não tirava nada
+    // de ninguém: a linha concedida numa versão anterior continuava no banco, e
+    // o cargo seguia podendo o que já não devia poder. Restringir só valeria em
+    // banco novo, que é exatamente onde não importa.
+    //
+    // Isto apaga o PADRÃO DO CARGO. Concessão nominal (UserPermission) não é
+    // tocada: quem recebeu a exceção com nome continua com ela.
+    await prisma.rolePermission.deleteMany({
+      where: {
+        roleId: roleRecord.id,
+        permission: { code: { notIn: [...permissionCodes] } },
+      },
+    });
   }
 
   await createBootstrapUser({

@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { ProductPhoto } from "@/components/ui/product-photo";
+import { useAuth } from "../auth/auth-context";
 
 interface Variation {
   id: string;
@@ -62,6 +63,11 @@ const formatMoney = (value: string | null) =>
 export function ProductsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const { can } = useAuth();
+  // Quem não cadastra também não edita nem tira de linha: é o mesmo direito
+  // sobre o catálogo, e separar em dois botões só criaria meio-caminho.
+  const podeMexer = can("PRODUCT_CREATE") || can("PRODUCT_EDIT");
+
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -280,7 +286,7 @@ export function ProductsPage() {
       title="Produtos"
       description="O catálogo vale para todas as lojas. O que muda de loja para loja é o estoque."
       actions={
-        formularioAberto ? null : (
+        formularioAberto || !podeMexer ? null : (
           <Button
             type="button"
             onClick={() => {
@@ -593,6 +599,7 @@ export function ProductsPage() {
                 )}
 
                 <div className="mt-2 flex flex-wrap justify-end gap-1">
+                  {podeMexer && (
                   <button
                     type="button"
                     onClick={() => abrirEdicao(product)}
@@ -601,7 +608,9 @@ export function ProductsPage() {
                     <Pencil className="h-4 w-4" aria-hidden />
                     Editar
                   </button>
+                  )}
 
+                  {podeMexer && (
                   <button
                     type="button"
                     onClick={() => {
@@ -613,7 +622,9 @@ export function ProductsPage() {
                     <Power className="h-4 w-4" aria-hidden />
                     {product.isActive ? "Desativar" : "Reativar"}
                   </button>
+                  )}
 
+                  {podeMexer && (
                   <label className="flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm text-text-secondary hover:bg-background-secondary">
                     <ImagePlus className="h-4 w-4" aria-hidden />
                     {product.imageChecksum ? "Trocar foto" : "Adicionar foto"}
@@ -628,8 +639,9 @@ export function ProductsPage() {
                       }}
                     />
                   </label>
+                  )}
 
-                  {product.imageChecksum && (
+                  {podeMexer && product.imageChecksum && (
                     <button
                       type="button"
                       aria-label={`Remover foto de ${product.name}`}

@@ -10,6 +10,7 @@ import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
 import { ProductPhoto } from "@/components/ui/product-photo";
+import { useAuth } from "../auth/auth-context";
 
 interface Template {
   id: string;
@@ -72,6 +73,7 @@ const formatTime = (iso: string) =>
  */
 export function LabelsPage() {
   const queryClient = useQueryClient();
+  const { can } = useAuth();
   const [storeId, setStoreId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -278,7 +280,8 @@ export function LabelsPage() {
             <Layers className="h-5 w-5" aria-hidden />
             Imprimir em lote
           </Button>
-          {!creating && (
+          {/* Imprimir é do gerente; desenhar o modelo da etiqueta, do dono. */}
+          {!creating && can("LABEL_TEMPLATE_MANAGE") && (
             <Button type="button" onClick={() => setCreating(true)}>
               <Tag className="h-5 w-5" aria-hidden />
               Novo modelo

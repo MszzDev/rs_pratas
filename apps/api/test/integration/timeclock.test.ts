@@ -72,7 +72,16 @@ async function setup() {
   await prisma.userStore.create({ data: { userId: manager.id, storeId: store.id } });
   const managerToken = await authenticate(manager.employeeCode, managerPassword);
 
-  return { company, store, device, seller, sellerToken, manager, managerToken };
+  // Jornada e correção de ponto passaram a ser do dono: o gerente consulta o
+  // ponto da loja dele, mas não define horário nem reescreve marcação.
+  const { user: owner, password: ownerPassword } = await createTestUser({
+    companyId: company.id,
+    role: "DONO",
+  });
+  await prisma.userStore.create({ data: { userId: owner.id, storeId: store.id } });
+  const ownerToken = await authenticate(owner.employeeCode, ownerPassword);
+
+  return { company, store, device, seller, sellerToken, manager, managerToken, owner, ownerToken };
 }
 
 const punch = (token: string, payload: Record<string, unknown>) =>
@@ -103,7 +112,7 @@ const WEEKDAY_BY_SHORT: Record<string, string> = {
  * quando a suíte roda.
  */
 async function createScheduleRelativeToNow(params: {
-  managerToken: string;
+  token: string;
   userId: string;
   storeId: string;
   minutesAgo: number;
@@ -128,10 +137,10 @@ async function createScheduleRelativeToNow(params: {
     weekday: "short",
   }).format(now);
 
-  return app.inject({
+  const response = await app.inject({
     method: "POST",
     url: "/api/v1/timeclock/schedules",
-    headers: auth(params.managerToken),
+    headers: auth(params.token),
     payload: {
       userId: params.userId,
       storeId: params.storeId,
@@ -141,6 +150,20 @@ async function createScheduleRelativeToNow(params: {
       toleranceMinutes: params.toleranceMinutes,
     },
   });
+
+  // Falha aqui, e não três asserções adiante.
+  //
+  // Enquanto este helper engolia o erro, tirar a permissão de jornada do
+  // gerente não quebrava o teste de propósito: a jornada simplesmente não era
+  // criada, e o teste de tolerância acusava "esperava false, recebeu null" —
+  // uma pista que não aponta para a causa.
+  if (response.statusCode !== 201) {
+    throw new Error(
+      `não criou a jornada do teste (${response.statusCode}): ${response.body}`,
+    );
+  }
+
+  return response;
 }
 
 describe("registro de ponto", () => {
@@ -193,11 +216,11 @@ describe("registro de ponto", () => {
   });
 
   it("marca atraso quando a entrada passa da tolerância", async () => {
-    const { device, sellerToken, seller, store, managerToken } = await setup();
+    const { device, sellerToken, seller, store, ownerToken } = await setup();
 
     // Jornada que começou 30 minutos atrás, no fuso da loja, com tolerância 10.
     await createScheduleRelativeToNow({
-      managerToken,
+      token: ownerToken,
       userId: seller.id,
       storeId: store.id,
       minutesAgo: 30,
@@ -213,11 +236,11 @@ describe("registro de ponto", () => {
   });
 
   it("não marca atraso quando a entrada cabe na tolerância", async () => {
-    const { device, sellerToken, seller, store, managerToken } = await setup();
+    const { device, sellerToken, seller, store, ownerToken } = await setup();
 
     // Começou 5 minutos atrás, tolerância de 10 — dentro do combinado.
     await createScheduleRelativeToNow({
-      managerToken,
+      token: ownerToken,
       userId: seller.id,
       storeId: store.id,
       minutesAgo: 5,
@@ -231,10 +254,10 @@ describe("registro de ponto", () => {
   });
 
   it("congela a avaliação: mudar a jornada depois não reescreve o passado", async () => {
-    const { device, sellerToken, seller, store, managerToken } = await setup();
+    const { device, sellerToken, seller, store, ownerToken } = await setup();
 
     await createScheduleRelativeToNow({
-      managerToken,
+      token: ownerToken,
       userId: seller.id,
       storeId: store.id,
       minutesAgo: 40,
@@ -244,13 +267,15 @@ describe("registro de ponto", () => {
     const registrada = (await punch(sellerToken, { deviceId: device.id, type: "CLOCK_IN" })).json();
     expect(registrada.isWithinTolerance).toBe(false);
 
-    // Jornada afrouxada depois do fato.
+    // Jornada afrouxada depois do fato: 60 é o teto aceito pela API, e já
+    // cobre os 40 minutos de atraso — se a avaliação fosse recalculada, a
+    // marcação passaria a constar como dentro da tolerância.
     await createScheduleRelativeToNow({
-      managerToken,
+      token: ownerToken,
       userId: seller.id,
       storeId: store.id,
       minutesAgo: 40,
-      toleranceMinutes: 120,
+      toleranceMinutes: 60,
     });
 
     const stored = await prisma.timeClockEntry.findUniqueOrThrow({
@@ -360,8 +385,8 @@ describe("espelho de ponto", () => {
 });
 
 describe("correção de marcação", () => {
-  it("cria um evento novo e preserva o original intacto", async () => {
-    const { device, sellerToken, seller, managerToken } = await setup();
+  it("o gerente não corrige ponto nem define jornada", async () => {
+    const { device, sellerToken, seller, store, managerToken } = await setup();
 
     const original = (await punch(sellerToken, { deviceId: device.id, type: "CLOCK_IN" })).json();
 
@@ -369,6 +394,40 @@ describe("correção de marcação", () => {
       method: "POST",
       url: `/api/v1/timeclock/entries/${original.id}/correct`,
       headers: auth(managerToken),
+      payload: {
+        type: "CLOCK_IN",
+        timestamp: new Date().toISOString(),
+        reason: "esqueceu de bater na chegada",
+      },
+    });
+
+    const jornada = await app.inject({
+      method: "POST",
+      url: "/api/v1/timeclock/schedules",
+      headers: auth(managerToken),
+      payload: {
+        userId: seller.id,
+        storeId: store.id,
+        weekday: "MONDAY",
+        startTime: "08:00",
+        endTime: "18:00",
+        toleranceMinutes: 10,
+      },
+    });
+
+    expect(correcao.statusCode).toBe(403);
+    expect(jornada.statusCode).toBe(403);
+  });
+
+  it("cria um evento novo e preserva o original intacto", async () => {
+    const { device, sellerToken, seller, ownerToken } = await setup();
+
+    const original = (await punch(sellerToken, { deviceId: device.id, type: "CLOCK_IN" })).json();
+
+    const correcao = await app.inject({
+      method: "POST",
+      url: `/api/v1/timeclock/entries/${original.id}/correct`,
+      headers: auth(ownerToken),
       payload: {
         type: "CLOCK_IN",
         timestamp: new Date("2026-03-10T11:00:00Z").toISOString(),
@@ -388,7 +447,7 @@ describe("correção de marcação", () => {
     const mirror = await app.inject({
       method: "GET",
       url: `/api/v1/timeclock/users/${seller.id}/mirror`,
-      headers: auth(managerToken),
+      headers: auth(ownerToken),
     });
     const entries = mirror.json().entries;
     expect(entries).toHaveLength(1);
@@ -397,13 +456,13 @@ describe("correção de marcação", () => {
   });
 
   it("exige motivo na correção", async () => {
-    const { device, sellerToken, managerToken } = await setup();
+    const { device, sellerToken, ownerToken } = await setup();
     const original = (await punch(sellerToken, { deviceId: device.id, type: "CLOCK_IN" })).json();
 
     const response = await app.inject({
       method: "POST",
       url: `/api/v1/timeclock/entries/${original.id}/correct`,
-      headers: auth(managerToken),
+      headers: auth(ownerToken),
       payload: { type: "CLOCK_IN", timestamp: new Date().toISOString(), reason: "x" },
     });
 
@@ -429,13 +488,13 @@ describe("correção de marcação", () => {
   });
 
   it("audita a correção com o motivo", async () => {
-    const { device, sellerToken, managerToken } = await setup();
+    const { device, sellerToken, ownerToken } = await setup();
     const original = (await punch(sellerToken, { deviceId: device.id, type: "CLOCK_IN" })).json();
 
     await app.inject({
       method: "POST",
       url: `/api/v1/timeclock/entries/${original.id}/correct`,
-      headers: auth(managerToken),
+      headers: auth(ownerToken),
       payload: {
         type: "CLOCK_IN",
         timestamp: new Date().toISOString(),
@@ -450,7 +509,7 @@ describe("correção de marcação", () => {
 
 describe("jornada de trabalho", () => {
   it("cadastrar nova jornada encerra a anterior sem apagá-la", async () => {
-    const { seller, store, managerToken } = await setup();
+    const { seller, store, ownerToken } = await setup();
 
     const payload = {
       userId: seller.id,
@@ -464,14 +523,14 @@ describe("jornada de trabalho", () => {
     await app.inject({
       method: "POST",
       url: "/api/v1/timeclock/schedules",
-      headers: auth(managerToken),
+      headers: auth(ownerToken),
       payload,
     });
 
     await app.inject({
       method: "POST",
       url: "/api/v1/timeclock/schedules",
-      headers: auth(managerToken),
+      headers: auth(ownerToken),
       payload: { ...payload, startTime: "09:00" },
     });
 

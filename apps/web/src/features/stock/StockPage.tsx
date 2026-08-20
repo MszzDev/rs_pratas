@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { ProductPhoto } from "@/components/ui/product-photo";
+import { useAuth } from "../auth/auth-context";
 
 interface StockRow {
   id: string;
@@ -63,6 +64,11 @@ const formatDateTime = (iso: string) =>
 
 export function StockPage() {
   const queryClient = useQueryClient();
+  const { can } = useAuth();
+  // Consultar o saldo é de todo mundo — mexer nele, não. O histórico segue
+  // visível de propósito: quem vende precisa saber por que a peça sumiu.
+  const podeAjustar = can("STOCK_ADJUST");
+
   const [storeId, setStoreId] = useState("");
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
@@ -402,6 +408,7 @@ export function StockPage() {
                   <History className="h-5 w-5" aria-hidden />
                   Histórico
                 </Button>
+                {podeAjustar && (
                 <Button
                   type="button"
                   variant="outline"
@@ -417,7 +424,9 @@ export function StockPage() {
                   <PackagePlus className="h-5 w-5" aria-hidden />
                   Entrada
                 </Button>
+                )}
 
+                {podeAjustar && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -432,6 +441,7 @@ export function StockPage() {
                   <SlidersHorizontal className="h-5 w-5" aria-hidden />
                   Ajustar
                 </Button>
+                )}
               </div>
             </div>
           </li>

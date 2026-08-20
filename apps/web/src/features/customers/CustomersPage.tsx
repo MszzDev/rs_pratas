@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
+import { useAuth } from "../auth/auth-context";
 
 interface Customer {
   id: string;
@@ -47,6 +48,12 @@ const formatDate = (iso: string | null) =>
 
 export function CustomersPage() {
   const queryClient = useQueryClient();
+  const { can } = useAuth();
+  // Cadastrar quem está comprando agora é parte de vender. Mexer em quem já
+  // está cadastrado é outra conversa, e essa é do dono.
+  const podeCadastrar = can("CUSTOMER_CREATE");
+  const podeEditar = can("CUSTOMER_EDIT");
+
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -112,7 +119,7 @@ export function CustomersPage() {
       title="Clientes"
       description="O telefone é a chave: é o que o cliente sabe de cabeça e o que evita cadastro duplicado."
       actions={
-        adding ? null : (
+        adding || !podeCadastrar ? null : (
           <Button type="button" onClick={() => setAdding(true)}>
             <Plus className="h-5 w-5" aria-hidden />
             Novo cliente
@@ -233,6 +240,7 @@ export function CustomersPage() {
                   </div>
                 )}
 
+                {podeEditar && (
                 <div className="mb-3 flex justify-end">
                   <Button
                     type="button"
@@ -251,6 +259,7 @@ export function CustomersPage() {
                     Remover cliente
                   </Button>
                 </div>
+                )}
 
                 <h3 className="mb-1 text-sm font-medium text-text-primary">Últimas compras</h3>
                 {detail.data.sales.length === 0 ? (

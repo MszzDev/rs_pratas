@@ -41,6 +41,14 @@ export interface IssuedSession {
      * em cada tela que tentar abrir.
      */
     twoFactorPending: boolean;
+    /**
+     * Permissões efetivas — perfil + concessões nominais, já com DENY aplicado.
+     *
+     * Existem para a tela não oferecer o que a pessoa não pode fazer: botão de
+     * editar que só devolve 403 é uma promessa quebrada. Não valem como
+     * autorização — quem decide continua sendo o servidor, a cada requisição.
+     */
+    permissions: string[];
   };
 }
 
@@ -151,6 +159,7 @@ export async function issueSessionForUser(params: {
       mustChangePassword: user.mustChangePassword,
       mustCreatePin: user.mustCreatePin,
       twoFactorPending: await isTwoFactorPending(user),
+      permissions: [...(await getEffectivePermissions(user.id))],
     },
   };
 }
@@ -490,6 +499,7 @@ export async function refreshSession(params: {
       mustChangePassword: session.user.mustChangePassword,
       mustCreatePin: session.user.mustCreatePin,
       twoFactorPending: await isTwoFactorPending(session.user),
+      permissions: [...(await getEffectivePermissions(session.user.id))],
     },
   };
 }

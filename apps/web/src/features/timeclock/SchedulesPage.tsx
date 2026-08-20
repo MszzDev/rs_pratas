@@ -7,6 +7,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useAuth } from "../auth/auth-context";
 
 interface Schedule {
   id: string;
@@ -56,6 +57,7 @@ const WEEK_ORDER: Weekday[] = [
 
 export function SchedulesPage() {
   const queryClient = useQueryClient();
+  const { can } = useAuth();
   const [selectedUserId, setSelectedUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -138,7 +140,7 @@ export function SchedulesPage() {
       title="Jornadas de trabalho"
       description="O horário previsto de cada funcionário. É contra ele que o atraso é calculado."
       actions={
-        selectedUserId && !adding ? (
+        selectedUserId && !adding && can("TIMECLOCK_MANAGE_SCHEDULE") ? (
           <Button type="button" onClick={() => setAdding(true)}>
             <Plus className="h-5 w-5" aria-hidden />
             Definir horário

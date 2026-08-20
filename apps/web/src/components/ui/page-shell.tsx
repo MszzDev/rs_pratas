@@ -70,7 +70,9 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/estoque", label: "Estoque", icon: Boxes, section: "gestao" },
   { to: "/etiquetas", label: "Etiquetas", icon: Tag, section: "gestao", roles: GESTAO },
   { to: "/relatorios", label: "Relatórios", icon: TrendingUp, section: "gestao", roles: GESTAO },
-  { to: "/funcionarios", label: "Funcionários", icon: Users, section: "gestao" },
+  // Quem trabalha no balcão não precisa da lista de colegas: matrícula, perfil
+  // e situação de cada um são assunto de quem administra.
+  { to: "/funcionarios", label: "Funcionários", icon: Users, section: "gestao", roles: GESTAO },
 
   { to: "/lojas", label: "Lojas", icon: Building2, section: "sistema", roles: DONO },
   { to: "/auditoria", label: "Auditoria", icon: ScrollText, section: "sistema", roles: GESTAO },
@@ -84,7 +86,15 @@ const NAV_ITEMS: NavItem[] = [
  * em vez de exigirem uma volta ao menu. É por isso que o mapa é recíproco:
  * de Produtos se chega a Estoque, e de Estoque se volta a Produtos.
  */
-const SUBPAGINAS: Record<string, Array<{ to: string; label: string; icon: typeof Users }>> = {
+interface Atalho {
+  to: string;
+  label: string;
+  icon: typeof Users;
+  /** Sem esta permissão o atalho não aparece — a tela devolveria 403. */
+  permission?: string;
+}
+
+const SUBPAGINAS: Record<string, Atalho[]> = {
   "/venda": [
     { to: "/orcamentos", label: "Orçamentos", icon: Calculator },
     { to: "/solicitar-peca", label: "Solicitar peça", icon: HandHeart },
@@ -104,13 +114,18 @@ const SUBPAGINAS: Record<string, Array<{ to: string; label: string; icon: typeof
   ],
   "/espelho-de-ponto": [
     { to: "/ponto", label: "Bater ponto", icon: Clock },
-    { to: "/jornadas", label: "Jornadas", icon: CalendarClock },
+    {
+      to: "/jornadas",
+      label: "Jornadas",
+      icon: CalendarClock,
+      permission: "TIMECLOCK_VIEW_STORE",
+    },
   ],
   "/meus-documentos": [{ to: "/ponto", label: "Ponto", icon: Clock }],
   "/sessoes": [{ to: "/ponto", label: "Ponto", icon: Clock }],
   "/funcionarios": [
-    { to: "/jornadas", label: "Jornadas", icon: CalendarClock },
-    { to: "/documentos", label: "Conferir documentos", icon: FileCheck },
+    { to: "/jornadas", label: "Jornadas", icon: CalendarClock, permission: "TIMECLOCK_VIEW_STORE" },
+    { to: "/documentos", label: "Conferir documentos", icon: FileCheck, permission: "USER_EDIT" },
     { to: "/espelho-de-ponto", label: "Espelho de ponto", icon: CalendarClock },
   ],
   "/jornadas": [{ to: "/funcionarios", label: "Funcionários", icon: Users }],
@@ -129,11 +144,11 @@ const SUBPAGINAS: Record<string, Array<{ to: string; label: string; icon: typeof
   ],
   "/produtos": [
     { to: "/estoque", label: "Estoque", icon: Boxes },
-    { to: "/etiquetas", label: "Etiquetas", icon: Tag },
+    { to: "/etiquetas", label: "Etiquetas", icon: Tag, permission: "LABEL_PRINT" },
   ],
   "/estoque": [
     { to: "/produtos", label: "Produtos", icon: Package },
-    { to: "/etiquetas", label: "Etiquetas", icon: Tag },
+    { to: "/etiquetas", label: "Etiquetas", icon: Tag, permission: "LABEL_PRINT" },
   ],
   "/etiquetas": [
     { to: "/produtos", label: "Produtos", icon: Package },
@@ -167,7 +182,7 @@ export function PageShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -175,7 +190,9 @@ export function PageShell({
     (item) => !item.roles || (user && item.roles.includes(user.role)),
   );
 
-  const atalhos = SUBPAGINAS[location.pathname] ?? [];
+  const atalhos = (SUBPAGINAS[location.pathname] ?? []).filter(
+    (atalho) => !atalho.permission || can(atalho.permission),
+  );
 
   // Fecha ao navegar: sem isso o menu fica por cima da tela que acabou de abrir.
   useEffect(() => setDrawerOpen(false), [location.pathname]);

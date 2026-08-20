@@ -1,14 +1,28 @@
 import { PERMISSION_CODES, type PermissionCode } from "./permissions.const.js";
 import type { UserRole } from "./roles.const.js";
 
+/**
+ * Cadastro é do dono. Só ele.
+ *
+ * Vendedor e gerente não criam, não editam e não removem registro nenhum —
+ * produto, preço, estoque, funcionário, loja, jornada, cliente já cadastrado.
+ * O que sobra para eles é o que a loja precisa para funcionar no dia: vender,
+ * abrir e fechar o caixa, bater ponto, atender.
+ *
+ * Isso não é irreversível: o dono concede qualquer código deste catálogo a uma
+ * matrícula específica em Funcionários → Permissões, com prazo se quiser, e o
+ * ato fica auditado. A regra do cargo é o padrão; a exceção tem nome.
+ */
 const VENDEDOR_PERMISSIONS: PermissionCode[] = [
   "PRODUCT_VIEW",
   "STOCK_VIEW",
   "SALE_CREATE",
   "CASH_OPEN",
   "CASH_CLOSE",
+  // Cadastrar quem está comprando agora faz parte de vender: sem isso a venda
+  // sai sem dono e a garantia depois não acha o cliente. Corrigir o cadastro
+  // de alguém que já existe, não — isso é edição, e é do dono.
   "CUSTOMER_CREATE",
-  "CUSTOMER_EDIT",
   "TIMECLOCK_VIEW_OWN",
 ];
 
@@ -17,22 +31,20 @@ const GERENTE_PERMISSIONS: PermissionCode[] = [
   "USER_VIEW",
   "STORE_VIEW",
   "REPORT_VIEW_STORE",
+  "AUDIT_VIEW_STORE",
+  "TIMECLOCK_VIEW_STORE",
+  // Autorizar desconto, cancelar e estornar não alteram cadastro: são decisões
+  // sobre uma venda que está acontecendo no balcão, e ninguém segura o cliente
+  // até o dono atender o telefone. Cada uma delas é auditada.
   "SALE_AUTHORIZE_DISCOUNT",
   "SALE_CANCEL",
   "SALE_REFUND",
-  "STOCK_ADJUST",
-  "STOCK_INVENTORY",
-  "STOCK_TRANSFER",
-  "PRODUCT_CREATE",
-  "PRODUCT_EDIT",
+  // Imprimir etiqueta não muda o que está cadastrado — repõe a etiqueta que
+  // caiu da peça.
   "PRODUCT_PRINT_LABEL",
   "LABEL_PRINT",
-  "AUDIT_VIEW_STORE",
   "DEVICE_RESTART",
   "TERMINAL_TEST",
-  "TIMECLOCK_VIEW_STORE",
-  "TIMECLOCK_CORRECT",
-  "TIMECLOCK_MANAGE_SCHEDULE",
   // O gerente consulta a comissao da equipe dele, mas nao define a regra —
   // quem decide quanto se paga de comissao e o dono.
   "COMMISSION_VIEW",

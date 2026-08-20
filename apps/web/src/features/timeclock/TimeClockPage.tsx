@@ -70,15 +70,16 @@ export function TimeClockPage() {
 
   const punch = useMutation({
     mutationFn: async (type: TimeClockEventType) => {
+      // Manda o tablet quando existe um. No computador da loja não existe, e a
+      // batida vale do mesmo jeito — o servidor identifica a loja pelo vínculo
+      // do funcionário. Recusar aqui seria a tela decidindo que a jornada
+      // trabalhada não aconteceu.
       const deviceId = await readDeviceId();
-      if (!deviceId) {
-        throw new Error("Este aparelho não está vinculado a uma loja.");
-      }
 
       return apiFetch<PunchResponse>("/api/v1/timeclock/punch", {
         method: "POST",
         body: {
-          deviceId,
+          ...(deviceId ? { deviceId } : {}),
           type,
           clientTimestamp: new Date().toISOString(),
           ...(justification.trim() ? { justification: justification.trim() } : {}),
@@ -92,6 +93,9 @@ export function TimeClockPage() {
       void queryClient.invalidateQueries({ queryKey: ["timeclock", "next"] });
     },
     onError: (caught) => {
+      // A mensagem do servidor diz o que fazer ("sua matrícula não está
+      // vinculada a nenhuma loja"). Trocá-la por um texto genérico deixaria o
+      // funcionário sem saber a quem recorrer.
       setError(
         caught instanceof ApiError
           ? caught.message
@@ -186,8 +190,8 @@ export function TimeClockPage() {
         </section>
 
         <p className="mt-5 text-center text-sm text-text-muted">
-          Nenhuma marcação é recusada. Correções só podem ser feitas pelo gerente, e ficam
-          registradas ao lado do original.
+          Nenhuma marcação é recusada. Correções são feitas pelo dono e ficam registradas ao
+          lado do original — a marcação errada continua lá.
         </p>
       </div>
     </PageShell>

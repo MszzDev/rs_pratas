@@ -65,6 +65,20 @@ async function createProduct(
   return response.json();
 }
 
+/**
+ * Concede uma permissão a uma matrícula específica, como o dono faz na tela de
+ * Funcionários. Cadastro e ajuste são do dono; onde o teste precisa exercitar
+ * uma regra que vem DEPOIS da permissão — isolamento entre lojas, contagem
+ * cega, segregação de funções — o ator recebe a exceção com nome, senão o
+ * teste morre no 403 e nunca alcança a regra que deveria provar.
+ */
+async function grantPermission(userId: string, grantedById: string, code: string) {
+  const permission = await prisma.permission.findUniqueOrThrow({ where: { code } });
+  await prisma.userPermission.create({
+    data: { userId, permissionId: permission.id, effect: "ALLOW", grantedById },
+  });
+}
+
 describe("catálogo", () => {
   it("cria produto simples", async () => {
     const { token } = await scenario();
@@ -353,6 +367,24 @@ describe("estoque", () => {
       role: "GERENTE",
     });
     await prisma.userStore.create({ data: { userId: manager.id, storeId: storeA.id } });
+
+    // Mexer no estoque é do dono, então o gerente recebe a permissão com nome
+    // — é assim que a exceção existe no sistema. O que se prova aqui é o
+    // ISOLAMENTO ENTRE LOJAS: mesmo autorizado a ajustar, ele não alcança a
+    // loja B. Sem esta concessão o teste pararia no 403 da permissão e nunca
+    // chegaria a exercitar a barreira de loja.
+    const stockAdjust = await prisma.permission.findUniqueOrThrow({
+      where: { code: "STOCK_ADJUST" },
+    });
+    await prisma.userPermission.create({
+      data: {
+        userId: manager.id,
+        permissionId: stockAdjust.id,
+        effect: "ALLOW",
+        grantedById: owner.id,
+      },
+    });
+
     const managerToken = await authenticate(manager.employeeCode, password);
 
     const response = await app.inject({
@@ -712,11 +744,13 @@ describe("inventário cego", () => {
   it("o gerente não abre contagem com o saldo à vista", async () => {
     const company = await createTestCompany();
     const store = await createTestStore(company.id);
+    const { user: owner } = await createTestUser({ companyId: company.id, role: "DONO" });
     const { user: manager, password } = await createTestUser({
       companyId: company.id,
       role: "GERENTE",
     });
     await prisma.userStore.create({ data: { userId: manager.id, storeId: store.id } });
+    await grantPermission(manager.id, owner.id, "STOCK_INVENTORY");
     const token = await authenticate(manager.employeeCode, password);
 
     const response = await app.inject({
@@ -726,6 +760,8 @@ describe("inventário cego", () => {
       payload: { storeId: store.id, isBlind: false },
     });
 
+    // Autorizado a inventariar e ainda assim barrado: contagem com o saldo à
+    // vista é decisão do dono, não da permissão.
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe("BLIND_INVENTORY_REQUIRED");
   });
@@ -746,6 +782,7 @@ describe("inventário cego", () => {
       role: "GERENTE",
     });
     await prisma.userStore.create({ data: { userId: manager.id, storeId: store.id } });
+    await grantPermission(manager.id, owner.id, "STOCK_INVENTORY");
     const managerToken = await authenticate(manager.employeeCode, password);
 
     const inventory = (

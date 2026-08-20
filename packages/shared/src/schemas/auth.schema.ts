@@ -50,6 +50,8 @@ export const authenticatedUserSchema = z.object({
   mustCreatePin: z.boolean(),
   /** Perfil exige 2FA e ele ainda não foi confirmado. */
   twoFactorPending: z.boolean(),
+  /** Só para a tela esconder o que este usuário não pode fazer. */
+  permissions: z.array(z.string()),
 });
 
 export const loginResponseSchema = z.object({

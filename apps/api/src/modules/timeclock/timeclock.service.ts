@@ -34,6 +34,27 @@ export function suggestNextEventType(last: TimeClockEventType | null): TimeClock
   }
 }
 
+/**
+ * Em qual loja este funcionário bate ponto quando não há tablet.
+ *
+ * Usa a loja marcada como principal; se não houver marcação, a única a que ele
+ * está vinculado. Com mais de uma e nenhuma principal, devolve a primeira por
+ * ordem de vínculo — determinístico de propósito: o espelho de ponto precisa
+ * cair sempre na mesma loja, senão a jornada de uma pessoa se espalha por
+ * várias e ninguém consegue conferir.
+ */
+async function resolveStoreForPunch(
+  userId: string,
+): Promise<{ id: string; timezone: string } | null> {
+  const link = await prisma.userStore.findFirst({
+    where: { userId, store: { deletedAt: null } },
+    orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+    select: { store: { select: { id: true, timezone: true } } },
+  });
+
+  return link?.store ?? null;
+}
+
 export async function getLastEntry(userId: string) {
   return prisma.timeClockEntry.findFirst({
     where: { userId, correctsEntryId: null },
@@ -53,17 +74,34 @@ export async function getLastEntry(userId: string) {
 export async function registerPunch(params: { input: PunchInput; request: FastifyRequest }) {
   const { input, request } = params;
 
-  const device = await prisma.device.findFirst({
-    where: { id: input.deviceId, deletedAt: null },
-    include: { store: { select: { id: true, timezone: true } } },
-  });
+  // O tablet informa quem ele é; a sessão sabe de qual aparelho o login partiu.
+  // Qualquer um dos dois serve — e nenhum dos dois é obrigatório.
+  const deviceId = input.deviceId ?? request.user.deviceId;
 
-  if (!device) {
+  const device = deviceId
+    ? await prisma.device.findFirst({
+        where: { id: deviceId, deletedAt: null },
+        include: { store: { select: { id: true, timezone: true } } },
+      })
+    : null;
+
+  if (deviceId && !device) {
     throw badRequest("DEVICE_NOT_FOUND", "Dispositivo não encontrado.");
   }
 
-  if (device.companyId !== request.user.companyId) {
+  if (device && device.companyId !== request.user.companyId) {
     throw forbidden("DEVICE_WRONG_COMPANY", "Dispositivo não pertence à sua empresa.");
+  }
+
+  // Sem tablet, a loja vem do vínculo do funcionário. Quem trabalha em uma só
+  // loja — a esmagadora maioria — bate ponto sem escolher nada.
+  const store = device ? device.store : await resolveStoreForPunch(request.user.sub);
+
+  if (!store) {
+    throw badRequest(
+      "NO_STORE_LINKED",
+      "Sua matrícula não está vinculada a nenhuma loja. Peça ao dono para vincular antes de bater o ponto.",
+    );
   }
 
   // Não basta o tablet ser da mesma empresa: o funcionário precisa ter acesso
@@ -73,7 +111,7 @@ export async function registerPunch(params: { input: PunchInput; request: Fastif
     userId: request.user.sub,
     role: request.user.role,
     companyId: request.user.companyId,
-    storeId: device.storeId,
+    storeId: store.id,
   });
 
   if (!canUseStore) {
@@ -82,8 +120,8 @@ export async function registerPunch(params: { input: PunchInput; request: Fastif
       result: "DENIED",
       userId: request.user.sub,
       companyId: request.user.companyId,
-      storeId: device.storeId,
-      deviceId: device.id,
+      storeId: store.id,
+      ...(device ? { deviceId: device.id } : {}),
       userRoleSnapshot: request.user.role,
       reason: "usuário sem acesso à loja do dispositivo",
     });
@@ -91,7 +129,7 @@ export async function registerPunch(params: { input: PunchInput; request: Fastif
   }
 
   const timestamp = new Date();
-  const timezone = device.store.timezone;
+  const timezone = store.timezone;
   const weekday = weekdayInTimezone(timestamp, timezone) as Weekday;
 
   const schedule = await prisma.workSchedule.findFirst({
@@ -132,8 +170,8 @@ export async function registerPunch(params: { input: PunchInput; request: Fastif
     data: {
       userId: request.user.sub,
       companyId: request.user.companyId,
-      storeId: device.storeId,
-      deviceId: device.id,
+      storeId: store.id,
+      deviceId: device?.id ?? null,
       type: input.type,
       timestamp,
       clientTimestamp: input.clientTimestamp ? new Date(input.clientTimestamp) : null,
@@ -150,8 +188,8 @@ export async function registerPunch(params: { input: PunchInput; request: Fastif
     result: "SUCCESS",
     userId: request.user.sub,
     companyId: request.user.companyId,
-    storeId: device.storeId,
-    deviceId: device.id,
+    storeId: store.id,
+    ...(device ? { deviceId: device.id } : {}),
     userRoleSnapshot: request.user.role,
     entityType: "TimeClockEntry",
     entityId: entry.id,

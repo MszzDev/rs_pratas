@@ -719,8 +719,11 @@ model TimeClockEntry {
   companyId String
   storeId   String
   store     Store  @relation(fields: [storeId], references: [id])
-  deviceId  String
-  device    Device @relation(fields: [deviceId], references: [id])
+  /// Nulo quando a marcação não partiu de um tablet pareado — o funcionário
+  /// bateu do computador da loja ou do próprio celular. A loja continua
+  /// obrigatória: é ela que identifica onde a jornada foi cumprida.
+  deviceId  String?
+  device    Device? @relation(fields: [deviceId], references: [id])
 
   type            TimeClockEventType
   timestamp       DateTime // horário de servidor, autoritativo

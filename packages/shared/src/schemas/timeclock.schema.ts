@@ -22,7 +22,13 @@ const timeOfDaySchema = z
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use o formato HH:mm, por exemplo 08:00.");
 
 export const punchSchema = z.object({
-  deviceId: z.string().uuid(),
+  /**
+   * O tablet manda o seu identificador. Quem entra pelo computador da loja não
+   * tem um — e a marcação não pode depender disso: recusar a batida por falta
+   * de aparelho seria impedir o funcionário de comprovar a jornada que
+   * cumpriu. Sem tablet, o servidor resolve a loja pelo vínculo do usuário.
+   */
+  deviceId: z.string().uuid().optional(),
   type: z.enum(TIME_CLOCK_EVENT_TYPES),
   /**
    * Obrigatória quando o funcionário sai durante o turno. A validação real é

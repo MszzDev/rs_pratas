@@ -19,6 +19,14 @@ interface AuthContextValue {
    * onde ele acabara de sair.
    */
   markTwoFactorResolved: () => void;
+  /**
+   * Este usuário tem a permissão? Serve para ESCONDER, nunca para liberar.
+   *
+   * A lista vem do servidor junto com a sessão, já com concessões nominais e
+   * DENY resolvidos. Se alguém adulterar isso no navegador, ganha um botão que
+   * não funciona: quem autoriza de verdade é a API, requisição por requisição.
+   */
+  can: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -108,13 +116,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const can = useCallback(
+    (permission: string) => user?.permissions.includes(permission) ?? false,
+    [user],
+  );
+
   const markTwoFactorResolved = useCallback(() => {
     setUser((current) => (current ? { ...current, twoFactorPending: false } : current));
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, loginWithPassword, loginWithPin, logout, markTwoFactorResolved }),
-    [user, loading, loginWithPassword, loginWithPin, logout, markTwoFactorResolved],
+    () => ({ user, loading, loginWithPassword, loginWithPin, logout, markTwoFactorResolved, can }),
+    [user, loading, loginWithPassword, loginWithPin, logout, markTwoFactorResolved, can],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
