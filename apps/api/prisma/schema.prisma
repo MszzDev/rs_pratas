@@ -307,6 +307,10 @@ model User {
 
   /// Matrícula: a ÚNICA identidade de login. O e-mail abaixo nunca autentica.
   employeeCode String
+  /// CPF, só dígitos. Opcional no cadastro porque a loja contrata antes de ter
+  /// o documento em mãos, mas OBRIGATÓRIO para o AFD: é por ele que a
+  /// fiscalização identifica o trabalhador no arquivo do ponto.
+  cpf          String?
   /// Canal de contato — envio de credenciais e documentos. Não serve para login:
   /// separar identidade de canal evita que uma caixa de e-mail comprometida
   /// vire acesso ao caixa da loja.
@@ -373,6 +377,14 @@ model User {
   pieceRequestsCreated PieceRequest[]   @relation("PieceRequestCreatedBy")
 
   @@unique([companyId, employeeCode])
+  /// O mesmo CPF não pode aparecer em duas matrículas da empresa — seria a
+  /// mesma pessoa com duas jornadas no AFD.
+  ///
+  /// Aqui o NULL-distinto do Postgres joga a favor: vários funcionários ainda
+  /// sem CPF cadastrado convivem sem colidir, e só os preenchidos são
+  /// comparados. (Em outros pontos do schema foi preciso índice PARCIAL para
+  /// obter o efeito contrário — ali dois NULLs precisavam colidir.)
+  @@unique([companyId, cpf], map: "users_company_cpf_key")
   @@index([companyId, role])
   @@map("users")
 }

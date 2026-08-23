@@ -17,6 +17,7 @@ import {
   deactivateWorkSchedule,
   getLastEntry,
   getMirror,
+  buildAfd,
   getTodayEntries,
   registerPunch,
   resolveStoreForPunch,
@@ -121,6 +122,44 @@ export async function timeClockRoutes(app: FastifyInstance) {
         type: correction.type,
         timestamp: correction.timestamp,
       });
+    },
+  );
+
+  /**
+   * AFD — o arquivo do ponto que a fiscalização pede.
+   *
+   * Só o dono exporta: é a jornada de todo mundo num arquivo só, e sair do
+   * sistema é o momento em que o dado deixa de estar protegido pelo RBAC.
+   * A exportação fica auditada.
+   */
+  app.get(
+    "/timeclock/afd",
+    { preHandler: [app.requireAuth, requirePermission("TIMECLOCK_VIEW_ALL")] },
+    async (request, reply) => {
+      const { from, to } = z
+        .object({ from: z.string().datetime(), to: z.string().datetime() })
+        .parse(request.query);
+
+      const resultado = await buildAfd({
+        from: new Date(from),
+        to: new Date(to),
+        request,
+      });
+
+      // Quem ficou de fora vai no cabeçalho da resposta, não no corpo: o corpo
+      // é o arquivo, e enfiar aviso dentro dele o corromperia.
+      if (resultado.semCpf.length > 0) {
+        reply.header(
+          "X-AFD-Sem-CPF",
+          resultado.semCpf.map((f) => `${f.employeeCode}:${f.marcacoes}`).join(","),
+        );
+      }
+
+      reply.header("X-AFD-Marcacoes", String(resultado.marcacoes));
+      reply.header("Content-Type", "text/plain; charset=us-ascii");
+      reply.header("Content-Disposition", 'attachment; filename="AFD.txt"');
+
+      return reply.send(resultado.conteudo);
     },
   );
 

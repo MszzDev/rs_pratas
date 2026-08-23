@@ -48,6 +48,20 @@ async function main() {
     storeIds: [matriz.id],
   });
 
+  /**
+   * Suporte técnico — o quarto perfil.
+   *
+   * Existe na demonstração porque é o que prova o mascaramento monetário: ele
+   * enxerga todas as lojas e todos os dados, e nenhum valor em dinheiro. Sem
+   * uma conta ativa não dá para mostrar isso funcionando.
+   */
+  await upsertUser({
+    companyId: company.id,
+    employeeCode: "RS000400",
+    name: "Suporte Demonstração",
+    role: "DESENVOLVEDOR",
+  });
+
   // ------------------------------------------- estação, caixa e maquininha
   const station = await upsert("pOSStation", { storeId: matriz.id, code: "E01" }, {
     storeId: matriz.id,
@@ -243,6 +257,7 @@ async function main() {
   console.log(`  Dono       matrícula ${owner.employeeCode}   senha ${DEMO_PASSWORD}`);
   console.log(`  Gerente    matrícula ${manager.employeeCode}   senha ${DEMO_PASSWORD}`);
   console.log(`  Vendedora  matrícula ${seller.employeeCode}   senha ${DEMO_PASSWORD}`);
+  console.log(`  Suporte    matrícula RS000400   senha ${DEMO_PASSWORD}`);
   console.log(`\n  PIN de todos (no tablet): ${DEMO_PIN}`);
   console.log("\nO caixa da Loja Centro já está aberto, então dá para vender.\n");
 }

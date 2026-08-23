@@ -379,6 +379,33 @@ describe("venda", () => {
   });
 });
 
+/**
+ * Todos os números que aparecem no payload, em qualquer profundidade.
+ *
+ * Strings numéricas entram convertidas porque Decimal do Prisma sai como
+ * string — "300.00" precisa ser pego igual ao número 300.
+ */
+function valoresDe(payload: unknown): number[] {
+  if (typeof payload === "number") return [payload];
+
+  if (typeof payload === "string") {
+    const numero = Number(payload);
+    return Number.isFinite(numero) && payload.trim() !== "" ? [numero] : [];
+  }
+
+  if (Array.isArray(payload)) return payload.flatMap(valoresDe);
+
+  if (payload && typeof payload === "object") {
+    return Object.entries(payload)
+      // O id não é valor monetário; é só um identificador que por azar pode
+      // conter os mesmos dígitos.
+      .filter(([chave]) => !/id$/i.test(chave))
+      .flatMap(([, valor]) => valoresDe(valor));
+  }
+
+  return [];
+}
+
 describe("caixa com fechamento cego", () => {
   it("a tela de fechamento não entrega o valor esperado", async () => {
     const { store, session, token, product } = await scenario();
@@ -399,8 +426,14 @@ describe("caixa com fechamento cego", () => {
     ).json();
 
     expect(closing.salesCount).toBe(1);
+
     // Nenhum campo de valor sai do servidor — nem esperado, nem total vendido.
-    expect(JSON.stringify(closing)).not.toContain("300");
+    //
+    // A checagem percorre os VALORES do payload em vez de procurar "300" no
+    // JSON cru: o texto cru inclui os UUIDs, e um id sorteado como
+    // "3b3ec6c0-838b-4300-..." fazia o teste falhar sozinho, sem nada ter
+    // vazado. Teste que acusa por acaso é pior que teste ausente.
+    expect(valoresDe(closing)).not.toContain(300);
     expect(closing.expectedAmount).toBeUndefined();
   });
 

@@ -25,6 +25,7 @@ function toPublicUser(user: {
   name: string;
   employeeCode: string;
   email: string | null;
+  cpf?: string | null;
   role: string;
   status: string;
   lastLoginAt?: Date | null;
@@ -36,6 +37,7 @@ function toPublicUser(user: {
     name: user.name,
     employeeCode: user.employeeCode,
     email: user.email,
+    cpf: user.cpf ?? null,
     role: user.role,
     status: user.status,
     lastLoginAt: user.lastLoginAt ?? null,
@@ -87,6 +89,7 @@ export async function createUser(params: {
         employeeCode,
         name: input.name,
         email: input.email ?? null,
+        cpf: input.cpf || null,
         role: input.role,
         status: "PENDING_FIRST_ACCESS",
         passwordHash,
@@ -267,6 +270,7 @@ export async function listUsers(request: FastifyRequest) {
     name: user.name,
     employeeCode: user.employeeCode,
     email: user.email,
+    cpf: user.cpf ?? null,
     role: user.role,
     status: user.status,
     storeIds: user.userStores.map((link) => link.storeId),
@@ -311,6 +315,7 @@ export async function updateUser(params: {
         ...(input.name ? { name: input.name } : {}),
         // String vazia é o gesto de "apagar o e-mail", distinto de "não mexer".
         ...(input.email !== undefined ? { email: input.email || null } : {}),
+        ...(input.cpf !== undefined ? { cpf: input.cpf || null } : {}),
       },
     });
 

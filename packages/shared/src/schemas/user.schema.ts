@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidCpf, onlyDigits } from "../cpf.js";
 import { USER_ROLES } from "../roles.const.js";
 
 /**
@@ -11,6 +12,19 @@ export const createUserSchema = z.object({
   name: z.string().min(2, "Informe o nome completo.").max(120),
   role: z.enum(USER_ROLES),
   email: z.string().email("Informe um e-mail válido.").max(160).optional(),
+  /**
+   * CPF. Opcional porque a loja contrata antes de ter o documento em mãos, mas
+   * sem ele o funcionário não entra no AFD — o arquivo do ponto identifica o
+   * trabalhador por CPF, e não por matrícula.
+   *
+   * Guardado só com dígitos; a validação é dos dígitos verificadores, para o
+   * erro aparecer no cadastro e não no arquivo entregue à fiscalização.
+   */
+  cpf: z
+    .string()
+    .transform(onlyDigits)
+    .refine((valor) => valor === "" || isValidCpf(valor), "CPF inválido — confira os números.")
+    .optional(),
   /** Lojas às quais o funcionário terá acesso. Dono e desenvolvedor veem todas. */
   storeIds: z.array(z.string().uuid()).default([]),
 });
@@ -19,6 +33,19 @@ export const updateUserSchema = z.object({
   name: z.string().min(2).max(120).optional(),
   /** String vazia apaga o e-mail cadastrado. */
   email: z.union([z.string().email().max(160), z.literal("")]).optional(),
+  /**
+   * CPF. Opcional porque a loja contrata antes de ter o documento em mãos, mas
+   * sem ele o funcionário não entra no AFD — o arquivo do ponto identifica o
+   * trabalhador por CPF, e não por matrícula.
+   *
+   * Guardado só com dígitos; a validação é dos dígitos verificadores, para o
+   * erro aparecer no cadastro e não no arquivo entregue à fiscalização.
+   */
+  cpf: z
+    .string()
+    .transform(onlyDigits)
+    .refine((valor) => valor === "" || isValidCpf(valor), "CPF inválido — confira os números.")
+    .optional(),
   storeIds: z.array(z.string().uuid()).optional(),
 });
 
@@ -36,6 +63,7 @@ export const userSummarySchema = z.object({
   name: z.string(),
   employeeCode: z.string(),
   email: z.string().nullable(),
+  cpf: z.string().nullable(),
   role: z.enum(USER_ROLES),
   status: z.string(),
   storeIds: z.array(z.string().uuid()),

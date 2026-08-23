@@ -44,6 +44,7 @@ export function UsersPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [cpf, setCpf] = useState("");
   const [role, setRole] = useState<UserRole>("VENDEDOR");
   const [storeIds, setStoreIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +52,12 @@ export function UsersPage() {
 
   /** Funcionário aberto para edição de cadastro. */
   const [editing, setEditing] = useState<UserRow | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", email: "", storeIds: [] as string[] });
+  const [editForm, setEditForm] = useState({
+    name: "",
+    email: "",
+    cpf: "",
+    storeIds: [] as string[],
+  });
   const [novoPerfil, setNovoPerfil] = useState<UserRow["role"] | "">("");
   const [motivoPerfil, setMotivoPerfil] = useState("");
   /**
@@ -96,7 +102,13 @@ export function UsersPage() {
       }>("/api/v1/users", {
         method: "POST",
         // E-mail em branco não vai como string vazia: o campo é opcional.
-        body: { name, role, storeIds, ...(email.trim() ? { email: email.trim() } : {}) },
+        body: {
+          name,
+          role,
+          storeIds,
+          ...(email.trim() ? { email: email.trim() } : {}),
+          ...(cpf.trim() ? { cpf: cpf.trim() } : {}),
+        },
       }),
     onSuccess: (result) => {
       setCredential({
@@ -123,6 +135,7 @@ export function UsersPage() {
           name: editForm.name.trim(),
           // String vazia apaga o e-mail; `undefined` deixaria como está.
           email: editForm.email.trim(),
+          cpf: editForm.cpf.trim(),
           storeIds: editForm.storeIds,
         },
       }),
@@ -286,6 +299,14 @@ export function UsersPage() {
             hint="Só para receber a credencial e avisos. Não serve para entrar no sistema — o login é sempre pela matrícula."
           />
 
+          <Field
+            label="CPF (opcional)"
+            value={cpf}
+            onChange={(event) => setCpf(event.target.value)}
+            placeholder="000.000.000-00"
+            hint="Sem CPF o funcionário não entra no arquivo do ponto (AFD) exigido pela fiscalização."
+          />
+
           <div className="flex flex-col gap-1.5">
             <label htmlFor="role" className="text-sm font-medium text-text-secondary">
               Perfil
@@ -365,6 +386,13 @@ export function UsersPage() {
                 value={editForm.email}
                 onChange={(event) => setEditForm({ ...editForm, email: event.target.value })}
                 hint="Canal de entrega de credencial e avisos. Não serve para entrar."
+              />
+              <Field
+                label="CPF"
+                value={editForm.cpf}
+                onChange={(event) => setEditForm({ ...editForm, cpf: event.target.value })}
+                placeholder="000.000.000-00"
+                hint="Necessário para o funcionário aparecer no AFD, o arquivo do ponto."
               />
             </div>
 
@@ -582,6 +610,7 @@ export function UsersPage() {
                           setEditForm({
                             name: entry.name,
                             email: entry.email ?? "",
+                            cpf: entry.cpf ?? "",
                             storeIds: entry.storeIds,
                           });
                           setNovoPerfil("");

@@ -11,6 +11,7 @@ import {
   parseTimeOfDay,
   weekdayInTimezone,
 } from "./tolerance.js";
+import { gerarAfd } from "./afd.js";
 
 /** Tipos de marcação que exigem justificativa obrigatória. */
 const REQUIRES_JUSTIFICATION: TimeClockEventType[] = ["CLOCK_OUT", "BREAK_START"];
@@ -405,6 +406,105 @@ export async function getMirror(params: {
           reason: correction.correctionReason,
         })),
       })),
+  };
+}
+
+/**
+ * Monta o AFD de um período.
+ *
+ * Devolve o arquivo E a lista de quem ficou de fora por não ter CPF. Emitir em
+ * silêncio um arquivo incompleto seria o pior resultado possível: o dono
+ * entregaria à fiscalização um documento que parece completo e não é, e só
+ * descobriria o problema quando já fosse tarde.
+ */
+export async function buildAfd(params: {
+  from: Date;
+  to: Date;
+  request: FastifyRequest;
+}) {
+  const { from, to, request } = params;
+
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: request.user.companyId },
+    select: { legalName: true, cnpj: true },
+  });
+
+  const entries = await prisma.timeClockEntry.findMany({
+    where: {
+      companyId: request.user.companyId,
+      timestamp: { gte: from, lte: to },
+    },
+    select: {
+      nsr: true,
+      type: true,
+      timestamp: true,
+      user: { select: { id: true, name: true, employeeCode: true, cpf: true } },
+      store: { select: { timezone: true } },
+    },
+    orderBy: { nsr: "asc" },
+  });
+
+  const semCpf = new Map<string, { name: string; employeeCode: string; marcacoes: number }>();
+  const marcacoes = [];
+
+  for (const entry of entries) {
+    if (!entry.user.cpf) {
+      const atual = semCpf.get(entry.user.id);
+      semCpf.set(entry.user.id, {
+        name: entry.user.name,
+        employeeCode: entry.user.employeeCode,
+        marcacoes: (atual?.marcacoes ?? 0) + 1,
+      });
+      continue;
+    }
+
+    marcacoes.push({
+      nsr: entry.nsr,
+      type: entry.type,
+      timestamp: entry.timestamp,
+      cpf: entry.user.cpf,
+    });
+  }
+
+  // O fuso é o da primeira loja que aparece no período; a rede inteira usa o
+  // mesmo horário de Brasília, e o AFD é um arquivo por empregador, não por
+  // loja.
+  const timezone = entries[0]?.store.timezone ?? "America/Sao_Paulo";
+
+  const conteudo = gerarAfd({
+    empregador: {
+      tipoIdentificador: 1,
+      cnpjOuCpf: company.cnpj,
+      razaoSocial: company.legalName,
+      identificacaoRep: `REP-P-${company.cnpj.replace(/\D/g, "").slice(-6)}`,
+    },
+    marcacoes,
+    inicio: from,
+    fim: to,
+    geradoEm: new Date(),
+    timezone,
+  });
+
+  await audit(request, {
+    action: "DATA_EXPORT",
+    result: "SUCCESS",
+    userId: request.user.sub,
+    companyId: request.user.companyId,
+    userRoleSnapshot: request.user.role,
+    entityType: "TimeClockEntry",
+    reason: "exportação de AFD",
+    metadata: {
+      de: from.toISOString(),
+      ate: to.toISOString(),
+      marcacoes: marcacoes.length,
+      funcionariosSemCpf: semCpf.size,
+    },
+  });
+
+  return {
+    conteudo,
+    marcacoes: marcacoes.length,
+    semCpf: [...semCpf.values()],
   };
 }
 

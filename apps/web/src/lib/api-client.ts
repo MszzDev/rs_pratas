@@ -161,6 +161,39 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return payload as T;
 }
 
+/**
+ * Busca um ARQUIVO da API, devolvendo a resposta crua.
+ *
+ * O `apiFetch` interpreta tudo como JSON, o que não serve aqui: o AFD é texto
+ * de posição fixa e os avisos (quantas marcações, quem ficou de fora por não
+ * ter CPF) vêm em cabeçalhos que se perderiam. Compartilha com ele o essencial
+ * — token, renovação de sessão expirada e tradução do erro.
+ */
+export async function apiFetchRaw(path: string): Promise<Response> {
+  const chamar = () =>
+    fetch(`${API_BASE_URL}${path}`, {
+      headers: { ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+    });
+
+  let response = await chamar();
+
+  if (response.status === 401 && (await refreshAccessToken())) {
+    response = await chamar();
+  }
+
+  if (!response.ok) {
+    const errorBody = (await response.json().catch(() => null)) as ApiErrorBody | null;
+
+    throw new ApiError(
+      response.status,
+      errorBody?.error?.code ?? "UNKNOWN",
+      errorBody?.error?.message ?? "Não foi possível baixar o arquivo.",
+    );
+  }
+
+  return response;
+}
+
 async function refreshAccessToken(): Promise<boolean> {
   refreshPromise ??= (async () => {
     try {

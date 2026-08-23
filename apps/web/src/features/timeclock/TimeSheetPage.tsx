@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, FileDown, PenLine, Printer } from "lucide-react";
+import { AlertTriangle, FileDown, FileText, PenLine, Printer } from "lucide-react";
 import type { TimeClockEventType } from "@rs-pratas/shared";
 import { formatDuration } from "@rs-pratas/shared";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
-import { apiFetch, ApiError } from "@/lib/api-client";
+import { apiFetch, apiFetchRaw, ApiError } from "@/lib/api-client";
 import { useAuth } from "../auth/auth-context";
 import type { DiaDeTrabalho, ReportEntry } from "./timesheet-report";
 import { agruparPorDia, baixar, paraCsv } from "./timesheet-report";
@@ -55,12 +55,13 @@ const formatDateTime = (iso: string) =>
   });
 
 export function TimeSheetPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const queryClient = useQueryClient();
   const canSeeOthers = ["DONO", "GERENTE", "DESENVOLVEDOR"].includes(user?.role ?? "");
 
   const [targetUserId, setTargetUserId] = useState("");
   const [correcting, setCorrecting] = useState<MirrorEntry | null>(null);
+  const [avisoAfd, setAvisoAfd] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const users = useQuery({
@@ -85,6 +86,42 @@ export function TimeSheetPage() {
     () => agruparPorDia(mirror.data?.entries ?? []),
     [mirror.data?.entries],
   );
+
+  /**
+   * AFD — o arquivo que a fiscalização do trabalho pede.
+   *
+   * Baixado direto da API (e não montado aqui) porque o formato é de posição
+   * fixa e tem valor legal: a única fonte do layout precisa ser o servidor,
+   * onde ele está testado. Se a tela montasse uma segunda versão, as duas
+   * divergiriam e a errada seria justamente a que alguém entrega.
+   */
+  const exportarAfd = useMutation({
+    mutationFn: async () => {
+      // Últimos 90 dias — a janela que a fiscalização costuma pedir.
+      const ate = new Date();
+      const de = new Date(ate.getTime() - 90 * 86_400_000);
+
+      const resposta = await apiFetchRaw(
+        `/api/v1/timeclock/afd?from=${de.toISOString()}&to=${ate.toISOString()}`,
+      );
+
+      const semCpf = resposta.headers.get("X-AFD-Sem-CPF");
+      const conteudo = await resposta.text();
+
+      baixar("AFD.txt", conteudo, "text/plain;charset=us-ascii");
+      return { semCpf, marcacoes: resposta.headers.get("X-AFD-Marcacoes") };
+    },
+    onSuccess: (resultado) => {
+      setError(null);
+      setAvisoAfd(
+        resultado.semCpf
+          ? `Arquivo gerado com ${resultado.marcacoes} marcação(ões). Ficaram DE FORA as matrículas sem CPF cadastrado: ${resultado.semCpf.replace(/:\d+/g, "")}. Cadastre o CPF em Funcionários e gere de novo.`
+          : `Arquivo gerado com ${resultado.marcacoes} marcação(ões).`,
+      );
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível gerar o AFD."),
+  });
 
   const exportarCsv = () => {
     const alvo = mirror.data?.user;
@@ -121,29 +158,57 @@ export function TimeSheetPage() {
       title="Espelho de ponto"
       description="Todas as marcações, com as correções ao lado das originais."
       actions={
-        dias.length > 0 && (
-          <div className="flex gap-2 print:hidden">
+        /*
+          O Excel e o PDF são deste espelho, então só aparecem com marcações na
+          tela. O AFD não: é o arquivo da EMPRESA inteira, e o dono precisa
+          conseguir gerá-lo mesmo tendo zero marcações próprias — que é
+          justamente o caso dele.
+        */
+        <div className="flex gap-2 print:hidden">
+          {dias.length > 0 && (
             <Button type="button" variant="outline" onClick={exportarCsv}>
               <FileDown className="h-5 w-5" aria-hidden />
               Excel
             </Button>
-            {/*
-              PDF sai pela impressão do navegador ("Salvar como PDF" no destino).
-              É o mesmo caminho das etiquetas: o navegador já sabe paginar e
-              embutir fonte, e uma biblioteca de PDF no pacote custaria centenas
-              de KB para reproduzir isso pior.
-            */}
+          )}
+          {/*
+            PDF sai pela impressão do navegador ("Salvar como PDF" no destino).
+            É o mesmo caminho das etiquetas: o navegador já sabe paginar e
+            embutir fonte, e uma biblioteca de PDF no pacote custaria centenas
+            de KB para reproduzir isso pior.
+          */}
+          {dias.length > 0 && (
             <Button type="button" variant="outline" onClick={() => window.print()}>
               <Printer className="h-5 w-5" aria-hidden />
               PDF
             </Button>
-          </div>
-        )
+          )}
+          {/* Só o dono exporta: é a jornada de todo mundo num arquivo só. */}
+          {can("TIMECLOCK_VIEW_ALL") && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={exportarAfd.isPending}
+              onClick={() => exportarAfd.mutate()}
+            >
+              <FileText className="h-5 w-5" aria-hidden />
+              {exportarAfd.isPending ? "Gerando..." : "AFD"}
+            </Button>
+          )}
+        </div>
       }
     >
       {error && (
         <div className="mb-5">
           <Alert tone="error">{error}</Alert>
+        </div>
+      )}
+
+      {avisoAfd && (
+        <div className="mb-5 print:hidden">
+          <Alert tone={avisoAfd.includes("DE FORA") ? "info" : "success"} title="AFD gerado">
+            {avisoAfd}
+          </Alert>
         </div>
       )}
 
