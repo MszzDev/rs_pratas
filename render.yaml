@@ -26,11 +26,14 @@ services:
     name: rs-pratas-api
     runtime: node
     plan: free
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @rs-pratas/api build
+    # --prod=false e obrigatorio: com NODE_ENV=production o pnpm pula as
+    # devDependencies, e o compilador (tsc) mora exatamente la. Sem isto o
+    # build falha em "tsc: not found".
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter @rs-pratas/api build
     # A migração roda no start, e não no build, porque no Render o build não
     # alcança o banco. Rodar aqui garante o schema aplicado antes da primeira
     # requisição.
-    startCommand: cd apps/api && pnpm prisma migrate deploy && node dist/server.js
+    startCommand: cd apps/api && pnpm exec prisma migrate deploy && node dist/server.js
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -59,7 +62,8 @@ services:
   - type: web
     name: rs-pratas-web
     runtime: static
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @rs-pratas/web build
+    # Mesmo motivo do serviço acima: o Vite é devDependency.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter @rs-pratas/web build
     staticPublishPath: apps/web/dist
     envVars:
       # PREENCHA com a URL da API. Precisa estar definido no BUILD: o Vite
