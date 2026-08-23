@@ -45,9 +45,22 @@ if (env.RUN_MIGRATIONS_ON_BOOT) {
       "deploy",
     ]);
     app.log.info({ stdout }, "migrações aplicadas");
+
+    // Perfis e catálogo de permissões. Sem eles o RBAC nega tudo para todo
+    // mundo, e um banco migrado mas não semeado parece pronto sem estar.
+    // Idempotente: repetir a cada deploy não duplica nada.
+    const tsx = "node_modules/tsx/dist/cli.mjs";
+    await run("node", [tsx, "prisma/seed.ts"]);
+    app.log.info("perfis e permissões semeados");
+
+    // Lojas, produtos e contas de exemplo — só onde alguém pediu por escrito.
+    if (process.env.SEED_DEMO_DATA === "true") {
+      await run("node", [tsx, "prisma/demo-seed.ts"]);
+      app.log.info("dados de demonstração semeados");
+    }
   } catch (error) {
     // Não derruba o processo: sem isto uma migração com problema tira o
     // sistema do ar inteiro, e ninguém consegue nem ler o erro pela API.
-    app.log.error({ error }, "falha ao aplicar migrações");
+    app.log.error({ error }, "falha ao preparar o banco");
   }
 }

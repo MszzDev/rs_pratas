@@ -50,8 +50,13 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Migra ao subir porque o build do Render não alcança o banco privado.
+      # Migra e semeia ao subir, porque o build do Render não alcança o banco
+      # privado. Sem isto o banco fica com tabelas e sem perfis, e ninguém entra.
       - key: RUN_MIGRATIONS_ON_BOOT
+        value: "true"
+      # Lojas, produtos e contas de teste. TIRE esta linha quando o sistema
+      # deixar de ser demonstração e passar a atender a loja de verdade.
+      - key: SEED_DEMO_DATA
         value: "true"
       - key: DATABASE_URL
         fromDatabase:

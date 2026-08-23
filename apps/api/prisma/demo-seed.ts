@@ -1,9 +1,13 @@
 /**
  * Dados de demonstração para ver as telas com conteúdo real.
  *
- * NÃO roda em produção — o guard abaixo derruba o script se NODE_ENV for
- * production. Serve só para o desenvolvimento local: telas vazias não mostram
- * se o layout funciona.
+ * NÃO roda em produção por acidente: com NODE_ENV=production o script se
+ * recusa, a menos que alguém peça por escrito, com SEED_DEMO_DATA=true.
+ *
+ * A escotilha existe porque um ambiente de DEMONSTRAÇÃO também roda com
+ * NODE_ENV=production — é hospedagem de verdade —, e tela vazia não demonstra
+ * nada. O que não pode acontecer é isto rodar sozinho no banco da loja: por
+ * isso são duas condições, e a segunda ninguém liga sem querer.
  *
  *   pnpm tsx prisma/demo-seed.ts
  */
@@ -14,8 +18,11 @@ const DEMO_PASSWORD = "RsPratas!Demo2026";
 const DEMO_PIN = "246810";
 
 async function main() {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("demo-seed nunca roda em produção.");
+  if (process.env.NODE_ENV === "production" && process.env.SEED_DEMO_DATA !== "true") {
+    throw new Error(
+      "demo-seed não roda em produção. Se este é um ambiente de demonstração e " +
+        "você quer dados de exemplo aqui, defina SEED_DEMO_DATA=true.",
+    );
   }
 
   const company = await prisma.company.findFirstOrThrow({ where: { deletedAt: null } });
