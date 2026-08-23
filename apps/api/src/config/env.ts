@@ -9,7 +9,13 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   DATABASE_MIGRATE_URL: z.string().url(),
 
-  REDIS_URL: z.string().url(),
+  /**
+   * Redis guarda só o cache de permissões. Sem ele o RBAC cai para consulta
+   * direta ao banco: mais lento, igualmente correto. Por isso tem padrão em
+   * vez de ser obrigatório — num ambiente de teste dá para subir sem provisionar
+   * mais um serviço, e a ausência aparece como "degraded" no /health/ready.
+   */
+  REDIS_URL: z.string().url().default("redis://127.0.0.1:6379"),
 
   JWT_ACCESS_SECRET: z.string().min(32, "JWT_ACCESS_SECRET deve ter ao menos 32 caracteres"),
   JWT_ACCESS_TTL: z.string().default("15m"),
