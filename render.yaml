@@ -1,0 +1,62 @@
+# Blueprint do Render — API + site, para ambiente de testes.
+#
+# Não substitui produção: o plano gratuito hiberna o serviço depois de alguns
+# minutos parado, e a primeira requisição depois disso demora quase um minuto.
+# Para DEMONSTRAR ao vivo, abra o sistema alguns minutos antes de começar, ou
+# use o túnel (ver DEPLOY.md) — nele nada hiberna.
+#
+# O banco NÃO está declarado aqui de propósito: ele precisa das duas roles
+# (app_owner e app_rw), criadas à mão uma vez com scripts/setup-roles-managed.sql.
+# Deixar o Render criar o banco sozinho geraria um usuário só, e a separação de
+# roles é justamente o que sustenta a imutabilidade da auditoria e do ponto.
+
+services:
+  - type: web
+    name: rs-pratas-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @rs-pratas/api build
+    # A migração roda no start, não no build: no Render o build não alcança o
+    # banco privado, e migrar de dentro do processo garante que o schema está
+    # aplicado antes da primeira requisição.
+    startCommand: cd apps/api && DATABASE_URL=$DATABASE_MIGRATE_URL pnpm prisma migrate deploy && node dist/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      # Conexão de runtime (app_rw) e de migração (app_owner).
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_MIGRATE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      # Gerados pelo Render — nunca digite segredo à mão aqui.
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: TOTP_ENCRYPTION_KEY
+        generateValue: true
+      # Preencha com a URL do site depois do primeiro deploy: sem isto o
+      # navegador bloqueia as chamadas da tela para a API.
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+  - type: web
+    name: rs-pratas-web
+    runtime: static
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @rs-pratas/web build
+    staticPublishPath: apps/web/dist
+    envVars:
+      # Endereço da API. Precisa estar definido no BUILD: o Vite embute o valor
+      # no pacote, não lê em tempo de execução.
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      # A navegação é do React Router: sem esta regra, recarregar em /venda
+      # devolve 404 porque não existe arquivo com esse nome.
+      - type: rewrite
+        source: /*
+        destination: /index.html
