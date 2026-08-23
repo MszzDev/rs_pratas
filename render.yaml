@@ -33,29 +33,26 @@ services:
     # --prod=false e obrigatorio: com NODE_ENV=production o pnpm pula as
     # devDependencies, e o compilador (tsc) mora exatamente la. Sem isto o
     # build falha em "tsc: not found".
-    # O `seed` vai junto: ele cria os perfis e o catálogo de permissões, sem os
-    # quais o RBAC devolve "nenhuma permissão" para todo mundo e ninguém entra —
-    # um banco migrado mas não semeado parece pronto e não é. É idempotente
-    # (tudo upsert), então repetir a cada deploy não duplica nada.
     #
-    # O demo-seed (lojas, produtos, contas de teste) NÃO entra aqui de
-    # propósito: ele se recusa a rodar com NODE_ENV=production.
-    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @rs-pratas/api build && cd apps/api && pnpm exec prisma migrate deploy && pnpm exec tsx prisma/seed.ts
-    # A migração roda no BUILD, não no start.
+    # `turbo run build` em vez de compilar so a API: o pacote @rs-pratas/shared
+    # precisa ser compilado ANTES, senao o processo sobe e morre na hora
+    # tentando importar TypeScript que o Node nao le. O turbo conhece essa
+    # ordem; o --filter sozinho, nao.
     #
-    # O Render vigia a porta assim que o start começa e derruba o serviço se
-    # nada escutar dentro da janela dele. Aplicar quinze migrações num banco
-    # recém-criado consome esse tempo todo ANTES do primeiro listen — o
-    # processo era morto sem nunca chegar a responder, e de fora isso parece
-    # um serviço que simplesmente não existe.
-    #
-    # No build não há relógio correndo, e o schema continua pronto antes de
-    # qualquer requisição.
+    # A migração NÃO roda aqui: o ambiente de build não alcança o banco
+    # privado. Ela acontece no boot, depois de a porta abrir — ver
+    # RUN_MIGRATIONS_ON_BOOT.
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm turbo run build --filter=@rs-pratas/api
+    # Só liga o servidor. A porta abre em milissegundos e o Render fica
+    # satisfeito; o schema é aplicado logo em seguida, de dentro do processo.
     startCommand: cd apps/api && node dist/server.js
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
+      # Migra ao subir porque o build do Render não alcança o banco privado.
+      - key: RUN_MIGRATIONS_ON_BOOT
+        value: "true"
       - key: DATABASE_URL
         fromDatabase:
           name: rs-pratas-db
@@ -80,7 +77,7 @@ services:
     runtime: static
     # Mesmos motivos do serviço acima: sem corepack, e com as devDependencies
     # (o Vite é uma delas).
-    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @rs-pratas/web build
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm turbo run build --filter=@rs-pratas/web
     staticPublishPath: apps/web/dist
     envVars:
       # PREENCHA com a URL da API. Precisa estar definido no BUILD: o Vite

@@ -2,7 +2,16 @@
   "extends": "@rs-pratas/config/base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
+    "noEmit": false
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "dist",
+    "**/*.test.ts"
+  ]
 }
