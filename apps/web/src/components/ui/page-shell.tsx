@@ -16,6 +16,7 @@ import {
   Menu,
   MonitorSmartphone,
   Package,
+  Percent,
   RotateCcw,
   ScrollText,
   Settings,
@@ -26,6 +27,7 @@ import {
   UserRound,
   Users,
   Wallet,
+  Wrench,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -103,6 +105,19 @@ interface Atalho {
 }
 
 const SUBPAGINAS: Record<string, Atalho[]> = {
+  "/relatorios": [
+    { to: "/comissoes", label: "Comissões e metas", icon: Percent, permission: "COMMISSION_MANAGE" },
+    { to: "/painel", label: "Painel", icon: LayoutDashboard },
+  ],
+  "/comissoes": [{ to: "/relatorios", label: "Relatórios", icon: TrendingUp }],
+  "/pos-venda": [
+    { to: "/ordens-de-servico", label: "Ordens de serviço", icon: Wrench },
+    { to: "/venda", label: "Venda", icon: ShoppingCart },
+  ],
+  "/ordens-de-servico": [
+    { to: "/pos-venda", label: "Trocas e garantias", icon: RotateCcw },
+    { to: "/clientes", label: "Clientes", icon: UserRound },
+  ],
   "/venda": [
     { to: "/orcamentos", label: "Orçamentos", icon: Calculator },
     { to: "/solicitar-peca", label: "Solicitar peça", icon: HandHeart },

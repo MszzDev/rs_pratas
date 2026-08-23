@@ -11,6 +11,13 @@ import {
   openClaim,
   reissueCertificate,
 } from "./warranties.service.js";
+import {
+  cancelServiceOrder,
+  createServiceOrder,
+  listServiceOrders,
+  SERVICE_ORDER_STATUSES,
+  updateServiceOrder,
+} from "./service-orders.service.js";
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 
@@ -161,6 +168,81 @@ export async function afterSalesRoutes(app: FastifyInstance) {
     async (request) => {
       const { id } = idParamSchema.parse(request.params);
       return reissueCertificate({ certificateId: id, request });
+    },
+  );
+
+  // ---------------------------------------------- ordem de serviço (conserto)
+
+  app.get(
+    "/service-orders",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request) => {
+      const query = z
+        .object({
+          storeId: z.string().uuid().optional(),
+          status: z.enum(SERVICE_ORDER_STATUSES).optional(),
+          emAberto: z.coerce.boolean().optional(),
+        })
+        .parse(request.query);
+
+      return listServiceOrders({ request, ...query });
+    },
+  );
+
+  app.post(
+    "/service-orders",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request, reply) => {
+      const input = z
+        .object({
+          storeId: z.string().uuid(),
+          customerId: z.string().uuid(),
+          description: z.string().min(3, "Descreva o serviço que a peça precisa.").max(1000),
+          intakeCondition: z
+            .string()
+            .min(3, "Descreva como a peça chegou — é o que protege a loja na retirada.")
+            .max(1000),
+          productId: z.string().uuid().optional(),
+          estimatedAmount: z.number().min(0).max(9_999_999).multipleOf(0.01).optional(),
+          underWarranty: z.boolean().optional(),
+          promisedFor: z.string().datetime().optional(),
+          notes: z.string().max(1000).optional(),
+        })
+        .parse(request.body);
+
+      return reply.status(201).send(await createServiceOrder({ input, request }));
+    },
+  );
+
+  app.patch(
+    "/service-orders/:id",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      const input = z
+        .object({
+          status: z.enum(SERVICE_ORDER_STATUSES).optional(),
+          estimatedAmount: z.number().min(0).max(9_999_999).multipleOf(0.01).optional(),
+          finalAmount: z.number().min(0).max(9_999_999).multipleOf(0.01).optional(),
+          promisedFor: z.string().datetime().optional(),
+          notes: z.string().max(1000).optional(),
+        })
+        .parse(request.body);
+
+      return updateServiceOrder({ orderId: id, input, request });
+    },
+  );
+
+  app.post(
+    "/service-orders/:id/cancel",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      const { reason } = z
+        .object({ reason: z.string().min(3, "Informe o motivo.").max(500) })
+        .parse(request.body);
+
+      return cancelServiceOrder({ orderId: id, reason, request });
     },
   );
 }

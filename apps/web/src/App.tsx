@@ -30,6 +30,8 @@ import { LabelsPage } from "./features/labels/LabelsPage";
 import { Logo } from "./components/ui/logo";
 import { ReportsPage } from "./features/reports/ReportsPage";
 import { AfterSalesPage } from "./features/aftersales/AfterSalesPage";
+import { ServiceOrdersPage } from "@/features/aftersales/ServiceOrdersPage";
+import { CommissionRulesPage } from "@/features/reports/CommissionRulesPage";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 
 /**
@@ -260,6 +262,22 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <AfterSalesPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/comissoes"
+        element={
+          <RequireAuth>
+            <CommissionRulesPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/ordens-de-servico"
+        element={
+          <RequireAuth>
+            <ServiceOrdersPage />
           </RequireAuth>
         }
       />

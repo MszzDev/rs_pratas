@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RotateCcw, Search, ShieldCheck } from "lucide-react";
+import { BadgeCheck, RotateCcw, Search, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -111,6 +111,8 @@ export function AfterSalesPage() {
     queryFn: () => apiFetch<SessionRow[]>("/api/v1/cash/sessions?status=ABERTO"),
   });
 
+  const [certificadoEmitido, setCertificadoEmitido] = useState<string | null>(null);
+
   const returnable = useQuery({
     queryKey: ["returnable", selectedSale],
     queryFn: () => apiFetch<ReturnableInfo>(`/api/v1/sales/${selectedSale}/returnable`),
@@ -165,6 +167,30 @@ export function AfterSalesPage() {
       sale.code.toLowerCase().includes(saleSearch.toLowerCase()) ||
       sale.customer?.name.toLowerCase().includes(saleSearch.toLowerCase()),
   );
+
+  /**
+   * Certificado de prata 925 da peça.
+   *
+   * Emitido a partir do ITEM da venda, e não do produto: o certificado é
+   * daquela peça que aquela pessoa levou, com código próprio. Sair daqui é o
+   * caminho natural — é a tela em que a venda já está aberta na frente de quem
+   * atende, com a peça na mão.
+   */
+  const emitirCertificado = useMutation({
+    mutationFn: (saleItemId: string) =>
+      apiFetch<{ code: string }>("/api/v1/certificates", {
+        method: "POST",
+        body: { saleItemId },
+      }),
+    onSuccess: (certificado) => {
+      setError(null);
+      setCertificadoEmitido(certificado.code);
+    },
+    onError: (caught) =>
+      setError(
+        caught instanceof ApiError ? caught.message : "Não foi possível emitir o certificado.",
+      ),
+  });
 
   const totalToRefund = (returnable.data?.items ?? []).reduce(
     (sum, item) => sum + Number(item.valorPorPeca ?? 0) * (quantities[item.saleItemId] ?? 0),
@@ -241,7 +267,15 @@ export function AfterSalesPage() {
             </>
           )}
 
-          {selectedSale && returnable.data && (
+          {certificadoEmitido && (
+        <div className="mb-5">
+          <Alert tone="success" title={`Certificado ${certificadoEmitido} emitido`}>
+            Anote o código no certificado impresso. Ele identifica esta peça e este cliente.
+          </Alert>
+        </div>
+      )}
+
+      {selectedSale && returnable.data && (
             <form
               className="mb-8 rounded-lg border border-border bg-surface p-5"
               onSubmit={(event) => {
@@ -283,7 +317,17 @@ export function AfterSalesPage() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-end gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={emitirCertificado.isPending}
+                          onClick={() => emitirCertificado.mutate(item.saleItemId)}
+                        >
+                          <BadgeCheck className="h-4 w-4" aria-hidden />
+                          Certificado
+                        </Button>
+
                         <Field
                           label="Devolver"
                           type="number"
