@@ -33,11 +33,25 @@ services:
     # --prod=false e obrigatorio: com NODE_ENV=production o pnpm pula as
     # devDependencies, e o compilador (tsc) mora exatamente la. Sem isto o
     # build falha em "tsc: not found".
-    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @rs-pratas/api build
-    # A migração roda no start, e não no build, porque no Render o build não
-    # alcança o banco. Rodar aqui garante o schema aplicado antes da primeira
-    # requisição.
-    startCommand: cd apps/api && pnpm exec prisma migrate deploy && node dist/server.js
+    # O `seed` vai junto: ele cria os perfis e o catálogo de permissões, sem os
+    # quais o RBAC devolve "nenhuma permissão" para todo mundo e ninguém entra —
+    # um banco migrado mas não semeado parece pronto e não é. É idempotente
+    # (tudo upsert), então repetir a cada deploy não duplica nada.
+    #
+    # O demo-seed (lojas, produtos, contas de teste) NÃO entra aqui de
+    # propósito: ele se recusa a rodar com NODE_ENV=production.
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @rs-pratas/api build && cd apps/api && pnpm exec prisma migrate deploy && pnpm exec tsx prisma/seed.ts
+    # A migração roda no BUILD, não no start.
+    #
+    # O Render vigia a porta assim que o start começa e derruba o serviço se
+    # nada escutar dentro da janela dele. Aplicar quinze migrações num banco
+    # recém-criado consome esse tempo todo ANTES do primeiro listen — o
+    # processo era morto sem nunca chegar a responder, e de fora isso parece
+    # um serviço que simplesmente não existe.
+    #
+    # No build não há relógio correndo, e o schema continua pronto antes de
+    # qualquer requisição.
+    startCommand: cd apps/api && node dist/server.js
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
