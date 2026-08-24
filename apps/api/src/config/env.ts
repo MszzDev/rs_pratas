@@ -5,13 +5,20 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
   /**
-   * Aplica as migrações ao subir, logo depois de a porta abrir. Serve para
-   * hospedagem cujo build não alcança o banco. Fora daí, migrar é passo do
-   * deploy — não do processo que atende requisição.
+   * Aplica as migrações ao subir, logo depois de a porta abrir.
+   *
+   * LIGADO por padrão, e a escolha tem um porquê. O contrário — subir com o
+   * banco sem schema — não dá erro visível: a API responde, a tela abre e
+   * ninguém entra, sem nada explicando o motivo. Já migrar quando não há o que
+   * migrar custa milissegundos e não faz nada.
+   *
+   * Entre um custo desprezível e uma falha muda, o padrão fica do lado do
+   * custo. Quem trata migração como passo separado do deploy desliga com
+   * RUN_MIGRATIONS_ON_BOOT=false.
    */
   RUN_MIGRATIONS_ON_BOOT: z
     .enum(["true", "false"])
-    .default("false")
+    .default("true")
     .transform((valor) => valor === "true"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 
