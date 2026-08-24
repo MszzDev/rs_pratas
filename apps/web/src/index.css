@@ -46,8 +46,14 @@
     visibility: hidden;
   }
 
-  .print-sheet,
-  .print-sheet * {
+  /* O `body:has(...)` do bloco acima precisa ser repetido aqui.
+
+     Sem ele, este seletor tem especificidade MENOR que o que esconde
+     (0,1,0 contra 0,1,1), e o navegador mantém tudo invisível: a folha é
+     posicionada, ocupa a página e sai em branco. Foi exatamente o que
+     aconteceu — etiquetas imprimindo quatro páginas vazias. */
+  body:has(.print-sheet) .print-sheet,
+  body:has(.print-sheet) .print-sheet * {
     visibility: visible;
   }
 
