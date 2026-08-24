@@ -71,6 +71,11 @@ services:
         generateValue: true
       - key: TOTP_ENCRYPTION_KEY
         generateValue: true
+      # Sal do hash dos refresh tokens. Faltava aqui, e sem ela o processo nem
+      # sobe — foi o que derrubou os primeiros deploys em silêncio, porque a
+      # mensagem só aparece no log do serviço.
+      - key: REFRESH_TOKEN_PEPPER
+        generateValue: true
       # PREENCHA depois do primeiro deploy com a URL da tela. Sem isto o
       # navegador bloqueia toda chamada da tela para a API, e o sistema abre
       # mas não funciona.
