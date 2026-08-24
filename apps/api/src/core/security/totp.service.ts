@@ -1,43 +1,13 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { Secret, TOTP } from "otpauth";
 import { env } from "../../config/env.js";
 
 /**
- * O segredo TOTP é equivalente à segunda credencial do dono: vazou o segredo,
- * vazou o segundo fator. Por isso fica cifrado em repouso (AES-256-GCM) com uma
- * chave que vive só no ambiente — um dump do banco, sozinho, não permite gerar
- * códigos válidos.
+ * O segredo TOTP e equivalente a segunda credencial do dono: vazou o segredo,
+ * vazou o segundo fator. A cifra em repouso vive em core/security/crypto.ts,
+ * compartilhada com os tokens de integracao — sao o mesmo problema.
  */
-const ALGORITHM = "aes-256-gcm";
-
-function encryptionKey(): Buffer {
-  // Deriva 32 bytes da variável de ambiente, aceitando qualquer comprimento.
-  return createHash("sha256").update(env.TOTP_ENCRYPTION_KEY).digest();
-}
-
-export function encryptSecret(plain: string): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv(ALGORITHM, encryptionKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-
-  return [iv.toString("base64"), authTag.toString("base64"), encrypted.toString("base64")].join(":");
-}
-
-export function decryptSecret(payload: string): string {
-  const [ivPart, tagPart, dataPart] = payload.split(":");
-  if (!ivPart || !tagPart || !dataPart) {
-    throw new Error("Segredo TOTP com formato inválido.");
-  }
-
-  const decipher = createDecipheriv(ALGORITHM, encryptionKey(), Buffer.from(ivPart, "base64"));
-  decipher.setAuthTag(Buffer.from(tagPart, "base64"));
-
-  return Buffer.concat([
-    decipher.update(Buffer.from(dataPart, "base64")),
-    decipher.final(),
-  ]).toString("utf8");
-}
+export { decryptSecret, encryptSecret } from "./crypto.js";
 
 export interface TotpSetup {
   secret: string;

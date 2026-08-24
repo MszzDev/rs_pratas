@@ -17,6 +17,7 @@ import {
   MonitorSmartphone,
   Package,
   Percent,
+  Plug,
   RotateCcw,
   ScrollText,
   Settings,
@@ -105,6 +106,10 @@ interface Atalho {
 }
 
 const SUBPAGINAS: Record<string, Atalho[]> = {
+  "/configuracoes": [
+    { to: "/integracoes", label: "Integrações", icon: Plug, permission: "SETTINGS_MANAGE_APP" },
+  ],
+  "/integracoes": [{ to: "/configuracoes", label: "Configurações", icon: Settings }],
   "/relatorios": [
     { to: "/comissoes", label: "Comissões e metas", icon: Percent, permission: "COMMISSION_MANAGE" },
     { to: "/painel", label: "Painel", icon: LayoutDashboard },

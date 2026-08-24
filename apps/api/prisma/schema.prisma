@@ -213,17 +213,18 @@ model Company {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  stores      Store[]
-  users       User[]
-  auditLogs   AuditLog[]
-  appSettings AppSetting[]
+  stores       Store[]
+  users        User[]
+  auditLogs    AuditLog[]
+  appSettings  AppSetting[]
+  integrations Integration[]
 
-  categories     Category[]
-  sizeGrades     SizeGrade[]
-  products       Product[]
-  stockTransfers StockTransfer[]
-  inventories    Inventory[]
-  customers      Customer[]
+  categories      Category[]
+  sizeGrades      SizeGrade[]
+  products        Product[]
+  stockTransfers  StockTransfer[]
+  inventories     Inventory[]
+  customers       Customer[]
   labelTemplates  LabelTemplate[]
   commissionRules CommissionRule[]
   goals           Goal[]
@@ -257,15 +258,15 @@ model Store {
   /// O dono abre e fecha qualquer loja de onde estiver, e é ele quem fecha no
   /// fim do dia: deixar a loja fechar sozinha por inatividade esconderia o
   /// tablet que ficou ligado a noite toda.
-  isOpen        Boolean   @default(false)
-  openedAt      DateTime?
-  openedById    String?
-  openedBy      User?     @relation("StoreOpenedBy", fields: [openedById], references: [id])
+  isOpen           Boolean   @default(false)
+  openedAt         DateTime?
+  openedById       String?
+  openedBy         User?     @relation("StoreOpenedBy", fields: [openedById], references: [id])
   /// Tablet cujo login abriu a loja. Nulo quando o dono abriu manualmente.
   openedByDeviceId String?
-  closedAt      DateTime?
-  closedById    String?
-  closedBy      User?     @relation("StoreClosedBy", fields: [closedById], references: [id])
+  closedAt         DateTime?
+  closedById       String?
+  closedBy         User?     @relation("StoreClosedBy", fields: [closedById], references: [id])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -279,15 +280,15 @@ model Store {
   storeSettings    StoreSetting[]
   auditLogs        AuditLog[]
 
-  stockItems       StockItem[]
-  transfersSent    StockTransfer[] @relation("TransferOrigin")
+  stockItems        StockItem[]
+  transfersSent     StockTransfer[] @relation("TransferOrigin")
   transfersReceived StockTransfer[] @relation("TransferDestination")
-  inventories      Inventory[]
+  inventories       Inventory[]
 
-  cashSessions CashSession[]
-  sales        Sale[]
-  reservations Reservation[]
-  quotes       Quote[]
+  cashSessions    CashSession[]
+  sales           Sale[]
+  reservations    Reservation[]
+  quotes          Quote[]
   printJobs       PrintJob[]
   commissionRules CommissionRule[]
   goals           Goal[]
@@ -343,8 +344,8 @@ model User {
   deviceSessions       DeviceSession[]
   twoFactorCredential  TwoFactorCredential?
   stepUpTokens         StepUpToken[]
-  workSchedules        WorkSchedule[]        @relation("WorkScheduleUser")
-  workSchedulesCreated WorkSchedule[]        @relation("WorkScheduleCreatedBy")
+  workSchedules        WorkSchedule[]       @relation("WorkScheduleUser")
+  workSchedulesCreated WorkSchedule[]       @relation("WorkScheduleCreatedBy")
   timeClockEntries     TimeClockEntry[]
   auditLogs            AuditLog[]
 
@@ -364,13 +365,13 @@ model User {
 
   stockMovements StockMovement[]
 
-  storesOpened         Store[]        @relation("StoreOpenedBy")
-  storesClosed         Store[]        @relation("StoreClosedBy")
-  cashSessionsOpened   CashSession[]  @relation("CashSessionOpenedBy")
-  cashSessionsClosed   CashSession[]  @relation("CashSessionClosedBy")
+  storesOpened         Store[]          @relation("StoreOpenedBy")
+  storesClosed         Store[]          @relation("StoreClosedBy")
+  cashSessionsOpened   CashSession[]    @relation("CashSessionOpenedBy")
+  cashSessionsClosed   CashSession[]    @relation("CashSessionClosedBy")
   cashMovements        CashMovement[]
-  salesMade            Sale[]         @relation("SaleSeller")
-  saleDiscountsAllowed Sale[]         @relation("SaleDiscountAuthorizer")
+  salesMade            Sale[]           @relation("SaleSeller")
+  saleDiscountsAllowed Sale[]           @relation("SaleDiscountAuthorizer")
   printJobsRequested   PrintJob[]
   commissionRules      CommissionRule[]
   goals                Goal[]
@@ -475,9 +476,9 @@ model UserPermission {
 // =====================================================================
 
 model POSStation {
-  id       String @id @default(uuid())
+  id       String  @id @default(uuid())
   storeId  String
-  store    Store  @relation(fields: [storeId], references: [id])
+  store    Store   @relation(fields: [storeId], references: [id])
   code     String
   name     String
   isActive Boolean @default(true)
@@ -557,9 +558,9 @@ model Device {
 /// Nenhum destes campos pode ser null: toda maquininha pertence obrigatoriamente
 /// a loja + estação + caixa + tablet.
 model PaymentTerminal {
-  id             String                @id @default(uuid())
+  id             String @id @default(uuid())
   deviceId       String
-  device         Device                @relation(fields: [deviceId], references: [id])
+  device         Device @relation(fields: [deviceId], references: [id])
   cashRegisterId String
   posStationId   String
   storeId        String
@@ -728,10 +729,10 @@ model TimeClockEntry {
   nsr BigInt @unique @default(autoincrement()) // Número Sequencial de Registro (AFD)
 
   userId    String
-  user      User   @relation(fields: [userId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
   companyId String
   storeId   String
-  store     Store  @relation(fields: [storeId], references: [id])
+  store     Store   @relation(fields: [storeId], references: [id])
   /// Nulo quando a marcação não partiu de um tablet pareado — o funcionário
   /// bateu do computador da loja ou do próprio celular. A loja continua
   /// obrigatória: é ela que identifica onde a jornada foi cumprida.
@@ -745,7 +746,7 @@ model TimeClockEntry {
   isWithinTolerance Boolean? // calculado e congelado no momento da criação
   minutesLate       Int?
 
-  justification       String? // obrigatória (validação de app) para saída durante turno
+  justification        String? // obrigatória (validação de app) para saída durante turno
   justificationPending Boolean @default(false) // marcado quando type exige justificativa e ela não veio
 
   correctsEntryId  String?
@@ -798,7 +799,7 @@ enum DocumentAnalysisVerdict {
 /// atestado exige verificar com a fonte emissora, o que nenhum modelo faz —
 /// e uma recusa automática indevida tem consequência trabalhista real.
 model EmployeeDocument {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   companyId String
   storeId   String?
 
@@ -813,20 +814,20 @@ model EmployeeDocument {
   referenceStart DateTime?
   referenceEnd   DateTime?
 
-  fileName     String
-  fileMimeType String
-  fileSizeBytes Int
+  fileName       String
+  fileMimeType   String
+  fileSizeBytes  Int
   /// Caminho relativo no armazenamento — nunca uma URL pública.
   fileStorageKey String
   /// SHA-256 do conteúdo: identifica reenvio do mesmo arquivo.
-  fileChecksum String
+  fileChecksum   String
 
   status EmployeeDocumentStatus @default(PENDING_REVIEW)
 
-  reviewedAt     DateTime?
-  reviewedById   String?
-  reviewedBy     User?     @relation("EmployeeDocumentReviewer", fields: [reviewedById], references: [id])
-  reviewComment  String?
+  reviewedAt    DateTime?
+  reviewedById  String?
+  reviewedBy    User?     @relation("EmployeeDocumentReviewer", fields: [reviewedById], references: [id])
+  reviewComment String?
 
   /// Parecer automático — sugestão, não decisão.
   analysisVerdict   DocumentAnalysisVerdict?
@@ -911,9 +912,9 @@ model AppSetting {
 }
 
 model StoreSetting {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   storeId     String
-  store       Store  @relation(fields: [storeId], references: [id])
+  store       Store   @relation(fields: [storeId], references: [id])
   key         String
   value       Json
   updatedById String?
@@ -927,9 +928,9 @@ model StoreSetting {
 }
 
 model DeviceSetting {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   deviceId    String
-  device      Device @relation(fields: [deviceId], references: [id])
+  device      Device  @relation(fields: [deviceId], references: [id])
   key         String
   value       Json
   updatedById String?
@@ -1006,8 +1007,8 @@ model SizeGrade {
   companyId String
   company   Company @relation(fields: [companyId], references: [id])
 
-  code String
-  name String
+  code     String
+  name     String
   /// Tamanhos na ordem em que a loja fala deles: ["8","9",...,"30"].
   /// Array em vez de tabela filha: a grade é lida inteira, sempre, e nunca
   /// referenciada linha a linha.
@@ -1043,7 +1044,7 @@ model Product {
 
   /// Teor do metal. Prata 925 é o padrão da rede; o campo existe porque
   /// folheado e ouro entram no mostruário e não podem ser vendidos como prata.
-  material String @default("PRATA_925")
+  material    String   @default("PRATA_925")
   /// Peso em gramas. Decimal, não float: prata é vendida por peso e um erro de
   /// arredondamento aqui vira diferença de dinheiro.
   weightGrams Decimal? @db.Decimal(10, 3)
@@ -1060,7 +1061,7 @@ model Product {
   imageMimeType   String?
   /// SHA-256 do arquivo — serve de etiqueta de cache no navegador. Sem ele, a
   /// foto trocada continuaria aparecendo a antiga até alguém limpar o cache.
-  imageChecksum String?
+  imageChecksum   String?
 
   /// Produto com variação não é vendido direto: quem sai do estoque é a
   /// variação (o anel tamanho 18, não "o anel").
@@ -1087,9 +1088,9 @@ model ProductVariation {
   product   Product @relation(fields: [productId], references: [id])
   companyId String
 
-  sku String
+  sku        String
   /// O tamanho desta variação dentro da grade do produto ("18").
-  size String?
+  size       String?
   /// Outros atributos que distinguem a variação: cor da pedra, acabamento.
   attributes Json?
 
@@ -1136,12 +1137,12 @@ model StockItem {
   variationId String?
   variation   ProductVariation? @relation(fields: [variationId], references: [id])
 
-  quantity Int @default(0)
+  quantity         Int @default(0)
   /// Peças separadas para reserva de cliente. O saldo disponível para venda é
   /// `quantity - reservedQuantity`, nunca `quantity`.
   reservedQuantity Int @default(0)
   /// Abaixo disso a tela avisa. Zero desliga o aviso.
-  minQuantity Int @default(0)
+  minQuantity      Int @default(0)
 
   movements StockMovement[]
 
@@ -1167,7 +1168,7 @@ model StockMovement {
   stockItemId String
   stockItem   StockItem @relation(fields: [stockItemId], references: [id])
 
-  type StockMovementType
+  type     StockMovementType
   /// Positivo entra, negativo sai. O sinal é redundante com o `type` de
   /// propósito: a soma da coluna reconstrói o saldo sem interpretar o enum.
   quantity Int
@@ -1246,7 +1247,7 @@ model StockTransferItem {
   productId   String
   variationId String?
 
-  quantitySent Int
+  quantitySent     Int
   /// Preenchido só no recebimento. Diferente do enviado = divergência, que a
   /// tela precisa mostrar em vez de aceitar em silêncio.
   quantityReceived Int?
@@ -1269,10 +1270,10 @@ model Inventory {
   storeId   String
   store     Store   @relation(fields: [storeId], references: [id])
 
-  code   String
-  status InventoryStatus @default(ABERTO)
+  code    String
+  status  InventoryStatus @default(ABERTO)
   /// Contagem cega. Abrir uma contagem não-cega é ato do dono, e fica auditado.
-  isBlind Boolean @default(true)
+  isBlind Boolean         @default(true)
 
   startedAt   DateTime  @default(now())
   startedById String
@@ -1374,7 +1375,7 @@ model Customer {
   cpf   String?
   email String?
 
-  birthDate DateTime?
+  birthDate   DateTime?
   /// Tamanho de anel do cliente — a loja pergunta uma vez e usa nas próximas.
   ringSize    String?
   addressJson Json?
@@ -1406,10 +1407,10 @@ model Customer {
 /// Toda venda pertence a um turno. Sem isso não existe "fechar o caixa" — não
 /// haveria como dizer quais vendas o dinheiro da gaveta deveria cobrir.
 model CashSession {
-  id        String  @id @default(uuid())
+  id        String @id @default(uuid())
   companyId String
   storeId   String
-  store     Store   @relation(fields: [storeId], references: [id])
+  store     Store  @relation(fields: [storeId], references: [id])
 
   cashRegisterId String
   cashRegister   CashRegister @relation(fields: [cashRegisterId], references: [id])
@@ -1417,11 +1418,11 @@ model CashSession {
   code   String
   status CashSessionStatus @default(ABERTO)
 
-  openedById String
-  openedBy   User     @relation("CashSessionOpenedBy", fields: [openedById], references: [id])
-  openedAt   DateTime @default(now())
+  openedById    String
+  openedBy      User     @relation("CashSessionOpenedBy", fields: [openedById], references: [id])
+  openedAt      DateTime @default(now())
   /// Fundo de troco declarado na abertura.
-  openingAmount Decimal @db.Decimal(12, 2)
+  openingAmount Decimal  @db.Decimal(12, 2)
 
   closedById String?
   closedBy   User?     @relation("CashSessionClosedBy", fields: [closedById], references: [id])
@@ -1429,10 +1430,10 @@ model CashSession {
 
   /// O que a pessoa CONTOU na gaveta. Digitado sem ver o esperado — é o
   /// fechamento cego. Ver o número antes de contar faz a diferença sumir.
-  countedAmount Decimal? @db.Decimal(12, 2)
+  countedAmount    Decimal? @db.Decimal(12, 2)
   /// O que o sistema calculou que deveria haver. Gravado só no fechamento,
   /// depois de a contagem estar registrada.
-  expectedAmount Decimal? @db.Decimal(12, 2)
+  expectedAmount   Decimal? @db.Decimal(12, 2)
   /// contado - esperado. Negativo é falta.
   differenceAmount Decimal? @db.Decimal(12, 2)
   /// Obrigatória quando há diferença: caixa que não bate precisa de explicação
@@ -1462,9 +1463,9 @@ model CashMovement {
   companyId String
   storeId   String
 
-  type CashMovementType
+  type   CashMovementType
   /// Positivo entra na gaveta, negativo sai.
-  amount Decimal @db.Decimal(12, 2)
+  amount Decimal          @db.Decimal(12, 2)
 
   /// Só movimento em espécie mexe na gaveta. Uma venda no cartão é receita da
   /// loja, mas não é dinheiro para conferir no fechamento — por isso o valor
@@ -1487,10 +1488,10 @@ model CashMovement {
 }
 
 model Sale {
-  id        String  @id @default(uuid())
+  id        String @id @default(uuid())
   companyId String
   storeId   String
-  store     Store   @relation(fields: [storeId], references: [id])
+  store     Store  @relation(fields: [storeId], references: [id])
 
   sessionId String?
   session   CashSession? @relation(fields: [sessionId], references: [id])
@@ -1518,14 +1519,14 @@ model Sale {
 
   notes String?
 
-  completedAt  DateTime?
-  cancelledAt  DateTime?
+  completedAt   DateTime?
+  cancelledAt   DateTime?
   cancelledById String?
-  cancelReason String?
+  cancelReason  String?
 
   items    SaleItem[]
   payments SalePayment[]
-  returns  SaleReturn[] @relation("ReturnOriginalSale")
+  returns  SaleReturn[]  @relation("ReturnOriginalSale")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1554,7 +1555,7 @@ model SaleItem {
   productName String
   productSku  String
 
-  quantity  Int
+  quantity       Int
   /// Preço praticado nesta venda. Vem do servidor, nunca do aplicativo.
   unitPrice      Decimal @db.Decimal(12, 2)
   discountAmount Decimal @default(0) @db.Decimal(12, 2)
@@ -1608,10 +1609,10 @@ model SalePayment {
 /// A peça continua na loja, mas some do saldo disponível — é isso que impede
 /// vender duas vezes a mesma aliança que alguém já veio buscar sexta-feira.
 model Reservation {
-  id        String  @id @default(uuid())
+  id        String @id @default(uuid())
   companyId String
   storeId   String
-  store     Store   @relation(fields: [storeId], references: [id])
+  store     Store  @relation(fields: [storeId], references: [id])
 
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id])
@@ -1621,7 +1622,7 @@ model Reservation {
 
   productId   String
   variationId String?
-  quantity    Int    @default(1)
+  quantity    Int     @default(1)
 
   /// Sinal pago. Fica registrado aqui e vira desconto quando a reserva virar
   /// venda.
@@ -1647,13 +1648,13 @@ model Reservation {
 
 /// Orçamento: aba separada do PDV, sem efeito nenhum sobre o estoque.
 model Quote {
-  id        String  @id @default(uuid())
+  id        String @id @default(uuid())
   companyId String
   storeId   String
-  store     Store   @relation(fields: [storeId], references: [id])
+  store     Store  @relation(fields: [storeId], references: [id])
 
-  customerId String?
-  customer   Customer? @relation(fields: [customerId], references: [id])
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
   /// Quando o cliente não é cadastrado — orçamento é justamente o momento em
   /// que ele ainda está decidindo.
   customerName  String?
@@ -1779,10 +1780,10 @@ model LabelTemplate {
 /// papel, perde a rede, trava — e sem fila o funcionário não sabe se a
 /// etiqueta saiu, e reimprime até sair errado.
 model PrintJob {
-  id        String  @id @default(uuid())
+  id        String @id @default(uuid())
   companyId String
   storeId   String
-  store     Store   @relation(fields: [storeId], references: [id])
+  store     Store  @relation(fields: [storeId], references: [id])
 
   /// Tablet que deve imprimir. Nulo enquanto qualquer um da loja pode pegar.
   deviceId String?
@@ -1857,8 +1858,8 @@ model CommissionRule {
   storeId String?
   store   Store?  @relation(fields: [storeId], references: [id])
   /// Nulo = vale para todos os vendedores da abrangência acima.
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id])
+  userId  String?
+  user    User?   @relation(fields: [userId], references: [id])
 
   name  String
   basis CommissionBasis @default(FATURAMENTO)
@@ -1893,9 +1894,9 @@ model Goal {
   scope  GoalScope
   /// Preenchido quando o escopo é VENDEDOR.
   userId String?
-  user   User?   @relation(fields: [userId], references: [id])
+  user   User?     @relation(fields: [userId], references: [id])
 
-  period    GoalPeriod
+  period      GoalPeriod
   /// Primeiro dia do período. Guardado como data para o mês de referência ser
   /// inequívoco — "meta de março" e não "meta dos últimos 30 dias".
   periodStart DateTime
@@ -1968,8 +1969,8 @@ model Warranty {
   /// prometido ao cliente.
   terms String
 
-  voidedAt    DateTime?
-  voidReason  String?
+  voidedAt   DateTime?
+  voidReason String?
 
   claims WarrantyClaim[]
 
@@ -1991,7 +1992,7 @@ model WarrantyClaim {
   companyId String
   storeId   String
 
-  description String
+  description    String
   /// Se o defeito estava coberto. Nulo enquanto ninguém decidiu.
   approved       Boolean?
   decisionReason String?
@@ -2031,7 +2032,7 @@ model Certificate {
   material    String
   weightGrams Decimal? @db.Decimal(10, 3)
   /// Descrição livre de pedras, banho, acabamento.
-  details String?
+  details     String?
 
   customerName String?
   issuedAt     DateTime @default(now())
@@ -2103,7 +2104,7 @@ model SaleReturnItem {
   saleItemId String
   saleItem   SaleItem @relation(fields: [saleItemId], references: [id])
 
-  quantity Int
+  quantity     Int
   /// Valor devolvido por este item — o que foi pago por ele, não o preço de
   /// hoje.
   refundAmount Decimal @db.Decimal(12, 2)
@@ -2136,7 +2137,7 @@ model ServiceOrder {
   /// uma peça de fora.
   productId String?
 
-  description  String
+  description     String
   /// Estado em que a peça chegou. Descrito na entrada para não virar
   /// discussão na retirada.
   intakeCondition String
@@ -2144,7 +2145,7 @@ model ServiceOrder {
   estimatedAmount Decimal? @db.Decimal(12, 2)
   finalAmount     Decimal? @db.Decimal(12, 2)
   /// Coberto pela garantia — nesse caso não se cobra do cliente.
-  underWarranty Boolean @default(false)
+  underWarranty   Boolean  @default(false)
 
   promisedFor DateTime?
   deliveredAt DateTime?
@@ -2202,20 +2203,20 @@ model PieceRequest {
   /// "aquele anel de coração com pedrinha azul" é o que o cliente sabe dizer,
   /// e forçar a escolha de um produto do catálogo impediria registrar
   /// justamente o que a loja não tem.
-  description String
+  description  String
   /// Peça do catálogo, quando o pedido é de algo que existe mas está em falta.
-  productId   String?
-  size        String?
+  productId    String?
+  size         String?
   /// Quanto o cliente topa pagar. Ajuda a decidir se vale encomendar.
   budgetAmount Decimal? @db.Decimal(12, 2)
 
   notes String?
 
   /// Preenchido quando a peça chega e o cliente é avisado.
-  notifiedAt   DateTime?
+  notifiedAt      DateTime?
   /// Venda gerada quando o cliente veio buscar.
   convertedSaleId String?
-  cancelReason String?
+  cancelReason    String?
 
   createdById String
   createdBy   User     @relation("PieceRequestCreatedBy", fields: [createdById], references: [id])
@@ -2226,4 +2227,86 @@ model PieceRequest {
   @@index([storeId, status])
   @@index([customerPhone])
   @@map("piece_requests")
+}
+
+// =====================================================================
+// INTEGRAÇÕES (Fase 7)
+// =====================================================================
+
+enum IntegrationProvider {
+  NUVEMSHOP
+  MERCADOPAGO
+  REDE
+}
+
+enum IntegrationStatus {
+  DESCONECTADA
+  CONECTADA
+  ERRO
+}
+
+/// Credencial de um serviço externo.
+///
+/// O token fica CIFRADO em repouso (AES-256-GCM, chave só no ambiente): um
+/// dump do banco, sozinho, não dá acesso à conta da loja no Mercado Pago nem
+/// na Nuvemshop. É a mesma proteção do segredo de 2FA, pelo mesmo motivo —
+/// quem tem o token opera em nome do dono.
+model Integration {
+  id        String              @id @default(uuid())
+  companyId String
+  company   Company             @relation(fields: [companyId], references: [id])
+  provider  IntegrationProvider
+  status    IntegrationStatus   @default(DESCONECTADA)
+
+  /// Identificador da conta no serviço (loja da Nuvemshop, usuário do MP).
+  externalAccountId    String?
+  /// AES-256-GCM. NUNCA sai da API — nem para o dono.
+  credentialsEncrypted String?
+
+  /// Loja do RS Pratas cujo estoque alimenta o site. Nulo = ainda não escolhida.
+  storeId String?
+
+  lastSyncAt    DateTime?
+  lastError     String?
+  connectedAt   DateTime?
+  connectedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events IntegrationEvent[]
+
+  @@unique([companyId, provider])
+  @@map("integrations")
+}
+
+/// Tudo que chegou de fora, gravado ANTES de ser processado.
+///
+/// Webhook é a única parte do sistema que não se pode pedir de novo: se o
+/// processamento falhar e o evento não tiver sido guardado, o pedido some e
+/// ninguém fica sabendo. Guardar primeiro e processar depois torna a falha
+/// recuperável — e o externalId impede que a reentrega do mesmo evento vire
+/// dois pedidos.
+model IntegrationEvent {
+  id            String      @id @default(uuid())
+  integrationId String
+  integration   Integration @relation(fields: [integrationId], references: [id])
+  companyId     String
+
+  /// Identificador do evento no serviço externo, quando ele manda um.
+  externalId String?
+  topic      String
+  payload    Json
+
+  processedAt DateTime?
+  error       String?
+  /// Venda criada a partir deste evento, quando houve.
+  saleId      String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([integrationId, externalId])
+  @@index([companyId, createdAt])
+  @@index([integrationId, processedAt])
+  @@map("integration_events")
 }
