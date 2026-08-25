@@ -21,6 +21,7 @@ import {
   markQuoteConverted,
   prepareQuoteConversion,
 } from "./quotes.service.js";
+import { sendSaleReceipt, sendWarrantyEmail } from "./receipt.service.js";
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 const moneySchema = z.number().min(0).max(9_999_999).multipleOf(0.01);
@@ -326,6 +327,31 @@ export async function saleRoutes(app: FastifyInstance) {
       const { saleId } = z.object({ saleId: z.string().uuid() }).parse(request.body);
 
       return markQuoteConverted({ quoteId: id, saleId, request });
+    },
+  );
+
+  /**
+   * Comprovante por e-mail.
+   *
+   * Rota propria, e nao um passo dentro da venda: o envio precisa poder ser
+   * REPETIDO. E-mail digitado errado no cadastro e o caso comum, e sem
+   * reenvio a unica saida seria refazer a venda.
+   */
+  app.post(
+    "/sales/:id/receipt",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      return sendSaleReceipt({ saleId: id, request });
+    },
+  );
+
+  app.post(
+    "/warranties/:id/email",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      return sendWarrantyEmail({ warrantyId: id, request });
     },
   );
 }

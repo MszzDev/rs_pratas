@@ -12,6 +12,7 @@ import { PaymentDialog } from "./PaymentDialog";
 import type { CartLine, StockRow } from "./types";
 import { groupByProduct } from "./group-stock";
 import { StorePicker } from "../stores/store-picker";
+import { useBarcodeScanner } from "./use-barcode-scanner";
 
 interface Reservation {
   id: string;
@@ -162,6 +163,30 @@ export function PosPage() {
     void queryClient.invalidateQueries({ queryKey: ["reservations"] });
   }
 
+  /**
+   * Leitura do código de barras da etiqueta.
+   *
+   * Casa pelo código EXATO, e não pela busca: o leitor entrega o código
+   * inteiro, e uma correspondência parcial poderia colocar no carrinho a peça
+   * errada — quem bipa confia no som e não confere a tela.
+   *
+   * Sem correspondência, o código cai na busca junto com o aviso. Assim o
+   * vendedor VÊ o que foi lido, em vez de bipar e nada acontecer.
+   */
+  useBarcodeScanner((codigo) => {
+    const lido = codigo.trim();
+    const linha = (stock.data ?? []).find((row) => row.sku.toUpperCase() === lido.toUpperCase());
+
+    if (linha) {
+      addToCart(linha);
+      setSearch("");
+      return;
+    }
+
+    setSearch(lido);
+    setError("Nenhuma peça com o código " + lido + ".");
+  });
+
   return (
     <PageShell title="Venda" description="Monte o carrinho e finalize no caixa aberto da loja.">
       {error && (
@@ -227,7 +252,7 @@ export function PosPage() {
                 label="Buscar peça"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Nome ou código"
+                placeholder="Nome ou código — ou bipe a etiqueta"
               />
             </div>
 
