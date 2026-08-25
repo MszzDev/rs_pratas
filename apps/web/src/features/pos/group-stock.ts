@@ -6,6 +6,7 @@ export interface GroupedProduct {
   /** SKU do produto, sem o sufixo do tamanho. */
   sku: string;
   imageChecksum: string | null;
+  imageExternalUrl: string | null;
   /** Menor e maior preço entre os tamanhos — quase sempre iguais. */
   precoMin: number;
   precoMax: number;
@@ -54,6 +55,7 @@ export function groupByProduct(rows: StockRow[]): GroupedProduct[] {
       // para descobrir o código do produto.
       sku: row.size ? row.sku.replace(new RegExp(`-${row.size}$`), "") : row.sku,
       imageChecksum: row.imageChecksum,
+      imageExternalUrl: row.imageExternalUrl,
       precoMin: preco,
       precoMax: preco,
       disponivelTotal: row.availableQuantity,

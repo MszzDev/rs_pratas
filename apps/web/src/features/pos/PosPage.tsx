@@ -119,6 +119,7 @@ export function PosPage() {
               sku: row.sku,
               salePrice: row.salePrice,
               imageChecksum: row.imageChecksum,
+              imageExternalUrl: row.imageExternalUrl,
               available: row.availableQuantity,
               quantity: 1,
             },
@@ -283,6 +284,7 @@ export function PosPage() {
                         <ProductPhoto
                           productId={grupo.productId}
                           checksum={grupo.imageChecksum}
+                          externalUrl={grupo.imageExternalUrl}
                           alt={grupo.name}
                           size="md"
                         />
@@ -371,6 +373,7 @@ export function PosPage() {
                       <ProductPhoto
                         productId={line.productId}
                         checksum={line.imageChecksum}
+                        externalUrl={line.imageExternalUrl}
                         alt={line.name}
                         size="sm"
                       />

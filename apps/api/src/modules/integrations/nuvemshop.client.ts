@@ -21,6 +21,8 @@ export interface NuvemshopCredentials {
 export interface NuvemshopProduct {
   id: number;
   name: Record<string, string> | string;
+  /** Fotos publicadas na loja virtual, na ordem em que aparecem lá. */
+  images?: Array<{ id: number; src: string; position?: number }>;
   variants: Array<{
     id: number;
     sku: string | null;
@@ -59,11 +61,15 @@ export interface NuvemshopOrder {
  * "erro interno" manda o dono adivinhar.
  */
 export class NuvemshopError extends AppError {
+  /** O status que a Nuvemshop devolveu, preservado para quem precisa distinguir. */
+  readonly upstreamStatus: number;
+
   constructor(status: number, message: string) {
     // 400 e nao 502: quem erra e a credencial que o dono colou, e e ele
     // quem corrige.
     super(400, "INTEGRATION_REJECTED", message);
     this.name = "NuvemshopError";
+    this.upstreamStatus = status;
   }
 }
 
@@ -107,8 +113,23 @@ export function getStore(credentials: NuvemshopCredentials) {
   );
 }
 
-export function listProducts(credentials: NuvemshopCredentials, page = 1) {
-  return request<NuvemshopProduct[]>(credentials, `/products?per_page=200&page=${page}`);
+/**
+ * Uma página do catálogo. Página além da última devolve lista vazia.
+ *
+ * A Nuvemshop responde 404 quando se pede uma página que não existe — com a
+ * mensagem "Last page is 3", que é informação, não erro. Sem tratar isso, a
+ * importação percorria tudo certinho e terminava mostrando ao dono um erro
+ * vermelho no fim de um trabalho que deu certo.
+ */
+export async function listProducts(credentials: NuvemshopCredentials, page = 1) {
+  try {
+    return await request<NuvemshopProduct[]>(credentials, `/products?per_page=200&page=${page}`);
+  } catch (erro) {
+    if (erro instanceof NuvemshopError && erro.upstreamStatus === 404) {
+      return [];
+    }
+    throw erro;
+  }
 }
 
 export function listOrders(credentials: NuvemshopCredentials, desde?: Date) {

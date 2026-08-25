@@ -33,6 +33,7 @@ interface QuoteLine {
   size: string | null;
   salePrice: string | null;
   imageChecksum: string | null;
+  imageExternalUrl: string | null;
   quantity: number;
 }
 
@@ -146,6 +147,7 @@ export function QuotesPage() {
               size: row.size,
               salePrice: row.salePrice,
               imageChecksum: row.imageChecksum,
+              imageExternalUrl: row.imageExternalUrl,
               quantity: 1,
             },
           ];
@@ -235,6 +237,7 @@ export function QuotesPage() {
                           <ProductPhoto
                             productId={grupo.productId}
                             checksum={grupo.imageChecksum}
+                            externalUrl={grupo.imageExternalUrl}
                             alt={grupo.name}
                             size="sm"
                           />
@@ -295,6 +298,7 @@ export function QuotesPage() {
                     <ProductPhoto
                       productId={line.productId}
                       checksum={line.imageChecksum}
+                      externalUrl={line.imageExternalUrl}
                       alt={line.name}
                       size="sm"
                     />

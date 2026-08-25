@@ -25,6 +25,7 @@ interface StockRow {
   minQuantity: number;
   lowStock: boolean;
   imageChecksum: string | null;
+  imageExternalUrl: string | null;
 }
 
 interface Movement {
@@ -341,6 +342,7 @@ export function StockPage() {
               <ProductPhoto
                 productId={row.productId}
                 checksum={row.imageChecksum}
+                externalUrl={row.imageExternalUrl}
                 alt={row.name}
                 size="md"
               />

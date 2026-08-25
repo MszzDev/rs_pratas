@@ -28,6 +28,7 @@ interface Product {
   isActive: boolean;
   /** Nulo = sem foto. Também é a chave de cache da imagem. */
   imageChecksum: string | null;
+  imageExternalUrl: string | null;
   category: { name: string } | null;
   variations: Variation[];
   stockItems: Array<{ quantity: number; reservedQuantity: number }>;
@@ -547,6 +548,7 @@ export function ProductsPage() {
                 <ProductPhoto
                   productId={product.id}
                   checksum={product.imageChecksum}
+                  externalUrl={product.imageExternalUrl}
                   alt={product.name}
                   size="lg"
                 />

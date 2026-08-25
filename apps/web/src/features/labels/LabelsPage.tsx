@@ -51,6 +51,7 @@ interface BatchRow {
   copies: number;
   salePrice: string | null;
   imageChecksum: string | null;
+  imageExternalUrl: string | null;
 }
 
 /** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
@@ -439,6 +440,7 @@ export function LabelsPage() {
                         <ProductPhoto
                           productId={row.productId}
                           checksum={row.imageChecksum}
+                          externalUrl={row.imageExternalUrl}
                           alt={row.name}
                           size="sm"
                         />

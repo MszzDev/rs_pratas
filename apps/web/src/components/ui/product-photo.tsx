@@ -26,12 +26,21 @@ const SIZES = {
 export function ProductPhoto({
   productId,
   checksum,
+  externalUrl,
   alt,
   size = "md",
   className,
 }: {
   productId: string;
   checksum: string | null | undefined;
+  /**
+   * Foto que mora na loja virtual, trazida pela importação.
+   *
+   * Só vale quando a peça não tem foto enviada por aqui: quem fotografou a
+   * joia no balcão fez isso por um motivo, e a foto do site não passa por
+   * cima dela.
+   */
+  externalUrl?: string | null | undefined;
   alt: string;
   size?: keyof typeof SIZES;
   className?: string;
@@ -74,7 +83,12 @@ export function ProductPhoto({
     className,
   );
 
-  if (!url) {
+  // Sem foto própria, vale a da loja virtual. Ela vem direto do endereço
+  // publicado lá — não passa pela API, porque não há o que conferir: é a mesma
+  // imagem que qualquer pessoa vê no site da loja.
+  const exibida = url ?? externalUrl ?? null;
+
+  if (!exibida) {
     return (
       <div className={cn(base, "flex items-center justify-center")} aria-hidden>
         <Gem className="h-1/2 w-1/2 text-text-muted/50" />
@@ -84,8 +98,9 @@ export function ProductPhoto({
 
   return (
     <img
-      src={url}
+      src={exibida}
       alt={alt}
+      loading="lazy"
       // Peça é fotografada de perto e quase sempre fora do quadrado; `cover`
       // preenche a moldura sem deformar a joia.
       className={cn(base, "object-cover")}

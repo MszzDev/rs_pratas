@@ -79,6 +79,17 @@ export async function importProductsFromNuvemshop(params: {
     for (const produto of produtos) {
       const nome = nuvemshop.nomeDe(produto.name);
 
+      /**
+       * A primeira foto da peça, na ordem em que aparece na loja virtual.
+       *
+       * É o endereço que fica guardado, não o arquivo: as fotos já estão
+       * publicadas lá, e baixá-las encheria o disco do servidor — que no plano
+       * gratuito é apagado a cada publicação, levando as fotos junto.
+       */
+      const foto = [...(produto.images ?? [])].sort(
+        (a, b) => (a.position ?? 0) - (b.position ?? 0),
+      )[0]?.src;
+
       for (const variante of produto.variants) {
         total += 1;
 
@@ -94,13 +105,17 @@ export async function importProductsFromNuvemshop(params: {
         });
 
         if (existente) {
-          // Só nome e preço de venda: custo, peso e categoria são conhecimento
-          // do ERP que a loja virtual não tem.
+          // Só nome, preço de venda e foto: custo, peso e categoria são
+          // conhecimento do ERP que a loja virtual não tem.
           await prisma.product.update({
             where: { id: existente.id },
             data: {
               name: nome || existente.name,
               ...(preco !== null ? { salePrice: preco } : {}),
+              // Foto enviada pelo sistema tem precedência: quem fotografou a
+              // peça no balcão fez isso por um motivo, e a importação não
+              // desfaz esse trabalho.
+              ...(foto && !existente.imageStorageKey ? { imageExternalUrl: foto } : {}),
             },
           });
           atualizados += 1;
@@ -116,6 +131,7 @@ export async function importProductsFromNuvemshop(params: {
             // Custo zero e não nulo: o campo é obrigatório para a margem, e
             // zero é honesto — diz "ainda não sabemos", em vez de inventar.
             costPrice: 0,
+            ...(foto ? { imageExternalUrl: foto } : {}),
           },
         });
         criados += 1;

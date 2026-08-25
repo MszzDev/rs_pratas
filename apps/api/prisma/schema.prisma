@@ -1080,6 +1080,13 @@ model Product {
   /// binário no banco) mantém o dump de backup no tamanho do texto.
   imageStorageKey String?
   imageMimeType   String?
+  /// Foto que mora na loja virtual, trazida junto com o produto importado.
+  ///
+  /// Guardar o endereço em vez do arquivo é o que torna a importação viável
+  /// aqui: as fotos já estão publicadas na Nuvemshop, e baixá-las encheria o
+  /// disco do servidor — que, no plano gratuito, é apagado a cada publicação.
+  /// Vale enquanto a peça existir lá; foto enviada por aqui tem precedência.
+  imageExternalUrl String?
   /// SHA-256 do arquivo — serve de etiqueta de cache no navegador. Sem ele, a
   /// foto trocada continuaria aparecendo a antiga até alguém limpar o cache.
   imageChecksum   String?
