@@ -18,6 +18,7 @@ import { PageShell } from "@/components/ui/page-shell";
 import { API_BASE_URL, apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-context";
 import { lerCodigoDeAutorizacao, limparCodigoDeAutorizacao } from "./authorization-code";
+import { LgpdRequests } from "./LgpdRequests";
 
 type Provider = "NUVEMSHOP" | "MERCADOPAGO" | "REDE";
 type Status = "DESCONECTADA" | "CONECTADA" | "ERRO";
@@ -618,6 +619,8 @@ export function IntegrationsPage() {
           );
         })}
       </ul>
+
+      <LgpdRequests />
 
       <WebhookAddresses />
 

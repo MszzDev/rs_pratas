@@ -17,6 +17,11 @@ import {
   importCustomersFromNuvemshop,
   importProductsFromNuvemshop,
 } from "./nuvemshop-import.service.js";
+import {
+  exportCustomerData,
+  fulfillLgpdRequest,
+  listLgpdRequests,
+} from "./lgpd.service.js";
 
 const providerParam = z.object({
   provider: z.enum(["NUVEMSHOP", "MERCADOPAGO", "REDE"]),
@@ -153,6 +158,39 @@ export async function integrationRoutes(app: FastifyInstance) {
     "/integrations/nuvemshop/import-customers",
     { preHandler: [app.requireAuth, requirePermission("CUSTOMER_CREATE")] },
     async (request) => importCustomersFromNuvemshop({ request }),
+  );
+
+  // ----------------------------------------------------------------- LGPD
+
+  /**
+   * A fila de pedidos de dado pessoal vindos da loja virtual.
+   *
+   * Atender e um ato do dono, nao automatico: a mensagem chega pela internet,
+   * e apagar cliente porque uma mensagem mandou nao tem volta.
+   */
+  app.get(
+    "/integrations/lgpd",
+    { preHandler: [app.requireAuth, requirePermission("SETTINGS_MANAGE_APP")] },
+    async (request) => listLgpdRequests(request),
+  );
+
+  app.post(
+    "/integrations/lgpd/:id/fulfill",
+    { preHandler: [app.requireAuth, requirePermission("SETTINGS_MANAGE_APP")] },
+    async (request) => {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      return fulfillLgpdRequest({ eventId: id, request });
+    },
+  );
+
+  /** A copia dos dados de um cliente, para o dono entregar a ele. */
+  app.get(
+    "/integrations/lgpd/customers/:id",
+    { preHandler: [app.requireAuth, requirePermission("SETTINGS_MANAGE_APP")] },
+    async (request) => {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      return exportCustomerData({ customerId: id, request });
+    },
   );
 
   // ------------------------------------------------------------- webhooks
