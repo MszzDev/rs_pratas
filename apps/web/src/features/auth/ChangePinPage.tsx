@@ -30,7 +30,7 @@ const TITULOS: Record<Etapa, string> = {
  */
 export function ChangePinPage() {
   const navigate = useNavigate();
-  const { user, loading, markPinChanged } = useAuth();
+  const { user, loading, logout, markPinChanged } = useAuth();
 
   const [etapa, setEtapa] = useState<Etapa>("atual");
   const [atual, setAtual] = useState("");
@@ -112,7 +112,7 @@ export function ChangePinPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-background-secondary px-4 py-8">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-brand px-4 py-8">
       <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-7 shadow-soft">
         <header className="mb-6 flex flex-col items-center text-center">
           <LogoMark className="h-16 w-16" />
@@ -185,11 +185,31 @@ export function ChangePinPage() {
                 </Button>
               )}
 
-              {/* Quem já venceu não sai daqui: o sistema pediria a troca de novo
-                  na próxima tela, e o botão só daria a volta. */}
               {!vencido && (
                 <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
                   Agora não
+                </Button>
+              )}
+
+              {/*
+                A saída que faltava.
+
+                Quem tem o PIN vencido é obrigado a trocá-lo — mas quem não
+                LEMBRA o PIN atual não consegue trocar, e sem esta porta ficava
+                preso na tela para sempre, num tablet em modo quiosque onde não
+                há como fechar o aplicativo. Sair devolve à tela de entrada, de
+                onde dá para pedir um PIN temporário ou entrar com outra conta.
+              */}
+              {vencido && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    void logout();
+                    navigate(Capacitor.isNativePlatform() ? "/pin" : "/login", { replace: true });
+                  }}
+                >
+                  Não lembro meu PIN atual — sair
                 </Button>
               )}
             </div>

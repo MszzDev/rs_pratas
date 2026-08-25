@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { apiFetch } from "@/lib/api-client";
-import { saveDeviceId } from "@/lib/secure-storage";
+import { saveDeviceId, saveDeviceLabel } from "@/lib/secure-storage";
 
 /**
  * O tablet se apresenta ao sistema e espera o dono vinculá-lo a uma loja.
@@ -69,6 +69,7 @@ export function useDeviceRegistration(): EstadoDoTablet {
           // Guarda o identificador para o login por PIN e para o ponto: a
           // partir daqui o tablet sabe quem ele é sem perguntar de novo.
           await saveDeviceId(registro.deviceId);
+          await saveDeviceLabel(registro.storeName ?? "", registro.deviceName ?? "");
 
           setEstado({
             estado: "vinculado",

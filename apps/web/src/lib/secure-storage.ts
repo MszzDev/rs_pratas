@@ -47,6 +47,40 @@ export async function saveDeviceId(deviceId: string): Promise<void> {
   localStorage.setItem(DEVICE_ID_KEY, deviceId);
 }
 
+const DEVICE_LABEL_KEY = "rs.deviceLabel";
+
+/**
+ * A que loja este tablet pertence, em texto.
+ *
+ * Guardado junto com o identificador para a tela de entrada poder dizer
+ * "Quiosque Elis Maas · Balcão" antes de qualquer login. Quem chega para
+ * trabalhar precisa reconhecer o aparelho como o da loja dele — e um tablet
+ * que não diz onde está é um tablet que pode ser o da loja errada.
+ */
+export async function saveDeviceLabel(loja: string, aparelho: string): Promise<void> {
+  const valor = JSON.stringify({ loja, aparelho });
+
+  if (isNative) {
+    await Preferences.set({ key: DEVICE_LABEL_KEY, value: valor });
+    return;
+  }
+  localStorage.setItem(DEVICE_LABEL_KEY, valor);
+}
+
+export async function readDeviceLabel(): Promise<{ loja: string; aparelho: string } | null> {
+  const valor = isNative
+    ? (await Preferences.get({ key: DEVICE_LABEL_KEY })).value
+    : localStorage.getItem(DEVICE_LABEL_KEY);
+
+  if (!valor) return null;
+
+  try {
+    return JSON.parse(valor) as { loja: string; aparelho: string };
+  } catch {
+    return null;
+  }
+}
+
 export async function readDeviceId(): Promise<string | null> {
   if (isNative) {
     const { value } = await Preferences.get({ key: DEVICE_ID_KEY });
