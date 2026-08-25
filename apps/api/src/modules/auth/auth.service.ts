@@ -7,6 +7,7 @@ import { audit } from "../../core/audit.service.js";
 import { badRequest, forbidden, notFound, tooManyRequests, unauthorized } from "../../core/errors.js";
 import { burnVerificationTime, verifySecret } from "../../core/security/password.service.js";
 import { getEffectivePermissions } from "../../core/rbac/permissions.engine.js";
+import { diasAteVencer, PIN_VALIDO_POR_DIAS } from "./pin.service.js";
 import {
   generateRefreshToken,
   hashRefreshToken,
@@ -44,6 +45,13 @@ export interface IssuedSession {
      */
     pinExpired: boolean;
     /**
+     * Dias ate o PIN vencer. Nulo quando nao ha PIN.
+     *
+     * A tela avisa a partir de 5 dias — cedo o bastante para a pessoa trocar
+     * quando for conveniente, e nao no meio de um atendimento.
+     */
+    pinExpiresInDays: number | null;
+    /**
      * O perfil exige 2FA e ele ainda não foi confirmado. O app usa isto para
      * levar direto à configuração, em vez de deixar o usuário esbarrar num 403
      * em cada tela que tentar abrir.
@@ -59,9 +67,6 @@ export interface IssuedSession {
     permissions: string[];
   };
 }
-
-/** Prazo de validade do PIN. */
-const PIN_VALIDO_POR_DIAS = 30;
 
 /**
  * O PIN venceu?
@@ -189,6 +194,7 @@ export async function issueSessionForUser(params: {
       mustChangePassword: user.mustChangePassword,
       mustCreatePin: user.mustCreatePin,
       pinExpired: isPinExpired(user),
+      pinExpiresInDays: diasAteVencer(user.pinChangedAt),
       twoFactorPending: await isTwoFactorPending(user),
       permissions: [...(await getEffectivePermissions(user.id))],
     },
@@ -530,6 +536,7 @@ export async function refreshSession(params: {
       mustChangePassword: session.user.mustChangePassword,
       mustCreatePin: session.user.mustCreatePin,
       pinExpired: isPinExpired(session.user),
+      pinExpiresInDays: diasAteVencer(session.user.pinChangedAt),
       twoFactorPending: await isTwoFactorPending(session.user),
       permissions: [...(await getEffectivePermissions(session.user.id))],
     },

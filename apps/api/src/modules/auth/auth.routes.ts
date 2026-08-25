@@ -30,6 +30,14 @@ import {
   startFirstAccess,
   type OnboardingTokenPayload,
 } from "./first-access.service.js";
+import { requireRole } from "../../core/rbac/require-role.hook.js";
+import {
+  approvePinReset,
+  changeOwnPin,
+  listPinResets,
+  rejectPinReset,
+  requestPinReset,
+} from "./pin.service.js";
 
 export async function authRoutes(app: FastifyInstance) {
   const signAccessToken = (payload: AccessTokenPayload) => app.jwt.sign(payload);
@@ -159,4 +167,63 @@ export async function authRoutes(app: FastifyInstance) {
       deviceId: request.user.deviceId,
     };
   });
+
+  // ------------------------------------------------------------------ PIN
+
+  /** O funcionario troca o proprio PIN. Exige o atual. */
+  app.post("/pin/change", { preHandler: app.requireAuth }, async (request) => {
+    const body = z
+      .object({
+        currentPin: z.string().min(4).max(8),
+        newPin: z.string().regex(/^[0-9]{6}$/, "O PIN novo precisa ter 6 numeros."),
+      })
+      .parse(request.body);
+
+    return changeOwnPin({ ...body, request });
+  });
+
+  /**
+   * Pedido de PIN temporario, feito da tela de login.
+   *
+   * Sem sessao: quem nao consegue entrar nao tem sessao para pedir com ela.
+   * Pedir nao concede nada — so o dono ou o gerente aprovam.
+   */
+  app.post("/pin/reset-request", async (request) => {
+    const body = z
+      .object({
+        employeeCode: z.string().min(3).max(20),
+        deviceId: z.string().uuid().optional(),
+      })
+      .parse(request.body);
+
+    return requestPinReset(body);
+  });
+
+  app.get(
+    "/pin/reset-requests",
+    { preHandler: [app.requireAuth, requireRole("DONO", "GERENTE")] },
+    async (request) => listPinResets(request),
+  );
+
+  app.post(
+    "/pin/reset-requests/:id/approve",
+    { preHandler: [app.requireAuth, requireRole("DONO", "GERENTE")] },
+    async (request) => {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      return approvePinReset({ requestId: id, request });
+    },
+  );
+
+  app.post(
+    "/pin/reset-requests/:id/reject",
+    { preHandler: [app.requireAuth, requireRole("DONO", "GERENTE")] },
+    async (request) => {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const { reason } = z
+        .object({ reason: z.string().min(3, "Diga por que esta recusando.").max(300) })
+        .parse(request.body);
+
+      return rejectPinReset({ requestId: id, reason, request });
+    },
+  );
 }

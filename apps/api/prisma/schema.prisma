@@ -369,17 +369,18 @@ model User {
 
   stockMovements StockMovement[]
 
-  storesOpened         Store[]          @relation("StoreOpenedBy")
-  storesClosed         Store[]          @relation("StoreClosedBy")
-  cashSessionsOpened   CashSession[]    @relation("CashSessionOpenedBy")
-  cashSessionsClosed   CashSession[]    @relation("CashSessionClosedBy")
+  storesOpened         Store[]           @relation("StoreOpenedBy")
+  storesClosed         Store[]           @relation("StoreClosedBy")
+  cashSessionsOpened   CashSession[]     @relation("CashSessionOpenedBy")
+  cashSessionsClosed   CashSession[]     @relation("CashSessionClosedBy")
   cashMovements        CashMovement[]
-  salesMade            Sale[]           @relation("SaleSeller")
-  saleDiscountsAllowed Sale[]           @relation("SaleDiscountAuthorizer")
+  salesMade            Sale[]            @relation("SaleSeller")
+  saleDiscountsAllowed Sale[]            @relation("SaleDiscountAuthorizer")
   printJobsRequested   PrintJob[]
   commissionRules      CommissionRule[]
   goals                Goal[]
-  pieceRequestsCreated PieceRequest[]   @relation("PieceRequestCreatedBy")
+  pieceRequestsCreated PieceRequest[]    @relation("PieceRequestCreatedBy")
+  PinResetRequest      PinResetRequest[]
 
   @@unique([companyId, employeeCode])
   /// O mesmo CPF não pode aparecer em duas matrículas da empresa — seria a
@@ -2345,4 +2346,44 @@ model DeviceAnnouncement {
 
   @@index([deviceId])
   @@map("device_announcements")
+}
+
+enum PinResetStatus {
+  PENDENTE
+  APROVADA
+  RECUSADA
+}
+
+/// Pedido de PIN temporário.
+///
+/// Existe para o caso em que o funcionário deixou o PIN vencer e está na porta
+/// da loja às 9 da manhã sem conseguir entrar. Sem isto, a saída seria o dono
+/// abrir o sistema em outro aparelho e mexer no cadastro — o que ninguém faz
+/// com a loja abrindo.
+///
+/// O pedido é feito da própria tela de login, SEM sessão: quem não consegue
+/// entrar não tem sessão para pedir com ela. O que impede abuso é que pedir
+/// não concede nada — só o dono ou o gerente aprovam, e a aprovação é
+/// registrada com nome.
+model PinResetRequest {
+  id        String @id @default(uuid())
+  companyId String
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  status PinResetStatus @default(PENDENTE)
+
+  requestedAt DateTime @default(now())
+  /// Aparelho de onde o pedido partiu, quando houver.
+  deviceId    String?
+
+  decidedAt   DateTime?
+  decidedById String?
+  /// Motivo da recusa. Quem foi recusado merece saber por quê.
+  reason      String?
+
+  @@index([companyId, status])
+  @@index([userId, requestedAt])
+  @@map("pin_reset_requests")
 }

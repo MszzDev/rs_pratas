@@ -50,6 +50,8 @@ export const authenticatedUserSchema = z.object({
   mustCreatePin: z.boolean(),
   /** PIN passou de 30 dias — precisa ser trocado antes de continuar. */
   pinExpired: z.boolean(),
+  /** Dias ate o PIN vencer. O aviso aparece a partir de 5. */
+  pinExpiresInDays: z.number().nullable(),
   /** Perfil exige 2FA e ele ainda não foi confirmado. */
   twoFactorPending: z.boolean(),
   /** Só para a tela esconder o que este usuário não pode fazer. */
