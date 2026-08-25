@@ -13,6 +13,10 @@ import {
   syncStockToNuvemshop,
   testIntegration,
 } from "./integrations.service.js";
+import {
+  importCustomersFromNuvemshop,
+  importProductsFromNuvemshop,
+} from "./nuvemshop-import.service.js";
 
 const providerParam = z.object({
   provider: z.enum(["NUVEMSHOP", "MERCADOPAGO", "REDE"]),
@@ -129,6 +133,26 @@ export async function integrationRoutes(app: FastifyInstance) {
 
       return completeNuvemshopAuthorization({ ...body, request });
     },
+  );
+
+
+  /**
+   * Traz o catalogo da loja virtual para o ERP.
+   *
+   * Separado da sincronizacao de estoque de proposito: um manda dados para la,
+   * o outro traz de la. Juntar os dois num botao so faria o dono disparar uma
+   * escrita quando queria uma leitura.
+   */
+  app.post(
+    "/integrations/nuvemshop/import-products",
+    { preHandler: [app.requireAuth, requirePermission("PRODUCT_CREATE")] },
+    async (request) => importProductsFromNuvemshop({ request }),
+  );
+
+  app.post(
+    "/integrations/nuvemshop/import-customers",
+    { preHandler: [app.requireAuth, requirePermission("CUSTOMER_CREATE")] },
+    async (request) => importCustomersFromNuvemshop({ request }),
   );
 
   // ------------------------------------------------------------- webhooks

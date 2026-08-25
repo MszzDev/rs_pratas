@@ -29,6 +29,15 @@ const ROLE_LABELS: Record<UserRole, string> = {
   DESENVOLVEDOR: "Desenvolvedor",
 };
 
+/**
+ * Perfis que a loja atribui.
+ *
+ * O suporte tecnico fica de fora: nao e um cargo da joalheria, e uma conta de
+ * manutencao do sistema. Oferece-lo aqui criaria uma conta que o dono depois
+ * nao encontra na lista — porque ela e escondida de proposito.
+ */
+const PERFIS_ATRIBUIVEIS: UserRole[] = ["VENDEDOR", "GERENTE", "DONO"];
+
 const STATUS_LABELS: Record<string, string> = {
   PENDING_FIRST_ACCESS: "Aguardando primeiro acesso",
   ACTIVE: "Ativo",
@@ -317,7 +326,7 @@ export function UsersPage() {
               onChange={(event) => setRole(event.target.value as UserRole)}
               className="min-h-[48px] rounded-md border border-border bg-surface px-4 text-base"
             >
-              {(Object.keys(ROLE_LABELS) as UserRole[]).map((option) => (
+              {PERFIS_ATRIBUIVEIS.map((option) => (
                 <option key={option} value={option}>
                   {ROLE_LABELS[option]}
                 </option>
@@ -459,7 +468,7 @@ export function UsersPage() {
                     className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3"
                   >
                     <option value="">Manter como está</option>
-                    {(Object.keys(ROLE_LABELS) as UserRole[])
+                    {PERFIS_ATRIBUIVEIS
                       .filter((option) => option !== editing.role)
                       .map((option) => (
                         <option key={option} value={option}>

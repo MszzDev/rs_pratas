@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ExternalLink, Link2, Plug, RefreshCw, Unplug, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  Link2,
+  Plug,
+  RefreshCw,
+  Unplug,
+  Users,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -220,6 +230,42 @@ export function IntegrationsPage() {
       setError(caught instanceof ApiError ? caught.message : "Não foi possível desconectar."),
   });
 
+  /**
+   * Traz o que esta na loja virtual para ca.
+   *
+   * Separado de "Enviar estoque": um le, o outro escreve. O rotulo diz a
+   * direcao, porque confundir as duas custa caro — enviar quando se queria
+   * receber sobrescreve o site com um estoque que o ERP ainda nao tem.
+   */
+  const importar = useMutation({
+    mutationFn: (oQue: "products" | "customers") =>
+      apiFetch<{ criados: number; atualizados: number; total: number; ignorados: string[] }>(
+        `/api/v1/integrations/nuvemshop/import-${oQue}`,
+        { method: "POST" },
+      ),
+    onSuccess: (resultado) => {
+      setError(null);
+
+      // O que ficou de fora vai junto do que entrou. Uma importação que só diz
+      // "pronto" esconde os itens sem código, e o dono só descobre a falta
+      // quando procura uma peça que nunca chegou.
+      const foraDaLista =
+        resultado.ignorados.length > 0
+          ? ` Ficaram de fora: ${resultado.ignorados.slice(0, 5).join("; ")}${
+              resultado.ignorados.length > 5 ? "..." : ""
+            }`
+          : "";
+
+      setAviso(
+        `${resultado.criados} criado(s) e ${resultado.atualizados} atualizado(s), de ${resultado.total}.${foraDaLista}`,
+      );
+
+      void queryClient.invalidateQueries({ queryKey: ["integrations"] });
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível importar."),
+  });
+
   const sincronizar = useMutation({
     mutationFn: () =>
       apiFetch<{ atualizados: number; totalSemCorrespondencia: number; semCorrespondencia: string[] }>(
@@ -349,6 +395,29 @@ export function IntegrationsPage() {
                           <RefreshCw className="h-5 w-5" aria-hidden />
                           {sincronizar.isPending ? "Enviando..." : "Enviar estoque"}
                         </Button>
+                      )}
+
+                      {integracao.provider === "NUVEMSHOP" && (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={importar.isPending}
+                            onClick={() => importar.mutate("products")}
+                          >
+                            <Download className="h-5 w-5" aria-hidden />
+                            Trazer produtos
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={importar.isPending}
+                            onClick={() => importar.mutate("customers")}
+                          >
+                            <Users className="h-5 w-5" aria-hidden />
+                            Trazer clientes
+                          </Button>
+                        </>
                       )}
 
                       <Button

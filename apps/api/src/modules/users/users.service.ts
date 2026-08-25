@@ -238,10 +238,24 @@ export async function regenerateTemporaryPassword(params: {
 export async function listUsers(request: FastifyRequest) {
   const isGlobalRole = request.user.role === "DONO" || request.user.role === "DESENVOLVEDOR";
 
+  /**
+   * O suporte técnico não aparece na lista — nem para o dono.
+   *
+   * É uma conta de manutenção do sistema, não alguém que trabalha na loja.
+   * Misturada aos funcionários, ela vira uma linha que o dono não reconhece e
+   * não sabe se pode apagar; e mostrá-la sem que ele possa gerenciá-la seria
+   * pior ainda. Fora da lista, o quadro de pessoal é só quem de fato trabalha
+   * ali.
+   *
+   * O próprio suporte continua se enxergando — precisa disso para trabalhar.
+   */
+  const escondeSuporte = request.user.role !== "DESENVOLVEDOR";
+
   const users = await prisma.user.findMany({
     where: {
       companyId: request.user.companyId,
       deletedAt: null,
+      ...(escondeSuporte ? { role: { not: "DESENVOLVEDOR" } } : {}),
       ...(isGlobalRole
         ? {}
         : { userStores: { some: { storeId: { in: request.user.storeIds } } } }),
