@@ -600,6 +600,10 @@ model PaymentTerminal {
   mpAccountLabel       String?
   /// user_id da conta, respondido pelo próprio Mercado Pago ao testar o token.
   mpExternalAccountId  String?
+  /// Identificador do aparelho na API do Point, escolhido pelo dono entre as
+  /// maquininhas que a conta tem. É o que permite mandar o valor da venda
+  /// direto para a tela dela, em vez de alguém digitar.
+  mpDeviceId           String?
   /// AES-256-GCM. NUNCA sai da API — nem para o dono.
   credentialsEncrypted String?
   credentialsUpdatedAt DateTime?

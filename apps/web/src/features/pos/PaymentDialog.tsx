@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { CreditCard, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
 import { CARD_METHODS, PAYMENT_LABELS, PAYMENT_METHODS } from "./types";
+import { usePointCharge } from "./use-point-charge";
 import type { CartLine, PaymentMethod } from "./types";
 
 interface PaymentLine {
@@ -25,6 +26,8 @@ interface Terminal {
   status: string;
   isPrimary: boolean;
   deviceId: string;
+  /** Ligada a um aparelho do Mercado Pago: aceita receber o valor pelo PDV. */
+  aceitaCobranca?: boolean;
 }
 
 const emptyLine = (amount: number): PaymentLine => ({
@@ -89,6 +92,48 @@ export function PaymentDialog({
   const chosenTerminal = usableTerminals.find((terminal) =>
     lines.some((line) => line.terminalId === terminal.id),
   );
+
+  const cobranca = usePointCharge();
+
+  /** Maquininha ligada a um aparelho do Mercado Pago aceita cobrança pelo PDV. */
+  const podeCobrarSozinho = (terminalId: string) =>
+    Boolean(usableTerminals.find((terminal) => terminal.id === terminalId)?.aceitaCobranca);
+
+  /**
+   * Manda o valor daquela forma de pagamento para a maquininha.
+   *
+   * Quando aprova, o número do pagamento cai no campo de autorização sozinho —
+   * é ele que faz o estorno funcionar depois sem ninguém procurar comprovante
+   * de papel.
+   */
+  async function cobrarNaMaquininha(index: number, line: PaymentLine) {
+    const valor = Number(line.amount || 0);
+
+    if (valor <= 0) {
+      setError("Informe o valor antes de cobrar na maquininha.");
+      return;
+    }
+
+    setError(null);
+
+    const paymentId = await cobranca.cobrar({
+      terminalId: line.terminalId,
+      amount: valor,
+      description: `Venda ${cart.length} peça(s)`,
+      // Sem código de venda ainda — ela só nasce depois do pagamento. O
+      // carimbo de tempo distingue esta cobrança das outras do mesmo dia.
+      externalReference: `PDV-${Date.now()}`,
+      ...(line.method === "CREDITO_PARCELADO" ? { installments: line.installments } : {}),
+      ...(line.method === "DEBITO" ? { type: "debit" as const } : {}),
+      ...(line.method === "CREDITO" || line.method === "CREDITO_PARCELADO"
+        ? { type: "credit" as const }
+        : {}),
+    });
+
+    if (paymentId) {
+      updateLine(index, { authorizationCode: paymentId });
+    }
+  }
 
   const complete = useMutation({
     mutationFn: () =>
@@ -285,6 +330,49 @@ export function PaymentDialog({
                       }
                       hint="O que aparece no comprovante da maquininha."
                     />
+
+                    {/*
+                      Só aparece na maquininha que já foi ligada a um aparelho
+                      do Mercado Pago. Nas outras, o valor continua sendo
+                      digitado no aparelho, como sempre foi.
+                    */}
+                    {podeCobrarSozinho(line.terminalId) && (
+                      <div className="sm:col-span-2">
+                        {cobranca.estado.cobrando ? (
+                          <div className="flex flex-wrap items-center gap-3 rounded-md border border-ocean/30 bg-ocean-soft/40 px-4 py-3">
+                            <span className="text-sm text-text-primary">
+                              {cobranca.estado.estado ?? "Enviando para a maquininha..."}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => void cobranca.cancelar(line.terminalId)}
+                            >
+                              Cancelar cobrança
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void cobrarNaMaquininha(index, line)}
+                          >
+                            <CreditCard className="h-5 w-5" aria-hidden />
+                            Cobrar na maquininha
+                          </Button>
+                        )}
+
+                        {cobranca.estado.erro && (
+                          <p className="mt-2 text-sm text-danger">{cobranca.estado.erro}</p>
+                        )}
+
+                        {cobranca.estado.aprovado && (
+                          <p className="mt-2 text-sm font-medium text-success">
+                            Pago na maquininha. O número do pagamento já entrou no campo acima.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

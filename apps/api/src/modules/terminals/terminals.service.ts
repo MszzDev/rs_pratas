@@ -102,6 +102,14 @@ export async function listTerminals(params: { request: FastifyRequest; storeId?:
   return terminais.map(({ credentialsEncrypted: _cifrado, ...terminal }) => ({
     ...terminal,
     conta: resumirConta({ ...terminal, credentialsEncrypted: _cifrado }),
+    /**
+     * Pode receber o valor da venda direto do PDV.
+     *
+     * Exige as duas coisas: a conta (para falar com o Mercado Pago) e o
+     * aparelho escolhido (para saber em qual das maquininhas da conta o valor
+     * aparece). Só uma delas não cobra nada.
+     */
+    aceitaCobranca: Boolean(_cifrado && terminal.mpDeviceId),
   }));
 }
 

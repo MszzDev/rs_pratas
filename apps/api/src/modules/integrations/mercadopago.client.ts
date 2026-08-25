@@ -112,6 +112,106 @@ export function refundPayment(accessToken: string, paymentId: string | number, a
   );
 }
 
+// ------------------------------------------------------------------ Point
+//
+// A cobrança sai do PDV e aparece na tela da maquininha. O que isso resolve
+// não é conforto: é o valor digitado errado. Com o valor indo pelo sistema,
+// R$ 189,90 não vira R$ 18,99 na pressa do fim de tarde — e o número do
+// pagamento volta sozinho, que é o que faz o estorno e a conferência do caixa
+// funcionarem sem ninguém copiar comprovante à mão.
+
+export interface PointDevice {
+  id: string;
+  pos_id?: number;
+  store_id?: string;
+  external_pos_id?: string;
+  operating_mode?: string;
+}
+
+/** As maquininhas Point que existem NESTA conta. */
+export async function listPointDevices(accessToken: string) {
+  const resposta = await request<{ devices?: PointDevice[] }>(
+    accessToken,
+    "/point/integration-api/devices",
+  );
+
+  return resposta.devices ?? [];
+}
+
+/**
+ * Manda o valor para a maquininha.
+ *
+ * `external_reference` leva o código da venda: é por ele que o pagamento que
+ * volta do Mercado Pago se reconhece como sendo daquela venda, sem depender de
+ * horário nem de valor — dois clientes pagando R$ 200 no mesmo minuto seriam
+ * indistinguíveis por qualquer outro critério.
+ *
+ * O valor vai em CENTAVOS, que é como a API do Point espera. Mandar reais faz
+ * a maquininha cobrar cem vezes menos, e a venda fecha como se estivesse certa.
+ */
+export function createPaymentIntent(
+  accessToken: string,
+  deviceId: string,
+  params: {
+    amountCents: number;
+    description: string;
+    externalReference: string;
+    installments?: number;
+    /** "credit" | "debit". Ausente: a maquininha pergunta ao cliente. */
+    type?: string;
+  },
+) {
+  return request<{ id: string; state: string }>(
+    accessToken,
+    `/point/integration-api/devices/${deviceId}/payment-intents`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        amount: params.amountCents,
+        description: params.description,
+        additional_info: { external_reference: params.externalReference, print_on_terminal: true },
+        ...(params.type
+          ? {
+              payment: {
+                type: params.type,
+                installments: params.installments ?? 1,
+                installments_cost: "seller",
+              },
+            }
+          : {}),
+      }),
+    },
+  );
+}
+
+/** Em que pé está a cobrança que está na tela da maquininha. */
+export function getPaymentIntent(accessToken: string, paymentIntentId: string) {
+  return request<{
+    id: string;
+    state: string;
+    payment?: { id?: number; status?: string } | null;
+  }>(accessToken, `/point/integration-api/payment-intents/${paymentIntentId}`);
+}
+
+/**
+ * Cancela a cobrança que está na maquininha.
+ *
+ * Existe para o caso comum de desistência: o cliente muda de ideia com o valor
+ * já na tela do aparelho. Sem isto, a maquininha ficaria presa esperando um
+ * cartão que não vem, e a próxima venda não conseguiria usá-la.
+ */
+export function cancelPaymentIntent(
+  accessToken: string,
+  deviceId: string,
+  paymentIntentId: string,
+) {
+  return request<{ id: string }>(
+    accessToken,
+    `/point/integration-api/devices/${deviceId}/payment-intents/${paymentIntentId}`,
+    { method: "DELETE" },
+  );
+}
+
 /**
  * Troca o código do OAuth pelo access token da conta do lojista.
  *

@@ -32,6 +32,13 @@ interface Terminal {
     tokenPreview: string | null;
     atualizadoEm: string | null;
   };
+  /**
+   * Recebe o valor da venda direto do PDV.
+   *
+   * Exige as duas coisas: a conta e o aparelho escolhido entre as maquininhas
+   * dela. Só uma não cobra nada.
+   */
+  aceitaCobranca?: boolean;
 }
 
 interface DeviceRow {
@@ -64,6 +71,11 @@ export function TerminalsPage() {
   /** Maquininha cuja conta está sendo informada agora. */
   const [configurando, setConfigurando] = useState<string | null>(null);
   const [conta, setConta] = useState({ accessToken: "", label: "" });
+  /** Aparelhos Point encontrados na conta, para o dono dizer qual é este. */
+  const [aparelhos, setAparelhos] = useState<{
+    terminalId: string;
+    lista: Array<{ id: string; modo: string | null; escolhido: boolean }>;
+  } | null>(null);
 
   const terminals = useQuery({
     queryKey: ["terminals"],
@@ -114,6 +126,43 @@ export function TerminalsPage() {
       setError(null);
       setAviso(resultado.aviso);
       setConfigurando(null);
+      invalidate();
+    },
+    onError: handleError,
+  });
+
+  /**
+   * As maquininhas Point que existem na conta.
+   *
+   * O número de série impresso no aparelho não é o identificador que a API
+   * usa — por isso a lista vem do Mercado Pago e o dono escolhe qual é esta.
+   */
+  const procurarAparelhos = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<Array<{ id: string; modo: string | null; escolhido: boolean }>>(
+        `/api/v1/terminals/${id}/point-devices`,
+      ).then((lista) => ({ terminalId: id, lista })),
+    onSuccess: (resultado) => {
+      setError(null);
+      setAparelhos(resultado);
+
+      if (resultado.lista.length === 0) {
+        setAviso("Esta conta não tem nenhuma maquininha Point ligada e conectada à internet.");
+      }
+    },
+    onError: handleError,
+  });
+
+  const escolherAparelho = useMutation({
+    mutationFn: (params: { terminalId: string; pointDeviceId: string }) =>
+      apiFetch(`/api/v1/terminals/${params.terminalId}/point-device`, {
+        method: "PUT",
+        body: { pointDeviceId: params.pointDeviceId },
+      }),
+    onSuccess: () => {
+      setError(null);
+      setAviso("Pronto. Agora o valor da venda vai direto para a tela desta maquininha.");
+      setAparelhos(null);
       invalidate();
     },
     onError: handleError,
@@ -298,6 +347,21 @@ export function TerminalsPage() {
                     "Sem conta do Mercado Pago — cobra normalmente, mas o sistema não consulta nem estorna."
                   )}
                 </p>
+
+                {terminal.conta?.configurada && (
+                  <p className="mt-1 text-sm">
+                    {terminal.aceitaCobranca ? (
+                      <span className="text-sage-dark">
+                        O valor da venda vai direto para a tela dela.
+                      </span>
+                    ) : (
+                      <span className="text-text-muted">
+                        O valor ainda é digitado no aparelho — falta dizer qual maquininha da conta
+                        é esta.
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -312,6 +376,21 @@ export function TerminalsPage() {
               >
                 {terminal.conta?.configurada ? "Trocar conta" : "Informar conta"}
               </Button>
+
+              {terminal.conta?.configurada && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={procurarAparelhos.isPending}
+                  onClick={() => procurarAparelhos.mutate(terminal.id)}
+                >
+                  {procurarAparelhos.isPending
+                    ? "Procurando..."
+                    : terminal.aceitaCobranca
+                      ? "Trocar aparelho"
+                      : "Ligar ao aparelho"}
+                </Button>
+              )}
 
               {terminal.status === "ACTIVE" && !terminal.isPrimary && (
                 <Button
@@ -359,6 +438,53 @@ export function TerminalsPage() {
                 Remover
               </Button>
             </div>
+
+            {aparelhos?.terminalId === terminal.id && aparelhos.lista.length > 0 && (
+              <div className="w-full border-t border-border/70 pt-4">
+                <p className="mb-3 text-sm text-text-secondary">
+                  Estas são as maquininhas ligadas nesta conta agora. Qual delas é esta? (Se
+                  estiver em dúvida, o aparelho mostra o número dele em Configurações.)
+                </p>
+
+                <ul className="space-y-2">
+                  {aparelhos.lista.map((aparelho) => (
+                    <li
+                      key={aparelho.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+                    >
+                      <span className="font-mono text-sm text-text-primary">{aparelho.id}</span>
+
+                      {aparelho.escolhido ? (
+                        <span className="text-sm text-sage-dark">É esta</span>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={escolherAparelho.isPending}
+                          onClick={() =>
+                            escolherAparelho.mutate({
+                              terminalId: terminal.id,
+                              pointDeviceId: aparelho.id,
+                            })
+                          }
+                        >
+                          É esta
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="mt-3"
+                  onClick={() => setAparelhos(null)}
+                >
+                  Fechar
+                </Button>
+              </div>
+            )}
 
             {configurando === terminal.id && (
               <form
