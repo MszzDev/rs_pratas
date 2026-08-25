@@ -48,6 +48,8 @@ export const authenticatedUserSchema = z.object({
   storeIds: z.array(z.string().uuid()),
   mustChangePassword: z.boolean(),
   mustCreatePin: z.boolean(),
+  /** PIN passou de 30 dias — precisa ser trocado antes de continuar. */
+  pinExpired: z.boolean(),
   /** Perfil exige 2FA e ele ainda não foi confirmado. */
   twoFactorPending: z.boolean(),
   /** Só para a tela esconder o que este usuário não pode fazer. */

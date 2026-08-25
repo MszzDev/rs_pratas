@@ -36,6 +36,14 @@ export interface IssuedSession {
     mustChangePassword: boolean;
     mustCreatePin: boolean;
     /**
+     * O PIN passou de 30 dias e precisa ser trocado.
+     *
+     * Ele abre o caixa e bate o ponto num tablet compartilhado, e todo mundo
+     * no balcao ve os dedos de todo mundo digitando. Um PIN que nunca muda
+     * deixa de identificar uma pessoa e vira senha coletiva.
+     */
+    pinExpired: boolean;
+    /**
      * O perfil exige 2FA e ele ainda não foi confirmado. O app usa isto para
      * levar direto à configuração, em vez de deixar o usuário esbarrar num 403
      * em cada tela que tentar abrir.
@@ -50,6 +58,28 @@ export interface IssuedSession {
      */
     permissions: string[];
   };
+}
+
+/** Prazo de validade do PIN. */
+const PIN_VALIDO_POR_DIAS = 30;
+
+/**
+ * O PIN venceu?
+ *
+ * Ele abre o caixa e bate o ponto num tablet compartilhado, onde todo mundo no
+ * balcão vê os dedos de todo mundo digitando. Um PIN que nunca muda deixa de
+ * identificar uma pessoa e vira senha coletiva — e aí a venda no nome errado
+ * não é fraude, é consequência.
+ *
+ * Sem data de troca registrada, conta como vencido: são os PINs criados antes
+ * desta regra existir, e todos eles já passaram do prazo.
+ */
+function isPinExpired(user: { pinHash: string | null; pinChangedAt: Date | null }): boolean {
+  if (!user.pinHash) return false;
+  if (!user.pinChangedAt) return true;
+
+  const dias = (Date.now() - user.pinChangedAt.getTime()) / 86_400_000;
+  return dias > PIN_VALIDO_POR_DIAS;
 }
 
 /** Só o DONO é obrigado a usar segundo fator (item 19 da especificação). */
@@ -158,6 +188,7 @@ export async function issueSessionForUser(params: {
       storeIds,
       mustChangePassword: user.mustChangePassword,
       mustCreatePin: user.mustCreatePin,
+      pinExpired: isPinExpired(user),
       twoFactorPending: await isTwoFactorPending(user),
       permissions: [...(await getEffectivePermissions(user.id))],
     },
@@ -498,6 +529,7 @@ export async function refreshSession(params: {
       storeIds,
       mustChangePassword: session.user.mustChangePassword,
       mustCreatePin: session.user.mustCreatePin,
+      pinExpired: isPinExpired(session.user),
       twoFactorPending: await isTwoFactorPending(session.user),
       permissions: [...(await getEffectivePermissions(session.user.id))],
     },

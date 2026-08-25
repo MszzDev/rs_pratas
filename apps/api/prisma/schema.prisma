@@ -322,8 +322,12 @@ model User {
 
   passwordHash       String? // argon2id — null até 1º acesso concluído
   pinHash            String? // argon2id — null até PIN criado
-  mustChangePassword Boolean @default(true)
-  mustCreatePin      Boolean @default(true)
+  /// Quando o PIN foi definido pela ultima vez. O PIN vence a cada 30 dias:
+  /// ele abre o caixa e bate o ponto num tablet compartilhado, entao um PIN
+  /// que nunca muda vira senha coletiva.
+  pinChangedAt       DateTime?
+  mustChangePassword Boolean   @default(true)
+  mustCreatePin      Boolean   @default(true)
 
   passwordFailedAttempts Int       @default(0)
   passwordLockedUntil    DateTime?
@@ -2309,4 +2313,36 @@ model IntegrationEvent {
   @@index([companyId, createdAt])
   @@index([integrationId, processedAt])
   @@map("integration_events")
+}
+
+/// Tablet que se apresentou e ainda não foi vinculado a uma loja.
+///
+/// Existe separado de `Device` porque um aparelho recém-ligado não tem loja
+/// nem caixa — e `Device` exige os dois, com razão: um tablet sem loja não
+/// pode vender, e afrouxar isso enfraqueceria toda consulta que hoje confia
+/// que todo dispositivo pertence a algum lugar.
+///
+/// Aqui é só a sala de espera. Quando o dono vincula, nasce o `Device` de
+/// verdade e esta linha aponta para ele — deixando de aparecer na fila sem
+/// perder o histórico de quando o aparelho apareceu pela primeira vez.
+model DeviceAnnouncement {
+  id String @id @default(uuid())
+
+  /// Identificador do aparelho, gerado pelo Android. É a chave de reencontro:
+  /// o mesmo tablet reabrindo o aplicativo cai na mesma linha, em vez de
+  /// encher a fila de duplicatas a cada reinício.
+  hardwareId String @unique
+
+  model      String?
+  osVersion  String?
+  appVersion String?
+
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+
+  /// Preenchido quando o dono vincula. Some da fila, permanece no histórico.
+  deviceId String? @unique
+
+  @@index([deviceId])
+  @@map("device_announcements")
 }

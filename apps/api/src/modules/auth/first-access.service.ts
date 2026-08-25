@@ -154,6 +154,7 @@ export async function setFirstAccessPin(params: {
     where: { id: user.id },
     data: {
       pinHash: await hashSecret(input.pin),
+      pinChangedAt: new Date(),
       mustCreatePin: false,
       pinFailedAttempts: 0,
       pinLockedUntil: null,

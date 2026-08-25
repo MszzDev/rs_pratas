@@ -20,6 +20,7 @@ import {
   registerKioskExit,
   unlinkDevice,
 } from "./devices.service.js";
+import { announceDevice, assignDevice, listPendingDevices } from "./announcement.service.js";
 
 export async function deviceRoutes(app: FastifyInstance) {
   // A guarda de somente-leitura do DESENVOLVEDOR já vive dentro do requireAuth.
@@ -134,4 +135,42 @@ export async function deviceRoutes(app: FastifyInstance) {
       return registerKioskExit({ deviceId: id, reason, request });
     },
   );
+
+  /**
+   * O tablet se apresenta ao abrir.
+   *
+   * Sem autenticacao de sessao: o aparelho ainda nao tem quem o autentique —
+   * e justamente o problema que ele veio resolver. A defesa e outra: o
+   * anuncio SOZINHO nao da nada. Aparelho anunciado e nao vinculado nao abre
+   * login, nao ve preco e nao vende. O pior que um estranho consegue e
+   * aparecer numa fila que o dono ignora.
+   */
+  app.post("/devices/announce", async (request) => {
+    const input = z
+      .object({
+        hardwareId: z.string().min(4).max(120),
+        model: z.string().max(80).optional(),
+        osVersion: z.string().max(40).optional(),
+        appVersion: z.string().max(40).optional(),
+      })
+      .parse(request.body);
+
+    return announceDevice(input);
+  });
+
+  /** A fila de aparelhos esperando uma loja. */
+  app.get("/devices/pending", { preHandler: managerOrOwner }, async () => listPendingDevices());
+
+  app.post("/devices/pending/:id/assign", { preHandler: managerOrOwner }, async (request) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({
+        storeId: z.string().uuid(),
+        name: z.string().min(2, "De um nome ao tablet, como Balcao 1.").max(60),
+        cashRegisterId: z.string().uuid().optional(),
+      })
+      .parse(request.body);
+
+    return assignDevice({ announcementId: id, ...body, request });
+  });
 }
