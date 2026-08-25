@@ -42,19 +42,14 @@ export function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background-secondary px-4">
-      <div className="w-full max-w-md rounded-lg border border-border bg-surface p-8 shadow-sm">
+      <div className="w-full max-w-md rounded-lg border border-border bg-brand p-8 shadow-sm">
         <header className="mb-8 flex flex-col items-center text-center">
-          <LogoMark className="h-16 w-16" />
-          <h1
-            className="mt-4 text-3xl font-semibold tracking-tight text-rose-primary"
-            style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
-          >
-            RS Pratas
-          </h1>
-          <p className="mt-1 text-[0.7rem] font-medium uppercase tracking-[0.32em] text-text-muted">
-            Prata 925
-          </p>
-          <p className="mt-4 text-text-secondary">Entre com sua matrícula</p>
+          {/*
+            Só a logo. Ela já traz o nome desenhado — repetir "RS Pratas" em
+            outra tipografia logo abaixo competiria com a própria marca.
+          */}
+          <LogoMark className="h-36 w-36" />
+          <h1 className="mt-4 text-lg text-text-secondary">Entre com sua matrícula</h1>
         </header>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>

@@ -34,6 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-context";
 import { Logo, LogoMark } from "@/components/ui/logo";
+import { KioskExitDialog, useKioskExitGesture } from "@/features/kiosk/KioskExit";
 
 type NavSection = "dia-a-dia" | "gestao" | "sistema";
 
@@ -218,6 +219,10 @@ export function PageShell({
     (item) => !item.roles || (user && item.roles.includes(user.role)),
   );
 
+  // Cinco toques na logo abrem a saida do quiosque. Sem botao visivel: um
+  // botao "sair" na tela de um caixa e um convite.
+  const quiosque = useKioskExitGesture();
+
   const atalhos = (SUBPAGINAS[location.pathname] ?? []).filter(
     (atalho) => !atalho.permission || can(atalho.permission),
   );
@@ -239,7 +244,12 @@ export function PageShell({
 
   return (
     <div className="min-h-screen bg-background-secondary lg:flex">
-      <Sidebar items={items} onLogout={() => void logout()} user={user} />
+      <Sidebar
+        items={items}
+        onLogout={() => void logout()}
+        user={user}
+        onLogoTap={quiosque.registrarToque}
+      />
 
       <MobileBar
         open={drawerOpen}
@@ -247,6 +257,7 @@ export function PageShell({
         items={items}
         onLogout={() => void logout()}
         user={user}
+        onLogoTap={quiosque.registrarToque}
       />
 
       <div className="flex-1 lg:min-w-0">
@@ -292,6 +303,8 @@ export function PageShell({
           {children}
         </main>
       </div>
+
+      {quiosque.aberto && <KioskExitDialog onClose={quiosque.fechar} />}
     </div>
   );
 }
@@ -394,15 +407,20 @@ function Sidebar({
   items,
   user,
   onLogout,
+  onLogoTap,
 }: {
   items: NavItem[];
   user: { name: string; role: string } | null;
   onLogout: () => void;
+  /** Conta os toques na logo — cinco abrem a saída do quiosque. */
+  onLogoTap: () => void;
 }) {
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-border/70 bg-surface lg:sticky lg:top-0 lg:flex lg:h-screen">
+    <aside className="hidden w-60 shrink-0 flex-col border-r border-border/70 bg-brand lg:sticky lg:top-0 lg:flex lg:h-screen">
       <div className="flex h-[4.5rem] items-center border-b border-border/70 px-5">
-        <Logo size="md" />
+        <button type="button" onClick={onLogoTap} aria-label="RS Pratas">
+          <Logo size="md" />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
@@ -421,16 +439,19 @@ function MobileBar({
   items,
   user,
   onLogout,
+  onLogoTap,
 }: {
   open: boolean;
   onToggle: () => void;
   items: NavItem[];
   user: { name: string; role: string } | null;
   onLogout: () => void;
+  /** Conta os toques na logo — cinco abrem a saída do quiosque. */
+  onLogoTap: () => void;
 }) {
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-border/70 bg-surface lg:hidden">
+      <header className="sticky top-0 z-30 border-b border-border/70 bg-brand lg:hidden">
         <div className="flex items-center gap-3 px-4 py-3">
           <button
             type="button"
@@ -442,7 +463,9 @@ function MobileBar({
             <Menu className="h-6 w-6" aria-hidden />
           </button>
 
-          <LogoMark className="h-8 w-8 shrink-0" />
+          <button type="button" onClick={onLogoTap} aria-label="RS Pratas">
+            <LogoMark className="h-8 w-8 shrink-0" />
+          </button>
 
           {/*
             No tablet as abas do dia a dia ficam à mão — é o que o vendedor usa
@@ -478,7 +501,7 @@ function MobileBar({
             className="absolute inset-0 bg-text-primary/40"
           />
 
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-surface shadow-lifted">
+          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-brand shadow-lifted">
             <div className="flex h-[4.5rem] items-center justify-between border-b border-border/70 px-4">
               <Logo size="sm" />
               <button

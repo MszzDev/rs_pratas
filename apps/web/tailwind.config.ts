@@ -12,6 +12,15 @@ export default {
           secondary: "#F8F7F7",
         },
         surface: "#FFFFFF",
+        /**
+         * O rosa do fundo da logo, medido do proprio arquivo.
+         *
+         * Serve para a logo nao aparecer como um quadrado colado sobre o
+         * branco: onde ela esta, o fundo e o dela. Como e a cor que a marca ja
+         * carrega, tambem apazigua o branco da barra lateral sem inventar um
+         * tom novo.
+         */
+        brand: "#FDF4F9",
         rose: {
           primary: "#9B4F53",
           secondary: "#A85D62",

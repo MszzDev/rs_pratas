@@ -257,3 +257,46 @@ export async function unlinkDevice(params: { deviceId: string; request: FastifyR
 
   return updated;
 }
+
+/**
+ * Registra a saida do modo quiosque.
+ *
+ * Nao e o servidor que destrava o tablet — quem faz isso e o proprio Android,
+ * no aparelho. O que acontece aqui e o que da sentido aquele destrave: a
+ * autorizacao e o RASTRO. Sem isto, sair do quiosque seria um gesto que nao
+ * deixa marca, e a pergunta "quem tirou o tablet do PDV as 3 da manha?"
+ * ficaria sem resposta.
+ *
+ * A permissao e o step-up sao conferidos antes de chegar aqui, na rota.
+ */
+export async function registerKioskExit(params: {
+  deviceId: string;
+  reason: string;
+  request: FastifyRequest;
+}) {
+  const { deviceId, reason, request } = params;
+
+  const device = await prisma.device.findFirst({
+    where: { id: deviceId, companyId: request.user.companyId, deletedAt: null },
+  });
+  if (!device) {
+    throw notFound("DEVICE_NOT_FOUND", "Dispositivo nao encontrado.");
+  }
+
+  await assertStoreAccess(request, device.storeId);
+
+  await audit(request, {
+    action: "DEVICE_KIOSK_EXIT",
+    result: "SUCCESS",
+    userId: request.user.sub,
+    companyId: device.companyId,
+    storeId: device.storeId,
+    deviceId: device.id,
+    userRoleSnapshot: request.user.role,
+    entityType: "Device",
+    entityId: device.id,
+    reason,
+  });
+
+  return { deviceId: device.id, autorizadoEm: new Date().toISOString() };
+}

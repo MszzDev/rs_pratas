@@ -8,12 +8,16 @@ import {
 } from "@rs-pratas/shared";
 import { prisma } from "../../db/prisma.js";
 import { assertStoreAccess, requireRole } from "../../core/rbac/require-role.hook.js";
+import { requirePermission } from "../../core/rbac/require-permission.hook.js";
+import { requireStepUp } from "../auth/step-up.service.js";
+import { StepUpPurpose } from "@prisma/client";
 import {
   claimDevice,
   createCashRegister,
   createDevice,
   createPOSStation,
   listDevices,
+  registerKioskExit,
   unlinkDevice,
 } from "./devices.service.js";
 
@@ -96,4 +100,38 @@ export async function deviceRoutes(app: FastifyInstance) {
     const device = await unlinkDevice({ deviceId: id, request, reason });
     return reply.status(200).send(device);
   });
+
+  /**
+   * Saida do modo quiosque.
+   *
+   * Tres barreiras, e cada uma cobre um buraco da outra: a PERMISSAO diz quem
+   * pode em tese; o STEP-UP prova que e a pessoa agora, e nao um tablet
+   * deixado destravado no balcao; o MOTIVO obriga a dizer para que.
+   *
+   * O motivo tem minimo de 5 caracteres de proposito — "ok" nao explica nada
+   * a quem for ler a auditoria daqui a tres meses.
+   */
+  app.post(
+    "/devices/:id/kiosk-exit",
+    {
+      preHandler: [
+        app.requireAuth,
+        requirePermission("DEVICE_EXIT_KIOSK"),
+        requireStepUp(StepUpPurpose.EXIT_KIOSK),
+      ],
+    },
+    async (request) => {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      const { reason } = z
+        .object({
+          reason: z
+            .string()
+            .min(5, "Explique por que o tablet esta saindo do modo quiosque.")
+            .max(500),
+        })
+        .parse(request.body);
+
+      return registerKioskExit({ deviceId: id, reason, request });
+    },
+  );
 }
