@@ -58,7 +58,7 @@ export function PaymentDialog({
   customerId: string | null;
   total: number;
   onClose: () => void;
-  onCompleted: (sale: { code: string; totalAmount: string }) => void;
+  onCompleted: (sale: { id: string; code: string; totalAmount: string }) => void;
 }) {
   const [discount, setDiscount] = useState("0");
   const [discountReason, setDiscountReason] = useState("");
@@ -92,7 +92,7 @@ export function PaymentDialog({
 
   const complete = useMutation({
     mutationFn: () =>
-      apiFetch<{ code: string; totalAmount: string }>("/api/v1/sales", {
+      apiFetch<{ id: string; code: string; totalAmount: string }>("/api/v1/sales", {
         method: "POST",
         body: {
           storeId,

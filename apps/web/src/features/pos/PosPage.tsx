@@ -1,6 +1,17 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, ChevronDown, Minus, Plus, Search, ShoppingCart, Trash2, X } from "lucide-react";
+import {
+  Bell,
+  ChevronDown,
+  Mail,
+  MessageCircle,
+  Minus,
+  Plus,
+  Search,
+  ShoppingCart,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -44,7 +55,10 @@ export function PosPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastSale, setLastSale] = useState<{ code: string; total: string } | null>(null);
+  const [lastSale, setLastSale] = useState<{ id: string; code: string; total: string } | null>(
+    null,
+  );
+  const [envio, setEnvio] = useState<string | null>(null);
   /** Peça com os tamanhos abertos. Uma de cada vez: duas listas abertas viram rolagem. */
   const [tamanhosAbertos, setTamanhosAbertos] = useState<string | null>(null);
 
@@ -52,9 +66,15 @@ export function PosPage() {
   const session = useQuery({
     queryKey: ["cash-open-session", storeId],
     queryFn: () =>
-      apiFetch<Array<{ id: string; code: string; cashRegister: { name: string } }>>(
-        `/api/v1/cash/sessions?storeId=${storeId}&status=ABERTO`,
-      ),
+      apiFetch<
+        Array<{
+          id: string;
+          code: string;
+          cashRegister: { name: string };
+          /** Passou do limite de dinheiro combinado — sem revelar o saldo. */
+          sangriaSugerida: { passou: boolean; limite: number } | null;
+        }>
+      >(`/api/v1/cash/sessions?storeId=${storeId}&status=ABERTO`),
     enabled: storeId !== "",
   });
 
@@ -153,8 +173,43 @@ export function PosPage() {
       setError(caught instanceof ApiError ? caught.message : "Não foi possível salvar o cliente."),
   });
 
-  function onSaleCompleted(sale: { code: string; totalAmount: string }) {
-    setLastSale({ code: sale.code, total: sale.totalAmount });
+  /**
+   * O comprovante pelo WhatsApp da própria loja.
+   *
+   * O sistema escreve a mensagem; quem manda é a pessoa, do aparelho dela. Sai
+   * do número que o cliente conhece, e não depende de conta de API nem de
+   * mensalidade — que é o que tornaria isso um projeto, e não um botão.
+   */
+  const enviarWhatsApp = useMutation({
+    mutationFn: (saleId: string) =>
+      apiFetch<{ whatsappUrl: string; telefone: string | null }>(
+        `/api/v1/sales/${saleId}/receipt-text`,
+      ),
+    onSuccess: (resultado) => {
+      window.open(resultado.whatsappUrl, "_blank", "noopener");
+      setEnvio(
+        resultado.telefone
+          ? "WhatsApp aberto na conversa do cliente."
+          : "WhatsApp aberto — escolha o contato, porque esta venda não tem telefone cadastrado.",
+      );
+    },
+    onError: (caught) =>
+      setError(
+        caught instanceof ApiError ? caught.message : "Não foi possível montar a mensagem.",
+      ),
+  });
+
+  const enviarEmail = useMutation({
+    mutationFn: (saleId: string) =>
+      apiFetch<{ enviado: boolean }>(`/api/v1/sales/${saleId}/receipt`, { method: "POST" }),
+    onSuccess: () => setEnvio("Comprovante enviado por e-mail."),
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível enviar."),
+  });
+
+  function onSaleCompleted(sale: { id: string; code: string; totalAmount: string }) {
+    setLastSale({ id: sale.id, code: sale.code, total: sale.totalAmount });
+    setEnvio(null);
     setCart([]);
     setCustomer(null);
     setCustomerName("");
@@ -199,9 +254,43 @@ export function PosPage() {
       {lastSale && (
         <div className="mb-5">
           <Alert tone="success" title={`Venda ${lastSale.code} concluída`}>
-            <div className="flex flex-wrap items-center gap-3">
-              <span>Total de {formatMoney(lastSale.total)}.</span>
-              <Button type="button" variant="ghost" onClick={() => setLastSale(null)}>
+            <p>Total de {formatMoney(lastSale.total)}.</p>
+
+            {envio && <p className="mt-1 font-medium">{envio}</p>}
+
+            {/*
+              O comprovante sai daqui, com a venda ainda na tela: procurar a
+              venda depois para mandar o comprovante é o passo que ninguém dá.
+            */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={enviarWhatsApp.isPending}
+                onClick={() => enviarWhatsApp.mutate(lastSale.id)}
+              >
+                <MessageCircle className="h-5 w-5" aria-hidden />
+                WhatsApp
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                disabled={enviarEmail.isPending}
+                onClick={() => enviarEmail.mutate(lastSale.id)}
+              >
+                <Mail className="h-5 w-5" aria-hidden />
+                {enviarEmail.isPending ? "Enviando..." : "E-mail"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setLastSale(null);
+                  setEnvio(null);
+                }}
+              >
                 Fechar
               </Button>
             </div>
@@ -240,6 +329,20 @@ export function PosPage() {
                 </li>
               ))}
             </ul>
+          </Alert>
+        </div>
+      )}
+
+      {/*
+        O aviso da gaveta cheia aparece para quem está no balcão, que é quem
+        pode resolver — e antes da lista de peças, porque no meio da venda
+        ninguém lê rodapé.
+      */}
+      {openSession?.sangriaSugerida?.passou && (
+        <div className="mb-5">
+          <Alert tone="info" title="Dinheiro acumulado no caixa">
+            A gaveta passou de {formatMoney(openSession.sangriaSugerida.limite)} em dinheiro. Faça
+            uma sangria em Caixa — dinheiro parado na gaveta é o que um assalto leva.
           </Alert>
         </div>
       )}

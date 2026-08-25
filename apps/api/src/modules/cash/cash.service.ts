@@ -433,7 +433,7 @@ export async function listSessions(params: {
 
   const seesEverything = request.user.role === "DONO" || request.user.role === "DESENVOLVEDOR";
 
-  return prisma.cashSession.findMany({
+  const sessions = await prisma.cashSession.findMany({
     where: {
       companyId: request.user.companyId,
       ...(storeId ? { storeId } : {}),
@@ -450,6 +450,20 @@ export async function listSessions(params: {
     orderBy: { openedAt: "desc" },
     take: 100,
   });
+
+  // Só os turnos abertos são medidos contra o limite: um caixa fechado já
+  // teve o dinheiro recolhido, e avisar sobre ele seria alarme sobre o
+  // passado. São poucos — um por caixa em uso.
+  const limites = await Promise.all(
+    sessions.map((session) =>
+      session.status === "ABERTO" ? cashLimitExceeded(session.id, request) : null,
+    ),
+  );
+
+  return sessions.map((session, indice) => ({
+    ...session,
+    sangriaSugerida: limites[indice] ?? null,
+  }));
 }
 
 /** Detalhe de um turno já fechado — aqui os valores podem aparecer. */

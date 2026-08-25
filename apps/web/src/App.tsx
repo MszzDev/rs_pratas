@@ -7,6 +7,7 @@ import { useDeviceRegistration } from "./features/devices/use-device-registratio
 import { WaitingForStore } from "./features/devices/WaitingForStore";
 import { ChangePinPage } from "./features/auth/ChangePinPage";
 import { useShiftGuard } from "./features/timeclock/use-shift-guard";
+import { ScreenLock } from "./features/kiosk/ScreenLock";
 import { restaurarBrilho } from "./components/ui/brightness-control";
 import { AuthProvider, useAuth } from "./features/auth/auth-context";
 import { LoginPage } from "./features/auth/LoginPage";
@@ -373,6 +374,12 @@ export function App() {
   return (
     <AuthProvider>
       <AppRoutes />
+
+      {/*
+        Trava a tela depois do tempo configurado sem toque. Fica fora das
+        rotas porque não pertence a tela nenhuma: vale para todas.
+      */}
+      <ScreenLock />
 
       {/*
         Cortina opaca enquanto o app está em segundo plano: o Android fotografa

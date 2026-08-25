@@ -37,6 +37,7 @@ import {
   listPinResets,
   rejectPinReset,
   requestPinReset,
+  verifyOwnPin,
 } from "./pin.service.js";
 
 export async function authRoutes(app: FastifyInstance) {
@@ -181,6 +182,16 @@ export async function authRoutes(app: FastifyInstance) {
 
     return changeOwnPin({ ...body, request });
   });
+
+  /** Destrava a tela do tablet depois da inatividade. Nao emite sessao nova. */
+  app.post(
+    "/pin/verify",
+    { preHandler: app.requireAuth, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request) => {
+      const { pin } = z.object({ pin: z.string().min(4).max(8) }).parse(request.body);
+      return verifyOwnPin({ pin, request });
+    },
+  );
 
   /**
    * Pedido de PIN temporario, feito da tela de login.

@@ -104,6 +104,54 @@ export async function changeOwnPin(params: {
 }
 
 /**
+ * Confere o PIN de quem já está na sessão. Usado para destravar a tela.
+ *
+ * Não é login: a sessão continua a mesma, e nada novo é emitido. É só a
+ * pergunta "ainda é você aí?" depois do tablet ficar parado no balcão — quem
+ * pegou o aparelho de alguém que saiu para o almoço não passa daqui.
+ *
+ * Erra o PIN e conta como tentativa, com o mesmo bloqueio do login: sem isso,
+ * a tela de destravar viraria o lugar confortável para tentar PINs à vontade.
+ */
+export async function verifyOwnPin(params: { pin: string; request: FastifyRequest }) {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: params.request.user.sub },
+    select: { id: true, pinHash: true, pinFailedAttempts: true, pinLockedUntil: true },
+  });
+
+  if (!user.pinHash) {
+    throw badRequest("NO_PIN", "Você ainda não tem PIN.");
+  }
+
+  if (user.pinLockedUntil && user.pinLockedUntil > new Date()) {
+    throw unauthorized("PIN_LOCKED", "PIN bloqueado por tentativas. Aguarde alguns minutos.");
+  }
+
+  const confere = await verifySecret(user.pinHash, params.pin);
+
+  if (!confere) {
+    const tentativas = user.pinFailedAttempts + 1;
+    const bloquear = tentativas >= 5;
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        pinFailedAttempts: bloquear ? 0 : tentativas,
+        ...(bloquear ? { pinLockedUntil: new Date(Date.now() + 15 * 60_000) } : {}),
+      },
+    });
+
+    throw unauthorized("WRONG_PIN", "PIN incorreto.");
+  }
+
+  if (user.pinFailedAttempts > 0) {
+    await prisma.user.update({ where: { id: user.id }, data: { pinFailedAttempts: 0 } });
+  }
+
+  return { destravado: true };
+}
+
+/**
  * O funcionário pede um PIN temporário.
  *
  * SEM sessão: quem não consegue entrar não tem sessão para pedir com ela. O

@@ -21,7 +21,7 @@ import {
   markQuoteConverted,
   prepareQuoteConversion,
 } from "./quotes.service.js";
-import { sendSaleReceipt, sendWarrantyEmail } from "./receipt.service.js";
+import { getReceiptText, sendSaleReceipt, sendWarrantyEmail } from "./receipt.service.js";
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 const moneySchema = z.number().min(0).max(9_999_999).multipleOf(0.01);
@@ -343,6 +343,22 @@ export async function saleRoutes(app: FastifyInstance) {
     async (request) => {
       const { id } = idParamSchema.parse(request.params);
       return sendSaleReceipt({ saleId: id, request });
+    },
+  );
+
+  /**
+   * O mesmo comprovante, em texto, para ir pelo WhatsApp da loja.
+   *
+   * Nao envia: devolve a mensagem pronta e o telefone do cliente. Quem manda
+   * e a pessoa, do proprio aparelho — o que dispensa conta de API, aprovacao
+   * de modelo e mensalidade, e faz a mensagem chegar do numero da loja.
+   */
+  app.get(
+    "/sales/:id/receipt-text",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      return getReceiptText({ saleId: id, request });
     },
   );
 

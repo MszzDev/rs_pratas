@@ -16,6 +16,83 @@ import { saleReceiptEmail, warrantyEmail } from "../../core/email/sale-templates
  * comum, e sem reenviar a única saída seria refazer a venda.
  */
 
+/**
+ * O comprovante em texto, pronto para ir pelo WhatsApp.
+ *
+ * Não envia nada: devolve o texto e o telefone, e quem abre a conversa é a
+ * pessoa, no aplicativo dela. É a diferença entre "o sistema manda mensagem
+ * pelo seu número" — que exigiria conta de API, aprovação de modelo de
+ * mensagem e mensalidade — e "o sistema escreve a mensagem para você mandar",
+ * que funciona hoje, de graça, no celular que a loja já tem.
+ *
+ * E é honesto com o cliente: a mensagem chega do número da loja, com o nome
+ * de quem atendeu, e não de um robô desconhecido.
+ */
+export async function getReceiptText(params: { saleId: string; request: FastifyRequest }) {
+  const { saleId, request } = params;
+
+  const sale = await prisma.sale.findFirst({
+    where: { id: saleId, companyId: request.user.companyId },
+    include: {
+      customer: true,
+      seller: { select: { name: true } },
+      store: { select: { name: true } },
+      items: true,
+      payments: true,
+    },
+  });
+
+  if (!sale) {
+    throw notFound("SALE_NOT_FOUND", "Venda não encontrada.");
+  }
+
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: request.user.companyId },
+    select: { tradeName: true },
+  });
+
+  const mensagem = saleReceiptEmail({
+    // O endereço não é usado: só o corpo do texto interessa aqui.
+    to: sale.customer?.email ?? "",
+    customerName: sale.customer?.name ?? "cliente",
+    companyName: company.tradeName,
+    storeName: sale.store.name,
+    saleCode: sale.code,
+    completedAt: sale.completedAt ?? sale.createdAt,
+    sellerName: sale.seller?.name ?? "a loja",
+    totalAmount: sale.totalAmount.toString(),
+    discountAmount: sale.discountAmount?.toString() ?? null,
+    items: sale.items.map((item) => ({
+      productName: item.productName,
+      productSku: item.productSku,
+      size: null,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice.toString(),
+      totalPrice: item.totalAmount.toString(),
+    })),
+    payments: sale.payments.map((payment) => ({
+      method: payment.method,
+      amount: payment.amount.toString(),
+      installments: payment.installments,
+    })),
+  });
+
+  const telefone = (sale.customer?.phone ?? "").replace(/\D/g, "");
+
+  return {
+    texto: mensagem.text,
+    telefone: telefone || null,
+    /**
+     * Endereço que abre a conversa já com a mensagem escrita. Com o telefone,
+     * abre a conversa daquele cliente; sem ele, abre o WhatsApp para a pessoa
+     * escolher com quem falar — que é o caso da venda sem cadastro.
+     */
+    whatsappUrl: telefone
+      ? `https://wa.me/55${telefone}?text=${encodeURIComponent(mensagem.text)}`
+      : `https://wa.me/?text=${encodeURIComponent(mensagem.text)}`,
+  };
+}
+
 export async function sendSaleReceipt(params: { saleId: string; request: FastifyRequest }) {
   const { saleId, request } = params;
 

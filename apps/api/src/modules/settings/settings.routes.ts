@@ -33,6 +33,35 @@ export async function settingsRoutes(app: FastifyInstance) {
     },
   );
 
+  /**
+   * O punhado de configurações que o TABLET precisa conhecer.
+   *
+   * A lista completa é do dono; esta é aberta a qualquer sessão porque quem
+   * precisa dela é a vendedora no balcão — o bloqueio por inatividade só
+   * funciona se a tela dela souber depois de quantos segundos travar.
+   *
+   * Só sai daqui o que não é sensível: um número de segundos e um texto de
+   * rodapé não dizem nada sobre a empresa que já não esteja impresso no
+   * comprovante.
+   */
+  app.get("/settings/device-policy", { preHandler: app.requireAuth }, async (request) => {
+    const settings = await prisma.appSetting.findMany({
+      where: {
+        companyId: request.user.companyId,
+        key: { in: ["inactivity_lock_seconds", "receipt_footer"] },
+      },
+    });
+
+    const valor = (chave: string) => settings.find((setting) => setting.key === chave)?.value;
+    const segundos = Number(valor("inactivity_lock_seconds") ?? 0);
+
+    return {
+      // Zero ou ausente: sem bloqueio. Só trava onde alguém decidiu que trava.
+      inactivityLockSeconds: Number.isFinite(segundos) && segundos > 0 ? segundos : 0,
+      receiptFooter: typeof valor("receipt_footer") === "string" ? valor("receipt_footer") : null,
+    };
+  });
+
   app.put("/settings/app", { preHandler: ownerOnly }, async (request) => {
     const input = settingBodySchema.parse(request.body);
 

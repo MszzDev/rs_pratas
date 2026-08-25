@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownCircle, ArrowUpCircle, Lock, LockOpen } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, Lock, LockOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -24,6 +24,14 @@ interface Session {
   openedBy: { name: string };
   closedBy: { name: string } | null;
   _count: { sales: number };
+  /**
+   * A gaveta passou do limite combinado.
+   *
+   * Vem só "passou ou não" e o limite — nunca o saldo. A contagem do
+   * fechamento é às cegas de propósito, e mandar o valor para a tela
+   * desfaria isso.
+   */
+  sangriaSugerida: { passou: boolean; limite: number } | null;
 }
 
 
@@ -418,6 +426,19 @@ export function CashPage() {
 
               {session.differenceReason && (
                 <p className="mt-1 text-sm text-text-muted">“{session.differenceReason}”</p>
+              )}
+
+              {/*
+                Diz que passou do limite, nunca quanto tem na gaveta: a
+                contagem do fechamento é às cegas, e o valor exato na tela
+                desfaria a conferência.
+              */}
+              {session.sangriaSugerida?.passou && (
+                <p className="mt-2 flex items-center gap-2 text-sm font-medium text-warning">
+                  <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+                  Passou de {formatMoney(session.sangriaSugerida.limite)} em dinheiro. Faça uma
+                  sangria.
+                </p>
               )}
             </div>
 
