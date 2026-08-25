@@ -20,7 +20,12 @@ import {
   registerKioskExit,
   unlinkDevice,
 } from "./devices.service.js";
-import { announceDevice, assignDevice, listPendingDevices } from "./announcement.service.js";
+import {
+  announceDevice,
+  assignDevice,
+  dismissAnnouncement,
+  listPendingDevices,
+} from "./announcement.service.js";
 
 export async function deviceRoutes(app: FastifyInstance) {
   // A guarda de somente-leitura do DESENVOLVEDOR já vive dentro do requireAuth.
@@ -172,5 +177,11 @@ export async function deviceRoutes(app: FastifyInstance) {
       .parse(request.body);
 
     return assignDevice({ announcementId: id, ...body, request });
+  });
+
+  /** Tira da fila um aparelho que nao e da loja. */
+  app.delete("/devices/pending/:id", { preHandler: managerOrOwner }, async (request) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    return dismissAnnouncement({ announcementId: id, request });
   });
 }

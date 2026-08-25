@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import type { ReactNode } from "react";
+import { Capacitor } from "@capacitor/core";
 import { installBackgroundPrivacy, installKioskGuards } from "./lib/kiosk";
+import { useDeviceRegistration } from "./features/devices/use-device-registration";
+import { WaitingForStore } from "./features/devices/WaitingForStore";
+import { ChangePinPage } from "./features/auth/ChangePinPage";
+import { restaurarBrilho } from "./components/ui/brightness-control";
 import { AuthProvider, useAuth } from "./features/auth/auth-context";
 import { LoginPage } from "./features/auth/LoginPage";
 import { FirstAccessPage } from "./features/auth/FirstAccessPage";
@@ -52,7 +57,8 @@ function RequireAuth({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    // No tablet não existe senha para digitar: a entrada é matrícula e PIN.
+    return <Navigate to={Capacitor.isNativePlatform() ? "/pin" : "/login"} replace />;
   }
 
   // O backend recusa todas as outras rotas até o segundo fator ser confirmado.
@@ -60,6 +66,13 @@ function RequireAuth({ children }: { children: ReactNode }) {
   // "sem permissão" em cada tela que tentar abrir.
   if (user.twoFactorPending) {
     return <Navigate to="/verificacao-duas-etapas" replace />;
+  }
+
+  // PIN vencido (inclusive o temporário liberado pelo responsável, que já nasce
+  // vencido de propósito): a sessão vale, mas a primeira coisa é escolher um
+  // PIN novo. Sem isto, o PIN dito em voz alta no balcão valeria trinta dias.
+  if (user.pinExpired) {
+    return <Navigate to="/trocar-pin" replace />;
   }
 
   return <>{children}</>;
@@ -88,6 +101,10 @@ function AppRoutes() {
       {/* Fora do RequireAuth de propósito: é a única rota que o dono alcança
           enquanto o segundo fator não estiver confirmado. */}
       <Route path="/verificacao-duas-etapas" element={<TwoFactorSetupPage />} />
+
+      {/* Fora do RequireAuth pela mesma razão: é para onde quem está com o PIN
+          vencido é mandado, e o guarda o devolveria para cá em círculo. */}
+      <Route path="/trocar-pin" element={<ChangePinPage />} />
 
       <Route
         path="/ponto"
@@ -308,7 +325,20 @@ function AppRoutes() {
 export function App() {
   const [hidden, setHidden] = useState(false);
 
+  /**
+   * O tablet se apresenta sozinho ao abrir e espera o dono escolher a loja.
+   *
+   * Enquanto isso não acontece, nem o login aparece: não há loja para vender,
+   * caixa para abrir nem ponto para bater. Mostrar a tela de entrada seria
+   * oferecer algo que não funciona.
+   */
+  const registro = useDeviceRegistration();
+
   useEffect(() => {
+    // O brilho escolhido ontem vale hoje: quem ajustou não deve ter que
+    // ajustar de novo a cada abertura do aplicativo.
+    void restaurarBrilho();
+
     const removeKioskGuards = installKioskGuards();
     const removePrivacy = installBackgroundPrivacy(setHidden);
 
@@ -317,6 +347,18 @@ export function App() {
       removePrivacy();
     };
   }, []);
+
+  if (registro.estado === "verificando") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-brand">
+        <Logo size="lg" />
+      </div>
+    );
+  }
+
+  if (registro.estado === "aguardando") {
+    return <WaitingForStore apelido={registro.apelido} />;
+  }
 
   return (
     <AuthProvider>

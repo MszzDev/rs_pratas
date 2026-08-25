@@ -1,0 +1,303 @@
+import type { FastifyInstance } from "fastify";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { prisma } from "../../src/db/prisma.js";
+import {
+  createTestApp,
+  createTestCompany,
+  createTestStore,
+  createTestUser,
+  disconnectAll,
+  resetDatabase,
+} from "./helpers.js";
+
+/**
+ * A vida do PIN: vence em 30 dias, o funcionário troca sozinho, e quem
+ * esqueceu pede um temporário ao responsável.
+ *
+ * O que estes testes seguram é a parte que não aparece na tela: pedir NÃO
+ * concede — só o dono ou o gerente concedem; o PIN temporário nasce vencido,
+ * para não valer trinta dias depois de ser dito em voz alta no balcão; e o PIN
+ * nunca entra na auditoria, que é lida por mais gente que o banco.
+ */
+
+let app: FastifyInstance;
+
+const PIN_ATUAL = "482913";
+const PIN_NOVO = "573926";
+
+beforeAll(async () => {
+  app = await createTestApp();
+});
+
+afterAll(async () => {
+  await app.close();
+  await disconnectAll();
+});
+
+beforeEach(async () => {
+  await resetDatabase();
+});
+
+async function authenticate(employeeCode: string, password: string) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/login/password",
+    payload: { identifier: employeeCode, password },
+  });
+  return response;
+}
+
+/** Funcionário com PIN válido, trocado há `diasAtras` dias. */
+async function criarComPin(companyId: string, diasAtras: number, role: "VENDEDOR" | "GERENTE" = "VENDEDOR") {
+  const { user, password } = await createTestUser({ companyId, role, pin: PIN_ATUAL });
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { pinChangedAt: new Date(Date.now() - diasAtras * 86_400_000) },
+  });
+
+  return { user, password };
+}
+
+describe("troca do próprio PIN", () => {
+  async function sessaoDeQuemTemPin(diasAtras = 1) {
+    const company = await createTestCompany();
+    const { user, password } = await criarComPin(company.id, diasAtras);
+    const token = (await authenticate(user.employeeCode, password)).json().accessToken;
+
+    return { company, user, token };
+  }
+
+  const trocar = (token: string, payload: Record<string, unknown>) =>
+    app.inject({
+      method: "POST",
+      url: "/api/v1/auth/pin/change",
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+
+  it("troca com o PIN atual correto e renova os 30 dias", async () => {
+    const { user, token } = await sessaoDeQuemTemPin(29);
+
+    const resposta = await trocar(token, { currentPin: PIN_ATUAL, newPin: PIN_NOVO });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json()).toMatchObject({ trocado: true, validoPorDias: 30 });
+
+    const depois = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(depois.pinChangedAt).not.toBeNull();
+    expect(Date.now() - depois.pinChangedAt!.getTime()).toBeLessThan(60_000);
+  });
+
+  it("recusa quem não sabe o PIN atual — um tablet destravado não basta", async () => {
+    const { token } = await sessaoDeQuemTemPin();
+
+    const resposta = await trocar(token, { currentPin: "000000", newPin: PIN_NOVO });
+
+    expect(resposta.statusCode).toBe(401);
+    expect(resposta.json().error.code).toBe("WRONG_PIN");
+  });
+
+  it("recusa PIN previsível", async () => {
+    const { token } = await sessaoDeQuemTemPin();
+
+    const resposta = await trocar(token, { currentPin: PIN_ATUAL, newPin: "123456" });
+
+    expect(resposta.statusCode).toBe(400);
+    expect(resposta.json().error.code).toBe("WEAK_PIN");
+  });
+
+  it("recusa trocar o PIN por ele mesmo — não renovaria nada", async () => {
+    const { token } = await sessaoDeQuemTemPin();
+
+    const resposta = await trocar(token, { currentPin: PIN_ATUAL, newPin: PIN_ATUAL });
+
+    expect(resposta.statusCode).toBe(400);
+    expect(resposta.json().error.code).toBe("SAME_PIN");
+  });
+});
+
+describe("aviso e vencimento", () => {
+  it("a sessão diz quantos dias faltam, para a tela avisar antes", async () => {
+    const company = await createTestCompany();
+    const { user, password } = await criarComPin(company.id, 27);
+
+    const sessao = (await authenticate(user.employeeCode, password)).json();
+
+    expect(sessao.user.pinExpired).toBe(false);
+    expect(sessao.user.pinExpiresInDays).toBe(3);
+  });
+
+  it("PIN vencido não impede entrar — impede continuar sem trocar", async () => {
+    const company = await createTestCompany();
+    const { user, password } = await criarComPin(company.id, 45);
+
+    const resposta = await authenticate(user.employeeCode, password);
+
+    // A sessão sai normalmente: bloquear o login deixaria a pessoa de fora sem
+    // caminho de volta. Quem exige a troca é a tela, com este sinal.
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().user.pinExpired).toBe(true);
+  });
+});
+
+describe("PIN temporário", () => {
+  async function cenario() {
+    const company = await createTestCompany();
+    const store = await createTestStore(company.id);
+
+    const { user: owner, password: ownerPassword } = await createTestUser({
+      companyId: company.id,
+      role: "DONO",
+    });
+    const ownerToken = (await authenticate(owner.employeeCode, ownerPassword)).json().accessToken;
+
+    const { user: seller } = await criarComPin(company.id, 40);
+    await prisma.userStore.create({ data: { userId: seller.id, storeId: store.id } });
+
+    return { company, store, owner, ownerToken, seller };
+  }
+
+  const pedir = (employeeCode: string) =>
+    app.inject({
+      method: "POST",
+      url: "/api/v1/auth/pin/reset-request",
+      payload: { employeeCode },
+    });
+
+  const listar = (token: string) =>
+    app.inject({
+      method: "GET",
+      url: "/api/v1/auth/pin/reset-requests",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+  it("o pedido sai sem sessão — quem não entra não tem sessão para pedir", async () => {
+    const { seller, ownerToken } = await cenario();
+
+    const pedido = await pedir(seller.employeeCode);
+
+    expect(pedido.statusCode).toBe(200);
+    expect(pedido.json().registrado).toBe(true);
+
+    const fila = await listar(ownerToken);
+    expect(fila.json()).toHaveLength(1);
+    expect(fila.json()[0].employeeCode).toBe(seller.employeeCode);
+  });
+
+  it("pedir de novo não cria fila com a mesma pessoa três vezes", async () => {
+    const { seller, ownerToken } = await cenario();
+
+    await pedir(seller.employeeCode);
+    await pedir(seller.employeeCode);
+    await pedir(seller.employeeCode);
+
+    expect((await listar(ownerToken)).json()).toHaveLength(1);
+  });
+
+  it("matrícula inexistente responde igual — a tela não vira verificador de quem trabalha aqui", async () => {
+    const { seller, ownerToken } = await cenario();
+
+    const conhecida = await pedir(seller.employeeCode);
+    const inventada = await pedir("RS999999");
+
+    expect(inventada.statusCode).toBe(conhecida.statusCode);
+    expect(inventada.json().mensagem).toBe(conhecida.json().mensagem);
+
+    // A resposta é a mesma, mas só uma vira pedido de verdade.
+    expect((await listar(ownerToken)).json()).toHaveLength(1);
+  });
+
+  it("aprovar devolve o PIN uma vez, já vencido, e não o escreve na auditoria", async () => {
+    const { seller, ownerToken } = await cenario();
+
+    await pedir(seller.employeeCode);
+    const [pedido] = (await listar(ownerToken)).json();
+
+    const aprovacao = await app.inject({
+      method: "POST",
+      url: `/api/v1/auth/pin/reset-requests/${pedido.id}/approve`,
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+
+    expect(aprovacao.statusCode).toBe(200);
+
+    const temporario = aprovacao.json().temporaryPin as string;
+    expect(temporario).toMatch(/^[0-9]{6}$/);
+
+    // Nasce vencido: serve para uma entrada, e o sistema já pede a troca.
+    const depois = await prisma.user.findUniqueOrThrow({ where: { id: seller.id } });
+    expect(depois.pinChangedAt).toBeNull();
+
+    // A auditoria é lida por mais gente que o banco — o PIN não entra nela.
+    const registros = await prisma.auditLog.findMany({ where: { entityId: seller.id } });
+    expect(JSON.stringify(registros)).not.toContain(temporario);
+
+    // Resolvido: some da fila de quem decide.
+    expect((await listar(ownerToken)).json()).toHaveLength(0);
+  });
+
+  it("o mesmo pedido não é aprovado duas vezes", async () => {
+    const { seller, ownerToken } = await cenario();
+
+    await pedir(seller.employeeCode);
+    const [pedido] = (await listar(ownerToken)).json();
+
+    const aprovar = () =>
+      app.inject({
+        method: "POST",
+        url: `/api/v1/auth/pin/reset-requests/${pedido.id}/approve`,
+        headers: { authorization: `Bearer ${ownerToken}` },
+      });
+
+    await aprovar();
+    const segunda = await aprovar();
+
+    expect(segunda.statusCode).toBe(400);
+    expect(segunda.json().error.code).toBe("ALREADY_DECIDED");
+  });
+
+  it("recusar exige motivo e deixa o PIN antigo como estava", async () => {
+    const { seller, ownerToken } = await cenario();
+
+    await pedir(seller.employeeCode);
+    const [pedido] = (await listar(ownerToken)).json();
+
+    const antes = await prisma.user.findUniqueOrThrow({ where: { id: seller.id } });
+
+    const semMotivo = await app.inject({
+      method: "POST",
+      url: `/api/v1/auth/pin/reset-requests/${pedido.id}/reject`,
+      headers: { authorization: `Bearer ${ownerToken}` },
+      payload: { reason: "" },
+    });
+    expect(semMotivo.statusCode).toBe(400);
+
+    const comMotivo = await app.inject({
+      method: "POST",
+      url: `/api/v1/auth/pin/reset-requests/${pedido.id}/reject`,
+      headers: { authorization: `Bearer ${ownerToken}` },
+      payload: { reason: "não era a pessoa" },
+    });
+
+    expect(comMotivo.statusCode).toBe(200);
+
+    const depois = await prisma.user.findUniqueOrThrow({ where: { id: seller.id } });
+    expect(depois.pinHash).toBe(antes.pinHash);
+  });
+
+  it("vendedor não vê nem aprova pedido de ninguém", async () => {
+    const { company, store, seller } = await cenario();
+
+    const { user: outro, password } = await createTestUser({
+      companyId: company.id,
+      role: "VENDEDOR",
+    });
+    await prisma.userStore.create({ data: { userId: outro.id, storeId: store.id } });
+    const token = (await authenticate(outro.employeeCode, password)).json().accessToken;
+
+    await pedir(seller.employeeCode);
+
+    expect((await listar(token)).statusCode).toBe(403);
+  });
+});

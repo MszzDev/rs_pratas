@@ -4,6 +4,9 @@ import android.app.ActivityManager;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.os.Build;
+import android.provider.Settings;
+import android.view.WindowManager;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -49,6 +52,26 @@ public class KioskPlugin extends Plugin {
   }
 
   /**
+   * Identificacao do aparelho, para ele se anunciar ao sistema.
+   *
+   * ANDROID_ID e estavel enquanto o aparelho nao for formatado — o que e
+   * exatamente a vida util de um tablet de balcao. Um identificador que
+   * mudasse a cada atualizacao faria o mesmo tablet reaparecer na fila do
+   * dono como se fosse novo.
+   */
+  @PluginMethod
+  public void identidade(PluginCall call) {
+    String androidId =
+        Settings.Secure.getString(getContext().getContentResolver(), Settings.Secure.ANDROID_ID);
+
+    JSObject resposta = new JSObject();
+    resposta.put("hardwareId", androidId);
+    resposta.put("model", Build.MANUFACTURER + " " + Build.MODEL);
+    resposta.put("osVersion", "Android " + Build.VERSION.RELEASE);
+    call.resolve(resposta);
+  }
+
+  /**
    * Sai do confinamento.
    *
    * Não é permanente: o `onResume` da MainActivity reentra no Lock Task assim
@@ -80,6 +103,48 @@ public class KioskPlugin extends Plugin {
                 call.reject("Não foi possível sair do modo quiosque.", erro);
               }
             });
+  }
+
+  /**
+   * Brilho da tela, ajustado pelo proprio sistema.
+   *
+   * Com a barra do Android desligada, nao ha mais como puxar o painel de
+   * ajustes rapidos — e o balcao da joalheria vai do sol da vitrine as seis da
+   * tarde. Sem isto, a vendedora fica sem saida quando a tela apaga na luz.
+   *
+   * O ajuste e da JANELA do aplicativo, nao do sistema: nao exige a permissao
+   * WRITE_SETTINGS e nao mexe no brilho de nada mais no aparelho.
+   *
+   * O minimo e 0,05 e nao zero: brilho zero apaga a tela por completo, e a
+   * pessoa que arrastasse ate o fim ficaria sem enxergar o proprio controle
+   * para voltar.
+   */
+  @PluginMethod
+  public void definirBrilho(PluginCall call) {
+    Float nivel = call.getFloat("nivel");
+
+    if (nivel == null) {
+      call.reject("Informe o nível do brilho, entre 0 e 1.");
+      return;
+    }
+
+    final float ajustado = Math.max(0.05f, Math.min(1f, nivel));
+
+    getActivity()
+        .runOnUiThread(
+            () -> {
+              WindowManager.LayoutParams atributos = getActivity().getWindow().getAttributes();
+              atributos.screenBrightness = ajustado;
+              getActivity().getWindow().setAttributes(atributos);
+              call.resolve(new JSObject().put("nivel", ajustado));
+            });
+  }
+
+  /** O brilho atual da janela. Negativo significa "o que o sistema mandar". */
+  @PluginMethod
+  public void obterBrilho(PluginCall call) {
+    float atual = getActivity().getWindow().getAttributes().screenBrightness;
+    call.resolve(new JSObject().put("nivel", atual));
   }
 
   /**

@@ -34,6 +34,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-context";
 import { Logo, LogoMark } from "@/components/ui/logo";
+import { StatusStrip } from "@/components/ui/status-strip";
+import { PinExpiryNotice } from "@/features/auth/PinExpiryNotice";
 import { KioskExitDialog, useKioskExitGesture } from "@/features/kiosk/KioskExit";
 
 type NavSection = "dia-a-dia" | "gestao" | "sistema";
@@ -262,6 +264,8 @@ export function PageShell({
 
       <div className="flex-1 lg:min-w-0">
         <main className="mx-auto w-full max-w-[82rem] px-4 py-6 md:px-6 md:py-8">
+          <PinExpiryNotice />
+
           <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               {eyebrow && (
@@ -417,10 +421,14 @@ function Sidebar({
 }) {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border/70 bg-brand lg:sticky lg:top-0 lg:flex lg:h-screen">
-      <div className="flex h-[4.5rem] items-center border-b border-border/70 px-5">
+      <div className="flex h-[4.5rem] items-center justify-between gap-2 border-b border-border/70 px-5">
         <button type="button" onClick={onLogoTap} aria-label="RS Pratas">
           <Logo size="md" />
         </button>
+
+        {/* Hora e bateria: no tablet a barra do Android está desligada, e é
+            daqui que a pessoa tira as duas informações. */}
+        <StatusStrip className="text-xs" />
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
@@ -489,6 +497,8 @@ function MobileBar({
                 </NavLink>
               ))}
           </nav>
+
+          <StatusStrip className="ml-auto shrink-0 text-xs" />
         </div>
       </header>
 

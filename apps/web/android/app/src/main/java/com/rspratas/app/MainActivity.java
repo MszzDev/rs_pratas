@@ -59,9 +59,14 @@ public class MainActivity extends BridgeActivity {
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-
+    // ANTES do super.onCreate: e ele quem monta a ponte com a tela. Registrar
+    // depois compila e nao reclama, mas a ponte ja nasceu sem o plugin, e a
+    // tela recebe "Kiosk plugin is not implemented on android" — que foi
+    // exatamente o que aconteceu com a saida do quiosque e com o anuncio do
+    // aparelho.
     registerPlugin(KioskPlugin.class);
+
+    super.onCreate(savedInstanceState);
 
     // Impede que o Android fotografe a tela para a lista de recentes e para
     // capturas: o resumo do caixa não pode ficar visível na miniatura para

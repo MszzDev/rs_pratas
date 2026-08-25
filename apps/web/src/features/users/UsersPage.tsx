@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
+import { PinResetRequests } from "@/features/auth/PinResetRequests";
 import { apiFetch, ApiError, requestStepUpToken } from "@/lib/api-client";
 import { useAuth } from "../auth/auth-context";
 import { OffDeviceAccessDialog } from "./OffDeviceAccessDialog";
@@ -234,6 +235,9 @@ export function UsersPage() {
         )
       }
     >
+      {/* Quem esqueceu o PIN está esperando agora — por isso vem antes de tudo. */}
+      <PinResetRequests />
+
       {/*
         A credencial aparece uma única vez. Não fica guardada em lugar nenhum —
         se o dono fechar sem anotar, o caminho é gerar outra, que invalida esta.

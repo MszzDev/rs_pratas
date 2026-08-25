@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Plus, Unlink } from "lucide-react";
+import { Plus, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "../auth/auth-context";
+import { PendingDevices } from "./PendingDevices";
 
 interface Store {
   id: string;
@@ -52,9 +52,6 @@ export function DevicesPage() {
 
   const [storeId, setStoreId] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [pairing, setPairing] = useState<{ code: string; expiresAt: string; name: string } | null>(
-    null,
-  );
 
   const stores = useQuery({
     queryKey: ["stores"],
@@ -98,32 +95,10 @@ export function DevicesPage() {
     onError: (caught) => handleError(caught, "Não foi possível criar o caixa."),
   });
 
-  const createDevice = useMutation({
-    mutationFn: (input: { cashRegisterId: string; name: string }) =>
-      apiFetch<{ pairingCode: string; expiresAt: string; device: Device }>("/api/v1/devices", {
-        method: "POST",
-        body: input,
-      }),
-    onSuccess: (result) => {
-      setPairing({
-        code: result.pairingCode,
-        expiresAt: result.expiresAt,
-        name: result.device.name,
-      });
-      setError(null);
-      void queryClient.invalidateQueries({ queryKey: ["devices"] });
-    },
-    onError: (caught) => handleError(caught, "Não foi possível cadastrar o tablet."),
-  });
-
-  const registers = stations.data?.flatMap((station) =>
-    station.cashRegisters.map((register) => ({ ...register, stationCode: station.code })),
-  );
-
   return (
     <PageShell
       title="Tablets"
-      description="Cada tablet pertence a um caixa, que pertence a uma estação de uma loja."
+      description="Ligue o tablet com internet e ele aparece aqui sozinho. Você escolhe a loja; ninguém digita nada no aparelho."
     >
       {error && (
         <div className="mb-5">
@@ -131,34 +106,8 @@ export function DevicesPage() {
         </div>
       )}
 
-      {pairing && (
-        <div className="mb-6">
-          <Alert tone="success" title={`Tablet "${pairing.name}" cadastrado`}>
-            <p>Digite este código no tablet para vinculá-lo:</p>
-            <div className="mt-3 flex items-center gap-3">
-              <code className="rounded bg-surface px-4 py-3 font-mono text-2xl tracking-widest">
-                {pairing.code}
-              </code>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Copiar código"
-                onClick={() => void navigator.clipboard.writeText(pairing.code)}
-              >
-                <Copy className="h-5 w-5" aria-hidden />
-              </Button>
-            </div>
-            <p className="mt-3">
-              Vale até {new Date(pairing.expiresAt).toLocaleTimeString("pt-BR")} e serve uma única
-              vez. Depois disso, gere outro.
-            </p>
-            <Button type="button" variant="ghost" className="mt-2" onClick={() => setPairing(null)}>
-              Entendi
-            </Button>
-          </Alert>
-        </div>
-      )}
+      {/* A fila de quem chegou e ainda não tem loja. Some sozinha quando vazia. */}
+      <PendingDevices stores={stores.data ?? []} />
 
       <div className="mb-6 max-w-sm">
         <label htmlFor="store" className="text-sm font-medium text-text-secondary">
@@ -300,51 +249,16 @@ export function DevicesPage() {
               ))}
             </ul>
 
-            {registers && registers.length > 0 && (
-              <form
-                className="mt-5 border-t border-border pt-5"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const form = new FormData(event.currentTarget);
-                  createDevice.mutate({
-                    cashRegisterId: String(form.get("cashRegisterId")),
-                    name: String(form.get("name")),
-                  });
-                  event.currentTarget.reset();
-                }}
-              >
-                <h3 className="font-medium text-text-primary">Cadastrar tablet</h3>
-
-                <div className="mt-3 flex flex-col gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label
-                      htmlFor="cashRegisterId"
-                      className="text-sm font-medium text-text-secondary"
-                    >
-                      Caixa
-                    </label>
-                    <select
-                      id="cashRegisterId"
-                      name="cashRegisterId"
-                      required
-                      className="min-h-[48px] rounded-md border border-border bg-surface px-4"
-                    >
-                      {registers.map((register) => (
-                        <option key={register.id} value={register.id}>
-                          {register.stationCode} — {register.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <Field label="Nome do tablet" name="name" required placeholder="Tablet 01" />
-
-                  <Button type="submit" disabled={createDevice.isPending}>
-                    {createDevice.isPending ? "Cadastrando..." : "Cadastrar e gerar código"}
-                  </Button>
-                </div>
-              </form>
-            )}
+            {/*
+              Não há formulário para cadastrar tablet: quem se cadastra é o
+              próprio aparelho, ao ser ligado. O antigo caminho — gerar um
+              código aqui e alguém digitá-lo lá — era trabalho do vendedor para
+              resolver um problema do dono.
+            */}
+            <p className="mt-5 border-t border-border pt-5 text-sm text-text-muted">
+              Para adicionar um tablet, ligue o aparelho com internet e abra o RS Pratas. Ele
+              aparece no topo desta tela em segundos.
+            </p>
           </section>
         </div>
       )}

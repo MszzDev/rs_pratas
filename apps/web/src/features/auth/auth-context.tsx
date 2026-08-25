@@ -20,6 +20,13 @@ interface AuthContextValue {
    */
   markTwoFactorResolved: () => void;
   /**
+   * Renova a contagem dos 30 dias depois que o funcionário troca o PIN.
+   *
+   * Mesma razão do 2FA: o access token atual ainda diz que o PIN venceu, e sem
+   * isto a tela de troca mandaria a pessoa de volta para ela mesma.
+   */
+  markPinChanged: () => void;
+  /**
    * Este usuário tem a permissão? Serve para ESCONDER, nunca para liberar.
    *
    * A lista vem do servidor junto com a sessão, já com concessões nominais e
@@ -125,9 +132,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((current) => (current ? { ...current, twoFactorPending: false } : current));
   }, []);
 
+  const markPinChanged = useCallback(() => {
+    setUser((current) =>
+      current ? { ...current, pinExpired: false, pinExpiresInDays: 30 } : current,
+    );
+  }, []);
+
   const value = useMemo(
-    () => ({ user, loading, loginWithPassword, loginWithPin, logout, markTwoFactorResolved, can }),
-    [user, loading, loginWithPassword, loginWithPin, logout, markTwoFactorResolved, can],
+    () => ({
+      user,
+      loading,
+      loginWithPassword,
+      loginWithPin,
+      logout,
+      markTwoFactorResolved,
+      markPinChanged,
+      can,
+    }),
+    [
+      user,
+      loading,
+      loginWithPassword,
+      loginWithPin,
+      logout,
+      markTwoFactorResolved,
+      markPinChanged,
+      can,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

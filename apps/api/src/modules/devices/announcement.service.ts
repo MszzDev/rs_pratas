@@ -50,7 +50,31 @@ export async function announceDevice(input: {
   });
 
   if (!anuncio.deviceId) {
-    return { vinculado: false as const, deviceId: null, storeName: null, deviceName: null };
+    // O aparelho pode já ter sido cadastrado pelo caminho antigo, em que o
+    // dono gerava um código e alguém digitava no tablet. Se existe um Device
+    // com este mesmo identificador de hardware, o anúncio adota aquele em vez
+    // de mandar o tablet para a fila — senão o dono vincularia de novo e a
+    // loja ficaria com dois caixas para um tablet só.
+    const jaCadastrado = await prisma.device.findFirst({
+      where: { deviceUuid: input.hardwareId, deletedAt: null },
+      include: { store: { select: { name: true } } },
+    });
+
+    if (!jaCadastrado) {
+      return { vinculado: false as const, deviceId: null, storeName: null, deviceName: null };
+    }
+
+    await prisma.deviceAnnouncement.update({
+      where: { id: anuncio.id },
+      data: { deviceId: jaCadastrado.id },
+    });
+
+    return {
+      vinculado: true as const,
+      deviceId: jaCadastrado.id,
+      storeName: jaCadastrado.store.name,
+      deviceName: jaCadastrado.name,
+    };
   }
 
   const device = await prisma.device.findFirst({
@@ -104,6 +128,53 @@ export async function listPendingDevices() {
     /** Só para citar o aparelho sem expor o identificador inteiro. */
     apelido: `${anuncio.model ?? "Tablet"} ····${anuncio.hardwareId.slice(-4)}`,
   }));
+}
+
+/**
+ * Tira da fila um aparelho que não é da loja.
+ *
+ * Qualquer aparelho com o aplicativo aberto entra na fila — o celular de quem
+ * estava testando, um tablet que já foi devolvido. Sem uma forma de descartar,
+ * a fila vira uma lista de coisas que o dono precisa ignorar toda vez, e uma
+ * lista assim deixa de ser lida.
+ *
+ * Descartar não bloqueia nada: se o mesmo aparelho abrir o aplicativo de novo,
+ * ele reaparece. É uma limpeza, não uma punição.
+ */
+export async function dismissAnnouncement(params: {
+  announcementId: string;
+  request: FastifyRequest;
+}) {
+  const anuncio = await prisma.deviceAnnouncement.findUnique({
+    where: { id: params.announcementId },
+  });
+
+  if (!anuncio) {
+    throw notFound("ANNOUNCEMENT_NOT_FOUND", "Este aparelho não está na fila.");
+  }
+
+  if (anuncio.deviceId) {
+    throw conflict(
+      "ALREADY_ASSIGNED",
+      "Este aparelho já pertence a uma loja. Para tirá-lo, desvincule o tablet.",
+    );
+  }
+
+  await prisma.deviceAnnouncement.delete({ where: { id: anuncio.id } });
+
+  await audit(params.request, {
+    action: "DEVICE_UPDATE",
+    result: "SUCCESS",
+    userId: params.request.user.sub,
+    companyId: params.request.user.companyId,
+    userRoleSnapshot: params.request.user.role,
+    entityType: "DeviceAnnouncement",
+    entityId: anuncio.id,
+    reason: "aparelho descartado da fila",
+    previousData: { hardwareId: anuncio.hardwareId, model: anuncio.model },
+  });
+
+  return { descartado: true };
 }
 
 /**
