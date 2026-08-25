@@ -39,6 +39,61 @@ async function authenticate(employeeCode: string, password: string) {
 const listAudit = (token: string, query = "") =>
   app.inject({ method: "GET", url: `/api/v1/audit${query}`, headers: auth(token) });
 
+describe("auditoria legível", () => {
+  it("agrupa por assunto e conta o que mudou, campo a campo", async () => {
+    const company = await createTestCompany();
+    const store = await createTestStore(company.id);
+    const { user: owner, password } = await createTestUser({
+      companyId: company.id,
+      role: "DONO",
+    });
+
+    const token = await authenticate(owner.employeeCode, password);
+
+    // Uma alteração de loja: é o tipo de mudança que leva alguém à auditoria
+    // perguntando "quem mexeu nisto?".
+    await app.inject({
+      method: "PATCH",
+      url: `/api/v1/stores/${store.id}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "Loja Centro Renomeada", phone: "1140028922" },
+    });
+
+    const resposta = await app.inject({
+      method: "GET",
+      url: "/api/v1/audit?topic=pessoas",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+
+    // O assunto "pessoas" traz o login do dono, não a alteração da loja.
+    const acoes = resposta.json().entries.map((entry: { action: string }) => entry.action);
+    expect(acoes).toContain("LOGIN_SUCCESS");
+    expect(acoes).not.toContain("STORE_UPDATE");
+
+    const tudo = await app.inject({
+      method: "GET",
+      url: "/api/v1/audit",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    const alteracao = tudo
+      .json()
+      .entries.find((entry: { action: string }) => entry.action === "STORE_UPDATE");
+
+    expect(alteracao).toBeDefined();
+
+    const campos = alteracao.changes.map((mudanca: { campo: string }) => mudanca.campo);
+    expect(campos).toContain("name");
+
+    // Identificadores e credenciais ficam de fora do "antes e depois": não
+    // dizem nada a quem lê, e credencial não circula nem como histórico.
+    expect(campos.some((campo: string) => campo.endsWith("Id"))).toBe(false);
+    expect(JSON.stringify(alteracao.changes)).not.toContain("Hash");
+  });
+});
+
 describe("consulta de auditoria", () => {
   it("o dono enxerga os registros da empresa", async () => {
     const company = await createTestCompany();

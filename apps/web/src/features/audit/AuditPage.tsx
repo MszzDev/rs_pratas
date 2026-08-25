@@ -1,9 +1,19 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  Boxes,
+  Clock,
+  CreditCard,
+  ListFilter,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch } from "@/lib/api-client";
+import { frase, nomeDoCampo, valorLegivel } from "./audit-language";
 
 interface AuditEntry {
   id: string;
@@ -15,165 +25,212 @@ interface AuditEntry {
   createdAt: string;
   userRoleSnapshot: string | null;
   user: { name: string; employeeCode: string } | null;
+  changes: Array<{ campo: string; de: unknown; para: unknown }>;
 }
 
 /**
- * Rótulos em português para os eventos. Sem isso a tela mostraria
- * LOGIN_FAILED cru, e quem investiga um incidente não deveria precisar
- * traduzir constante de código.
+ * As perguntas que levam alguém à auditoria.
+ *
+ * Cada aba é uma pergunta real do dia a dia — "mexeram no meu estoque?",
+ * "quem deu esse desconto?", "alguém tentou entrar e não conseguiu?" — em vez
+ * de um filtro por nome de evento. Ninguém abre esta tela pensando em
+ * `STOCK_ADJUST`.
  */
-const ACTION_LABELS: Record<string, string> = {
-  LOGIN_SUCCESS: "Entrou no sistema",
-  LOGIN_FAILED: "Tentativa de entrada recusada",
-  LOGOUT: "Saiu do sistema",
-  LOGOUT_ALL: "Encerrou todas as sessões",
-  PASSWORD_CHANGE: "Senha alterada",
-  PIN_SET: "PIN criado",
-  FIRST_ACCESS_COMPLETED: "Primeiro acesso concluído",
-  USER_CREATE: "Funcionário cadastrado",
-  USER_UPDATE: "Funcionário alterado",
-  USER_BLOCK: "Funcionário bloqueado",
-  USER_UNBLOCK: "Funcionário desbloqueado",
-  USER_PROMOTE_TO_OWNER: "Promovido a dono",
-  USER_ROLE_CHANGE: "Perfil alterado",
-  PERMISSION_GRANT: "Permissão concedida",
-  PERMISSION_REVOKE: "Permissão revogada",
-  PERMISSION_DENIED: "Acesso negado por falta de permissão",
-  DEVICE_PAIR_INITIATED: "Tablet cadastrado",
-  DEVICE_PAIR_CLAIMED: "Tablet vinculado",
-  DEVICE_UNLINK: "Tablet desvinculado",
-  DEVICE_KIOSK_EXIT: "Saiu do modo quiosque",
-  SESSION_REVOKE: "Sessão encerrada",
-  SESSION_REUSE_DETECTED: "Reuso de credencial detectado",
-  STORE_CREATE: "Loja cadastrada",
-  STORE_UPDATE: "Loja alterada",
-  STORE_DEACTIVATE: "Loja desativada",
-  DATA_EXPORT: "Documento acessado",
-  TIMECLOCK_ENTRY_CREATE: "Ponto registrado",
-  TIMECLOCK_CORRECTION: "Ponto corrigido",
-  WORK_SCHEDULE_CREATE: "Jornada cadastrada",
-  TWO_FACTOR_ENABLE: "Verificação em duas etapas ativada",
-  TWO_FACTOR_CHALLENGE_FAILED: "Código de verificação incorreto",
-  STEP_UP_ISSUED: "Identidade confirmada",
-  STEP_UP_FAILED: "Confirmação de identidade recusada",
-  SETTING_UPDATE: "Configuração alterada",
-};
+const ABAS = [
+  { chave: "", rotulo: "Tudo", icone: ListFilter, dica: "Tudo o que aconteceu, do mais recente." },
+  {
+    chave: "problemas",
+    rotulo: "Deu errado",
+    icone: AlertTriangle,
+    dica: "Tentativas recusadas pelo sistema: senha errada, falta de permissão, PIN bloqueado.",
+  },
+  {
+    chave: "dinheiro",
+    rotulo: "Dinheiro",
+    icone: Wallet,
+    dica: "Vendas, cancelamentos, descontos, caixa e devoluções.",
+  },
+  {
+    chave: "estoque",
+    rotulo: "Estoque",
+    icone: Boxes,
+    dica: "Peças cadastradas, alteradas, ajustes e transferências entre lojas.",
+  },
+  {
+    chave: "pessoas",
+    rotulo: "Pessoas",
+    icone: Users,
+    dica: "Entradas, saídas, cadastros de funcionário e mudanças de permissão.",
+  },
+  {
+    chave: "aparelhos",
+    rotulo: "Tablets",
+    icone: CreditCard,
+    dica: "Tablets e maquininhas: vínculo, troca e saída do modo quiosque.",
+  },
+  {
+    chave: "ponto",
+    rotulo: "Ponto",
+    icone: Clock,
+    dica: "Marcações, correções e jornadas.",
+  },
+] as const;
 
-const RESULT_LABELS: Record<string, string> = {
-  SUCCESS: "Concluído",
-  FAILURE: "Falhou",
-  DENIED: "Negado",
-};
+const hora = (iso: string) =>
+  new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
-const formatDateTime = (iso: string) =>
-  new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+/** "Hoje", "Ontem" ou a data por extenso — como se fala de um dia. */
+function nomeDoDia(iso: string): string {
+  const data = new Date(iso);
+  const hoje = new Date();
+  const ontem = new Date(hoje.getTime() - 86_400_000);
+
+  const mesmoDia = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+
+  if (mesmoDia(data, hoje)) return "Hoje";
+  if (mesmoDia(data, ontem)) return "Ontem";
+
+  return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+/** Agrupa por dia mantendo a ordem que veio (do mais recente). */
+function porDia(entries: AuditEntry[]): Array<{ dia: string; registros: AuditEntry[] }> {
+  const grupos: Array<{ dia: string; registros: AuditEntry[] }> = [];
+
+  for (const entry of entries) {
+    const dia = nomeDoDia(entry.createdAt);
+    const ultimo = grupos[grupos.length - 1];
+
+    if (ultimo?.dia === dia) ultimo.registros.push(entry);
+    else grupos.push({ dia, registros: [entry] });
+  }
+
+  return grupos;
+}
 
 export function AuditPage() {
-  const [cursor, setCursor] = useState<string | undefined>();
-  const [onlyProblems, setOnlyProblems] = useState(false);
+  const [aba, setAba] = useState<string>("");
+  const [paginas, setPaginas] = useState<string[]>([]);
+
+  const cursor = paginas[paginas.length - 1];
+  const abaAtual = ABAS.find((item) => item.chave === aba) ?? ABAS[0];
 
   const audit = useQuery({
-    queryKey: ["audit", cursor, onlyProblems],
+    queryKey: ["audit", aba, cursor],
     queryFn: () => {
       const params = new URLSearchParams();
       if (cursor) params.set("cursor", cursor);
-      if (onlyProblems) params.set("result", "DENIED");
+      // "Deu errado" é resultado, não assunto: é a única aba que filtra pelo
+      // desfecho em vez de pelo tipo de evento.
+      if (aba === "problemas") params.set("result", "DENIED");
+      else if (aba) params.set("topic", aba);
+
       return apiFetch<{ entries: AuditEntry[]; nextCursor: string | null }>(
         `/api/v1/audit?${params.toString()}`,
       );
     },
   });
 
+  const grupos = porDia(audit.data?.entries ?? []);
+
   return (
     <PageShell
-      title="Auditoria"
-      description="Registro do que aconteceu no sistema. Não pode ser alterado nem apagado — nem por você."
+      eyebrow="Sistema"
+      title="O que aconteceu"
+      description="O histórico do sistema, em ordem. Nada aqui pode ser alterado ou apagado — nem por você."
     >
-      <div className="mb-5 flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant={onlyProblems ? "outline" : "secondary"}
-          onClick={() => {
-            setOnlyProblems(false);
-            setCursor(undefined);
-          }}
-        >
-          Tudo
-        </Button>
-        <Button
-          type="button"
-          variant={onlyProblems ? "secondary" : "outline"}
-          onClick={() => {
-            setOnlyProblems(true);
-            setCursor(undefined);
-          }}
-        >
-          Só acessos negados
-        </Button>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {ABAS.map((item) => (
+          <button
+            key={item.chave}
+            type="button"
+            onClick={() => {
+              setAba(item.chave);
+              setPaginas([]);
+            }}
+            className={`flex min-h-[40px] items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors ${
+              aba === item.chave
+                ? "border-rose-primary bg-rose-soft text-rose-dark"
+                : "border-border bg-surface text-text-secondary hover:border-rose-light"
+            }`}
+          >
+            <item.icone className="h-4 w-4 shrink-0" aria-hidden />
+            {item.rotulo}
+          </button>
+        ))}
       </div>
 
-      {audit.data?.entries.length === 0 && <Alert tone="info">Nenhum registro no filtro atual.</Alert>}
+      <p className="mb-5 text-sm text-text-muted">{abaAtual.dica}</p>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-border bg-background-secondary">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Quando</th>
-              <th className="px-4 py-3 font-semibold">Quem</th>
-              <th className="px-4 py-3 font-semibold">O que</th>
-              <th className="px-4 py-3 font-semibold">Resultado</th>
-              <th className="px-4 py-3 font-semibold">Motivo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {audit.isLoading && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                  Carregando...
-                </td>
-              </tr>
-            )}
+      {audit.isLoading && <p className="text-text-muted">Carregando...</p>}
 
-            {audit.data?.entries.map((entry) => (
-              <tr key={entry.id} className="border-b border-border last:border-0">
-                <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
-                  {formatDateTime(entry.createdAt)}
-                </td>
-                <td className="px-4 py-3">
-                  {entry.user ? (
-                    <>
-                      <span className="font-medium">{entry.user.name}</span>
-                      <span className="block text-text-muted">{entry.user.employeeCode}</span>
-                    </>
-                  ) : (
-                    <span className="text-text-muted">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">{ACTION_LABELS[entry.action] ?? entry.action}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={
-                      entry.result === "SUCCESS"
-                        ? "text-success"
-                        : entry.result === "DENIED"
-                          ? "text-danger"
-                          : "text-warning"
-                    }
-                  >
-                    {RESULT_LABELS[entry.result] ?? entry.result}
+      {audit.data?.entries.length === 0 && (
+        <Alert tone="info">Nada registrado neste assunto ainda.</Alert>
+      )}
+
+      <div className="space-y-6">
+        {grupos.map((grupo) => (
+          <section key={grupo.dia}>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-text-muted">
+              {grupo.dia}
+            </h2>
+
+            <ul className="overflow-hidden rounded-lg border border-border bg-surface">
+              {grupo.registros.map((registro) => (
+                <li
+                  key={registro.id}
+                  className="flex gap-4 border-b border-border/70 px-4 py-3 last:border-0"
+                >
+                  <span className="w-12 shrink-0 pt-0.5 text-sm tabular-nums text-text-muted">
+                    {hora(registro.createdAt)}
                   </span>
-                </td>
-                <td className="px-4 py-3 text-text-secondary">{entry.reason ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={
+                        registro.result === "SUCCESS"
+                          ? "text-text-primary"
+                          : "font-medium text-danger"
+                      }
+                    >
+                      {frase(registro)}
+                    </p>
+
+                    {registro.reason && (
+                      <p className="mt-0.5 text-sm text-text-secondary">{registro.reason}</p>
+                    )}
+
+                    {/*
+                      O antes e o depois, campo a campo. É a resposta para a
+                      pergunta que traz a pessoa até aqui — "quem mudou esse
+                      preço?" — e ela não estava na tela antiga.
+                    */}
+                    {registro.changes.length > 0 && (
+                      <ul className="mt-1 space-y-0.5">
+                        {registro.changes.map((mudanca) => (
+                          <li key={mudanca.campo} className="text-sm text-text-muted">
+                            {nomeDoCampo(mudanca.campo)}:{" "}
+                            <span className="line-through">{valorLegivel(mudanca.de)}</span>{" "}
+                            <span className="text-text-secondary">
+                              → {valorLegivel(mudanca.para)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {registro.user && (
+                      <p className="mt-0.5 text-xs text-text-muted">
+                        {registro.user.employeeCode}
+                        {registro.ipAddress ? ` · ${registro.ipAddress}` : ""}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
       </div>
 
       {audit.data?.nextCursor && (
@@ -181,9 +238,11 @@ export function AuditPage() {
           type="button"
           variant="outline"
           className="mt-4"
-          onClick={() => setCursor(audit.data.nextCursor ?? undefined)}
+          onClick={() =>
+            setPaginas((atual) => [...atual, audit.data.nextCursor as string])
+          }
         >
-          Carregar mais
+          Ver mais antigos
         </Button>
       )}
     </PageShell>
