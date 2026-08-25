@@ -128,6 +128,42 @@ describe("aviso e vencimento", () => {
     expect(sessao.user.pinExpiresInDays).toBe(3);
   });
 
+  it("o dono não renova PIN — ele entra por senha e segundo fator", async () => {
+    const company = await createTestCompany();
+    const { user: owner, password } = await createTestUser({
+      companyId: company.id,
+      role: "DONO",
+      pin: PIN_ATUAL,
+    });
+
+    // PIN sem data de troca e com 90 dias de idade: para um vendedor, isto
+    // seria vencido duas vezes.
+    await prisma.user.update({
+      where: { id: owner.id },
+      data: { pinChangedAt: new Date(Date.now() - 90 * 86_400_000) },
+    });
+
+    const sessao = (await authenticate(owner.employeeCode, password)).json();
+
+    expect(sessao.user.pinExpired).toBe(false);
+    // Nem o aviso dos cinco dias: não há prazo do qual avisar.
+    expect(sessao.user.pinExpiresInDays).toBeNull();
+  });
+
+  it("o suporte técnico também fica de fora — nunca entra por tablet", async () => {
+    const company = await createTestCompany();
+    const { user: dev, password } = await createTestUser({
+      companyId: company.id,
+      role: "DESENVOLVEDOR",
+      pin: PIN_ATUAL,
+    });
+
+    const sessao = (await authenticate(dev.employeeCode, password)).json();
+
+    expect(sessao.user.pinExpired).toBe(false);
+    expect(sessao.user.pinExpiresInDays).toBeNull();
+  });
+
   it("PIN vencido não impede entrar — impede continuar sem trocar", async () => {
     const company = await createTestCompany();
     const { user, password } = await criarComPin(company.id, 45);

@@ -69,22 +69,45 @@ export interface IssuedSession {
 }
 
 /**
- * O PIN venceu?
+ * Quem é obrigado a trocar o PIN de tempos em tempos.
  *
- * Ele abre o caixa e bate o ponto num tablet compartilhado, onde todo mundo no
- * balcão vê os dedos de todo mundo digitando. Um PIN que nunca muda deixa de
- * identificar uma pessoa e vira senha coletiva — e aí a venda no nome errado
- * não é fraude, é consequência.
+ * O prazo existe por causa do balcão: o PIN é digitado num tablet
+ * compartilhado, onde todo mundo vê os dedos de todo mundo. Um PIN que nunca
+ * muda deixa de identificar uma pessoa e vira senha coletiva.
+ *
+ * O DONO e o DESENVOLVEDOR ficam de fora porque não é assim que eles entram —
+ * é senha longa mais segundo fator, do computador ou do celular. Cobrar deles
+ * a troca de um PIN que não usam trocaria segurança de verdade por incômodo:
+ * o dono abriria o sistema para ver o faturamento e esbarraria numa tela
+ * pedindo para renovar uma credencial de tablet.
+ */
+function rotacionaPin(role: string): boolean {
+  return role !== "DONO" && role !== "DESENVOLVEDOR";
+}
+
+/**
+ * O PIN venceu?
  *
  * Sem data de troca registrada, conta como vencido: são os PINs criados antes
  * desta regra existir, e todos eles já passaram do prazo.
  */
-function isPinExpired(user: { pinHash: string | null; pinChangedAt: Date | null }): boolean {
+function isPinExpired(user: {
+  role: string;
+  pinHash: string | null;
+  pinChangedAt: Date | null;
+}): boolean {
   if (!user.pinHash) return false;
+  if (!rotacionaPin(user.role)) return false;
   if (!user.pinChangedAt) return true;
 
   const dias = (Date.now() - user.pinChangedAt.getTime()) / 86_400_000;
   return dias > PIN_VALIDO_POR_DIAS;
+}
+
+/** Dias até vencer — nulo para quem não é obrigado a trocar, e a tela não avisa. */
+function diasParaAviso(user: { role: string; pinChangedAt: Date | null }): number | null {
+  if (!rotacionaPin(user.role)) return null;
+  return diasAteVencer(user.pinChangedAt);
 }
 
 /** Só o DONO é obrigado a usar segundo fator (item 19 da especificação). */
@@ -194,7 +217,7 @@ export async function issueSessionForUser(params: {
       mustChangePassword: user.mustChangePassword,
       mustCreatePin: user.mustCreatePin,
       pinExpired: isPinExpired(user),
-      pinExpiresInDays: diasAteVencer(user.pinChangedAt),
+      pinExpiresInDays: diasParaAviso(user),
       twoFactorPending: await isTwoFactorPending(user),
       permissions: [...(await getEffectivePermissions(user.id))],
     },
@@ -536,7 +559,7 @@ export async function refreshSession(params: {
       mustChangePassword: session.user.mustChangePassword,
       mustCreatePin: session.user.mustCreatePin,
       pinExpired: isPinExpired(session.user),
-      pinExpiresInDays: diasAteVencer(session.user.pinChangedAt),
+      pinExpiresInDays: diasParaAviso(session.user),
       twoFactorPending: await isTwoFactorPending(session.user),
       permissions: [...(await getEffectivePermissions(session.user.id))],
     },
