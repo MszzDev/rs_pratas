@@ -503,7 +503,36 @@ export async function getOpenSessionForRegister(params: {
     select: { id: true, code: true, openedAt: true, openedBy: { select: { name: true } } },
   });
 
-  return session;
+  if (!session) return null;
+
+  return { ...session, sangriaSugerida: await cashLimitExceeded(session.id, params.request) };
+}
+
+/**
+ * A gaveta passou do limite combinado?
+ *
+ * Devolve só sim ou não, e o limite — nunca o saldo. A contagem do fechamento
+ * é às cegas de propósito: quem conta não pode saber quanto o sistema espera
+ * encontrar, senão a conferência deixa de conferir. Saber que passou de mil
+ * reais não entrega o valor da gaveta; saber que há R$ 1.437,50 entregaria.
+ *
+ * Sem limite configurado, ninguém é incomodado — o alerta só existe onde
+ * alguém decidiu quanto é demais.
+ */
+export async function cashLimitExceeded(
+  sessionId: string,
+  request: FastifyRequest,
+): Promise<{ passou: boolean; limite: number } | null> {
+  const setting = await prisma.appSetting.findFirst({
+    where: { companyId: request.user.companyId, key: "cash_limit_amount" },
+  });
+
+  const limite = Number(setting?.value ?? 0);
+  if (!Number.isFinite(limite) || limite <= 0) return null;
+
+  const saldo = await currentCashBalance(sessionId);
+
+  return { passou: saldo.greaterThan(limite), limite };
 }
 
 async function loadOpenSession(sessionId: string, request: FastifyRequest) {

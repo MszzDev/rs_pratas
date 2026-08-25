@@ -55,7 +55,12 @@ export async function startFirstAccess(params: {
   // que desfaria, por esta porta, a proteção anti-enumeração que o login tem.
   const matches = await verifySecret(user.passwordHash, input.tempPassword);
 
-  if (matches && user.status !== "PENDING_FIRST_ACCESS") {
+  // Quem ainda não trocou o que recebeu passa por aqui, mesmo já ATIVO: o
+  // funcionário nasce ativo para poder entrar no tablet com o PIN temporário
+  // no primeiro dia, e a senha do papel continua sendo de uso único.
+  const aindaNaoTrocou = user.status === "PENDING_FIRST_ACCESS" || user.mustChangePassword;
+
+  if (matches && !aindaNaoTrocou) {
     throw badRequest(
       "FIRST_ACCESS_ALREADY_DONE",
       "Este usuário já concluiu o primeiro acesso. Use a tela de login normal.",
@@ -85,7 +90,19 @@ async function loadOnboardingUser(userId: string) {
     where: { id: userId, deletedAt: null },
   });
 
-  if (!user || user.status !== "PENDING_FIRST_ACCESS") {
+  /**
+   * O que autoriza os passos seguintes é o TOKEN, não o status.
+   *
+   * O funcionário passou a nascer ATIVO — é o PIN temporário que o faz
+   * trabalhar no primeiro dia —, então exigir "PENDENTE" aqui derrubava o
+   * fluxo no meio: bastava a senha ter sido definida no passo anterior para o
+   * passo seguinte dizer que o primeiro acesso não valia mais.
+   *
+   * O token de onboarding tem escopo próprio, dura minutos e só é emitido a
+   * quem acertou a senha temporária no `start` — que é onde a conta já
+   * estabelecida é recusada. Aqui basta a conta existir e não estar bloqueada.
+   */
+  if (!user || user.status === "BLOCKED" || user.status === "INACTIVE") {
     throw badRequest("FIRST_ACCESS_INVALID_STATE", "Este fluxo de primeiro acesso não é mais válido.");
   }
 

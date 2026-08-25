@@ -117,6 +117,57 @@ describe("troca do próprio PIN", () => {
   });
 });
 
+describe("primeira entrada do funcionário", () => {
+  it("entra no tablet com o PIN entregue e é obrigado a escolher o dele", async () => {
+    const company = await createTestCompany();
+    const store = await createTestStore(company.id);
+
+    const { user: owner, password: ownerPassword } = await createTestUser({
+      companyId: company.id,
+      role: "DONO",
+    });
+    const ownerToken = (await authenticate(owner.employeeCode, ownerPassword)).json().accessToken;
+
+    // O tablet da loja, que é por onde o balcão trabalha.
+    const station = await prisma.pOSStation.create({
+      data: { storeId: store.id, code: "E01", name: "Estação 01" },
+    });
+    const cashRegister = await prisma.cashRegister.create({
+      data: { posStationId: station.id, code: "C01", name: "Caixa 01" },
+    });
+    const device = await prisma.device.create({
+      data: {
+        cashRegisterId: cashRegister.id,
+        companyId: company.id,
+        storeId: store.id,
+        name: "Balcão",
+        status: "ACTIVE",
+      },
+    });
+
+    const criada = await app.inject({
+      method: "POST",
+      url: "/api/v1/users",
+      headers: { authorization: `Bearer ${ownerToken}` },
+      payload: { name: "Vendedora Nova", role: "VENDEDOR", storeIds: [store.id] },
+    });
+
+    const { employeeCode } = criada.json().user;
+    const pinEntregue = criada.json().temporaryPin as string;
+
+    const entrada = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login/pin",
+      payload: { deviceId: device.id, employeeCode, pin: pinEntregue },
+    });
+
+    // Entra no primeiro dia, sem passar por computador nenhum...
+    expect(entrada.statusCode).toBe(200);
+    // ...e a primeira coisa que o sistema pede é um PIN que só ela saiba.
+    expect(entrada.json().user.pinExpired).toBe(true);
+  });
+});
+
 describe("aviso e vencimento", () => {
   it("a sessão diz quantos dias faltam, para a tela avisar antes", async () => {
     const company = await createTestCompany();

@@ -35,6 +35,13 @@ const KNOWN_SETTINGS: Array<{
     suffix: "segundos",
   },
   {
+    key: "cash_limit_amount",
+    label: "Limite de dinheiro no caixa",
+    hint: "Passando disso, o sistema pede uma sangria. Dinheiro parado na gaveta é o que um assalto leva.",
+    type: "number",
+    suffix: "reais",
+  },
+  {
     key: "timeclock_tolerance_minutes",
     label: "Tolerância padrão de ponto",
     hint: "Usada quando a jornada do funcionário não define uma própria.",

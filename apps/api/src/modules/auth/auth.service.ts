@@ -331,7 +331,12 @@ export async function loginWithPassword(params: {
 
   // Senha correta, mas a conta ainda não passou pelo primeiro acesso: o cliente
   // deve seguir para o fluxo de definir senha própria e PIN.
-  if (user.status === "PENDING_FIRST_ACCESS") {
+  //
+  // `mustChangePassword` entra na mesma condição porque o funcionário agora
+  // nasce ATIVO, com PIN temporário para entrar no tablet no primeiro dia. Sem
+  // isto, a senha temporária que veio no mesmo papel continuaria valendo para
+  // sempre em quem nunca abre o sistema pelo computador.
+  if (user.status === "PENDING_FIRST_ACCESS" || user.mustChangePassword) {
     await audit(request, {
       action: "LOGIN_FAILED",
       result: "DENIED",

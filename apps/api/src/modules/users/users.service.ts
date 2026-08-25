@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import type { UserRole } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
 import type { ChangeUserRoleInput, CreateUserInput, UpdateUserInput } from "@rs-pratas/shared";
@@ -78,9 +79,25 @@ export async function createUser(params: {
   const employeeCode = await generateEmployeeCode(companyId);
   const temporaryPassword = generateTemporaryPassword();
 
+  /**
+   * PIN de entrada, que é como se entra no tablet da loja.
+   *
+   * Vem junto com a matrícula porque é a credencial que o funcionário vai usar
+   * de fato: quem trabalha no balcão entra pelo tablet, e uma senha longa
+   * entregue no papel só serviria para ser digitada uma vez e esquecida.
+   *
+   * Nasce VENCIDO — `pinChangedAt` fica nulo. Assim ele serve para a primeira
+   * entrada e o sistema já pede a troca, em vez de deixar valendo por trinta
+   * dias um PIN que passou por um papel e pela mão de duas pessoas.
+   */
+  const temporaryPin = String(randomInt(100_000, 1_000_000));
+
   // Argon2id é caro de propósito (~100ms). Fora da transação, para não segurar
   // uma conexão do pool durante o hash.
-  const passwordHash = await hashSecret(temporaryPassword);
+  const [passwordHash, pinHash] = await Promise.all([
+    hashSecret(temporaryPassword),
+    hashSecret(temporaryPin),
+  ]);
 
   const user = await prisma.$transaction(async (tx) => {
     const created = await tx.user.create({
@@ -91,10 +108,19 @@ export async function createUser(params: {
         email: input.email ?? null,
         cpf: input.cpf || null,
         role: input.role,
-        status: "PENDING_FIRST_ACCESS",
+        // ATIVO, e não "aguardando primeiro acesso": com o PIN temporário em
+        // mãos a pessoa entra no tablet no primeiro dia, sem depender de um
+        // computador para concluir cadastro nenhum. A troca continua sendo
+        // exigida — do PIN, na primeira entrada; da senha, se ela algum dia
+        // entrar pelo computador.
+        status: "ACTIVE",
         passwordHash,
+        pinHash,
+        // Nulo de propósito: é o que faz o sistema tratar este PIN como
+        // vencido e pedir um novo assim que a pessoa entrar.
+        pinChangedAt: null,
         mustChangePassword: true,
-        mustCreatePin: true,
+        mustCreatePin: false,
         createdById: request.user.sub,
       },
     });
@@ -124,6 +150,7 @@ export async function createUser(params: {
           name: user.name,
           employeeCode: user.employeeCode,
           temporaryPassword,
+          temporaryPin,
           companyName: company.tradeName,
         }),
       )
@@ -165,6 +192,13 @@ export async function createUser(params: {
      * sumir, o caminho é gerar outra, que invalida esta.
      */
     temporaryPassword,
+    /**
+     * O PIN de entrada do tablet, também uma única vez.
+     *
+     * É esta a credencial que o funcionário do balcão vai usar — a senha só
+     * serve a quem abre o sistema pelo computador.
+     */
+    temporaryPin,
     /** A tela avisa se a entrega por e-mail funcionou. */
     emailSent,
   };
@@ -187,20 +221,37 @@ export async function regenerateTemporaryPassword(params: {
     throw notFound("USER_NOT_FOUND", "Usuário não encontrado.");
   }
 
-  if (user.status !== "PENDING_FIRST_ACCESS") {
+  // Vale enquanto a pessoa ainda não trocou o que recebeu — seja porque não
+  // entrou, seja porque entrou e não concluiu. Depois disso, quem esqueceu o
+  // PIN pede um temporário pela própria tela de login.
+  if (user.status !== "PENDING_FIRST_ACCESS" && !user.mustChangePassword) {
     throw badRequest(
       "FIRST_ACCESS_ALREADY_DONE",
-      "Este usuário já concluiu o primeiro acesso. Reenviar credenciais não se aplica.",
+      "Este usuário já trocou as credenciais que recebeu. Para um PIN novo, use o pedido de PIN temporário.",
     );
   }
 
-  // A senha nova invalida a anterior: gerar outra nunca ressuscita a que já
-  // circulou no papel.
+  // As credenciais novas invalidam as anteriores: gerar outras nunca
+  // ressuscita as que já circularam no papel.
   const temporaryPassword = generateTemporaryPassword();
+  const temporaryPin = String(randomInt(100_000, 1_000_000));
+
+  const [passwordHash, pinHash] = await Promise.all([
+    hashSecret(temporaryPassword),
+    hashSecret(temporaryPin),
+  ]);
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash: await hashSecret(temporaryPassword), mustChangePassword: true },
+    data: {
+      passwordHash,
+      mustChangePassword: true,
+      pinHash,
+      // Nasce vencido, como no cadastro: serve para entrar uma vez.
+      pinChangedAt: null,
+      pinFailedAttempts: 0,
+      pinLockedUntil: null,
+    },
   });
 
   const company = await prisma.company.findUniqueOrThrow({
@@ -215,6 +266,7 @@ export async function regenerateTemporaryPassword(params: {
           name: user.name,
           employeeCode: user.employeeCode,
           temporaryPassword,
+          temporaryPin,
           companyName: company.tradeName,
         }),
       )
@@ -228,11 +280,11 @@ export async function regenerateTemporaryPassword(params: {
     userRoleSnapshot: request.user.role,
     entityType: "User",
     entityId: user.id,
-    reason: "nova senha temporária gerada pelo dono",
+    reason: "novas credenciais temporárias geradas pelo dono",
     newData: { credentialsEmailSent: emailSent },
   });
 
-  return { employeeCode: user.employeeCode, temporaryPassword, emailSent };
+  return { employeeCode: user.employeeCode, temporaryPassword, temporaryPin, emailSent };
 }
 
 export async function listUsers(request: FastifyRequest) {

@@ -74,18 +74,24 @@ describe("criação de usuário pelo dono", () => {
     const body = response.json();
 
     expect(body.user.employeeCode).toMatch(/^RS\d{6}$/);
-    expect(body.user.status).toBe("PENDING_FIRST_ACCESS");
+    // ATIVO: com o PIN temporário em mãos, a pessoa entra no tablet no
+    // primeiro dia, sem depender de um computador para concluir cadastro.
+    expect(body.user.status).toBe("ACTIVE");
 
-    // Sem e-mail no sistema, a senha precisa voltar aqui — é a única vez que
-    // ela existe fora do hash, para o dono anotar e entregar em mãos.
+    // Sem e-mail no sistema, as credenciais precisam voltar aqui — é a única
+    // vez que existem fora do hash, para o dono anotar e entregar em mãos.
     expect(body.temporaryPassword).toBeTypeOf("string");
     expect(body.temporaryPassword.length).toBeGreaterThanOrEqual(12);
+    // O PIN é o que a pessoa vai usar de fato, no tablet.
+    expect(body.temporaryPin).toMatch(/^\d{6}$/);
 
     const created = await prisma.user.findUniqueOrThrow({ where: { id: body.user.id } });
     expect(created.mustChangePassword).toBe(true);
-    expect(created.mustCreatePin).toBe(true);
-    // Guardada só como hash — a senha em claro não fica em lugar nenhum.
+    // Nasce vencido: serve para entrar uma vez, e o sistema já pede a troca.
+    expect(created.pinChangedAt).toBeNull();
+    // Guardadas só como hash — nem a senha nem o PIN ficam em claro.
     expect(created.passwordHash).not.toContain(body.temporaryPassword);
+    expect(created.pinHash).not.toContain(body.temporaryPin);
 
     const links = await prisma.userStore.findMany({ where: { userId: created.id } });
     expect(links.map((link) => link.storeId)).toEqual([store.id]);

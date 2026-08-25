@@ -13,6 +13,7 @@ export function credentialsEmail(params: {
   name: string;
   employeeCode: string;
   temporaryPassword: string;
+  temporaryPin: string;
   companyName: string;
 }): EmailMessage {
   const firstName = params.name.split(" ")[0] ?? params.name;
@@ -23,16 +24,18 @@ export function credentialsEmail(params: {
     text: [
       `Olá, ${firstName}.`,
       "",
-      "Seu cadastro no sistema foi criado. Para entrar, use:",
+      "Seu cadastro no sistema foi criado. No tablet da loja, que é por onde",
+      "você vai trabalhar, a entrada é assim:",
       "",
       `  Matrícula: ${params.employeeCode}`,
-      `  Senha temporária: ${params.temporaryPassword}`,
+      `  PIN de entrada: ${params.temporaryPin}`,
       "",
-      "No primeiro acesso o sistema vai pedir que você troque essa senha e crie",
-      "um PIN de 4 ou 6 números — o PIN é o que você usa no tablet da loja, para",
-      "bater o ponto e vender.",
+      "Este PIN serve para a primeira entrada. Assim que você entrar, o sistema",
+      "pede que você escolha o seu — seis números que só você sabe. Ele vale por",
+      "30 dias, e o aviso de troca aparece cinco dias antes.",
       "",
-      "Guarde essa senha só até trocá-la. Depois disso ela não vale mais.",
+      "Se você também for usar o sistema pelo computador, a senha temporária é",
+      `${params.temporaryPassword} — e ela também é trocada no primeiro uso.`,
       "",
       "Ninguém da empresa vai te pedir sua senha ou seu PIN por mensagem ou",
       "telefone. Se pedirem, não é a empresa.",
@@ -40,27 +43,31 @@ export function credentialsEmail(params: {
   };
 }
 
-/** Reenvio: o funcionário perdeu a credencial antes de concluir o cadastro. */
+/** Reenvio: o funcionário perdeu a credencial antes de trocá-la. */
 export function credentialsResetEmail(params: {
   to: string;
   name: string;
   employeeCode: string;
   temporaryPassword: string;
+  temporaryPin: string;
   companyName: string;
 }): EmailMessage {
   const firstName = params.name.split(" ")[0] ?? params.name;
 
   return {
     to: params.to,
-    subject: `Nova senha temporária — ${params.companyName}`,
+    subject: `Novo PIN de entrada — ${params.companyName}`,
     text: [
       `Olá, ${firstName}.`,
       "",
-      "Foi gerada uma nova senha temporária para o seu primeiro acesso.",
-      "A anterior deixou de funcionar neste momento.",
+      "Foram geradas novas credenciais de primeira entrada. As anteriores",
+      "deixaram de funcionar neste momento.",
       "",
       `  Matrícula: ${params.employeeCode}`,
-      `  Senha temporária: ${params.temporaryPassword}`,
+      `  PIN de entrada (tablet): ${params.temporaryPin}`,
+      `  Senha temporária (computador): ${params.temporaryPassword}`,
+      "",
+      "Na primeira entrada o sistema pede que você escolha o seu próprio PIN.",
       "",
       "Se não foi você quem pediu, avise o responsável pela loja.",
     ].join("\n"),

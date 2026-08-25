@@ -86,6 +86,8 @@ export function UsersPage() {
     name: string;
     code: string;
     password: string;
+    /** O que a pessoa vai usar no tablet — a senha é só para o computador. */
+    pin: string;
     emailSent: boolean;
   } | null>(null);
 
@@ -108,6 +110,7 @@ export function UsersPage() {
       apiFetch<{
         user: { name: string; employeeCode: string };
         temporaryPassword: string;
+        temporaryPin: string;
         emailSent: boolean;
       }>("/api/v1/users", {
         method: "POST",
@@ -125,6 +128,7 @@ export function UsersPage() {
         name: result.user.name,
         code: result.user.employeeCode,
         password: result.temporaryPassword,
+        pin: result.temporaryPin,
         emailSent: result.emailSent,
       });
       setError(null);
@@ -208,18 +212,24 @@ export function UsersPage() {
 
   const regenerate = useMutation({
     mutationFn: (target: UserRow) =>
-      apiFetch<{ employeeCode: string; temporaryPassword: string; emailSent: boolean }>(
-        `/api/v1/users/${target.id}/regenerate-password`,
-        { method: "POST" },
-      ).then((result) => ({ ...result, name: target.name })),
+      apiFetch<{
+        employeeCode: string;
+        temporaryPassword: string;
+        temporaryPin: string;
+        emailSent: boolean;
+      }>(`/api/v1/users/${target.id}/regenerate-password`, { method: "POST" }).then((result) => ({
+        ...result,
+        name: target.name,
+      })),
     onSuccess: (result) =>
       setCredential({
         name: result.name,
         code: result.employeeCode,
         password: result.temporaryPassword,
+        pin: result.temporaryPin,
         emailSent: result.emailSent,
       }),
-    onError: (caught) => handleError(caught, "Não foi possível gerar a senha."),
+    onError: (caught) => handleError(caught, "Não foi possível gerar as credenciais."),
   });
 
   return (
@@ -247,20 +257,29 @@ export function UsersPage() {
           <Alert tone="success" title={`Credencial de ${credential.name}`}>
             <p>
               {credential.emailSent
-                ? "Enviada também para o e-mail cadastrado. Anote mesmo assim — esta senha não aparece de novo aqui."
-                : "Anote e entregue em mãos. Esta senha não aparece de novo."}
+                ? "Enviada também para o e-mail cadastrado. Anote mesmo assim — não aparece de novo aqui."
+                : "Anote e entregue em mãos. Não aparece de novo."}
             </p>
 
-            <dl className="mt-3 grid gap-2 rounded-md bg-surface p-4 sm:grid-cols-2">
+            <dl className="mt-3 grid gap-2 rounded-md bg-surface p-4 sm:grid-cols-3">
               <div>
                 <dt className="text-sm text-text-secondary">Matrícula</dt>
                 <dd className="font-mono text-lg">{credential.code}</dd>
               </div>
               <div>
-                <dt className="text-sm text-text-secondary">Senha temporária</dt>
+                <dt className="text-sm text-text-secondary">PIN de entrada (tablet)</dt>
+                <dd className="font-mono text-lg tracking-widest">{credential.pin}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-text-secondary">Senha (computador)</dt>
                 <dd className="font-mono text-lg">{credential.password}</dd>
               </div>
             </dl>
+
+            <p className="mt-3 text-sm">
+              No balcão, o que vale é a matrícula e o PIN. Na primeira entrada o sistema já pede
+              que a pessoa escolha o PIN dela.
+            </p>
 
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
@@ -268,7 +287,7 @@ export function UsersPage() {
                 variant="outline"
                 onClick={() =>
                   void navigator.clipboard.writeText(
-                    `Matrícula: ${credential.code}\nSenha temporária: ${credential.password}`,
+                    `Matrícula: ${credential.code}\nPIN de entrada: ${credential.pin}\nSenha (computador): ${credential.password}`,
                   )
                 }
               >
