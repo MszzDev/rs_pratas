@@ -17,6 +17,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { API_BASE_URL, apiFetch, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-context";
+import { lerCodigoDeAutorizacao, limparCodigoDeAutorizacao } from "./authorization-code";
 
 type Provider = "NUVEMSHOP" | "MERCADOPAGO" | "REDE";
 type Status = "DESCONECTADA" | "CONECTADA" | "ERRO";
@@ -260,6 +261,9 @@ export function IntegrationsPage() {
     onSuccess: (resultado) => {
       setError(null);
       setAviso(`Conectado. Conta identificada: ${resultado.externalAccountId}.`);
+      // O código serve uma vez só; guardá-lo depois de usado só daria a alguém
+      // a chance de tentar de novo com um código morto.
+      limparCodigoDeAutorizacao();
       fechar();
       void queryClient.invalidateQueries({ queryKey: ["integrations"] });
     },
@@ -366,6 +370,20 @@ export function IntegrationsPage() {
         </div>
       )}
 
+      {/*
+        Quem volta da autorização da Nuvemshop cai aqui sem entender o que
+        aconteceu — a barra de endereço já foi limpa e a tela é a mesma de
+        antes. Este aviso diz que o passo funcionou e qual é o próximo.
+      */}
+      {lerCodigoDeAutorizacao() && !abrindo && (
+        <div className="mb-5">
+          <Alert tone="info" title="Autorização da Nuvemshop recebida">
+            Falta o ID do aplicativo e a chave secreta. Clique em Conectar no Nuvemshop abaixo — o
+            código já vai preenchido. Ele vale poucos minutos.
+          </Alert>
+        </div>
+      )}
+
       <ul className="space-y-4">
         {integracoes.data?.map((integracao) => {
           const servico = SERVICOS[integracao.provider];
@@ -431,7 +449,20 @@ export function IntegrationsPage() {
 
                 <div className="flex flex-wrap gap-2">
                   {servico.disponivel && !conectada && abrindo !== integracao.provider && (
-                    <Button type="button" onClick={() => setAbrindo(integracao.provider)}>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setAbrindo(integracao.provider);
+
+                        // Quem acabou de voltar da autorização já tem o código
+                        // guardado — preencher poupa a ida à barra de endereço,
+                        // que a essa altura nem mostra mais o código.
+                        const codigo =
+                          integracao.provider === "NUVEMSHOP" ? lerCodigoDeAutorizacao() : null;
+
+                        setValores(codigo ? { code: codigo } : {});
+                      }}
+                    >
                       <Link2 className="h-5 w-5" aria-hidden />
                       Conectar
                     </Button>
