@@ -56,7 +56,7 @@ export async function announceDevice(input: {
     // de mandar o tablet para a fila — senão o dono vincularia de novo e a
     // loja ficaria com dois caixas para um tablet só.
     const jaCadastrado = await prisma.device.findFirst({
-      where: { deviceUuid: input.hardwareId, deletedAt: null },
+      where: { deviceUuid: input.hardwareId, deletedAt: null, status: "ACTIVE" },
       include: { store: { select: { name: true } } },
     });
 
@@ -82,9 +82,11 @@ export async function announceDevice(input: {
     include: { store: { select: { name: true } } },
   });
 
-  if (!device) {
-    // O dispositivo foi removido depois de vinculado. O aparelho volta para a
-    // fila em vez de ficar apontando para algo que não existe.
+  if (!device || device.status !== "ACTIVE") {
+    // O dispositivo foi removido, desvinculado ou bloqueado depois. O aparelho
+    // volta para a fila em vez de ficar apontando para um cadastro que não
+    // serve — mostrar a tela de login de um tablet desvinculado só levaria a
+    // pessoa a digitar o PIN para receber "este aparelho não está ativo".
     await prisma.deviceAnnouncement.update({
       where: { id: anuncio.id },
       data: { deviceId: null },

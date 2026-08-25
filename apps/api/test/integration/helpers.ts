@@ -33,6 +33,12 @@ const VOLATILE_TABLES = [
   "user_stores",
   "device_settings",
   "payment_terminals",
+  // A fila de anúncios não tem chave estrangeira para `devices` — ela guarda
+  // só o identificador —, então o CASCADE do TRUNCATE não a alcança. Sem
+  // listá-la aqui, um tablet anunciado num teste sobrevive para o seguinte e
+  // os testes passam a depender da ordem em que rodam.
+  "device_announcements",
+  "pin_reset_requests",
   "devices",
   "cash_registers",
   "pos_stations",

@@ -201,6 +201,46 @@ describe("anúncio do tablet", () => {
     );
   });
 
+  it("tablet desvinculado volta para a fila e pode ser vinculado de novo", async () => {
+    const { token, store } = await setupStoreWithOwner();
+
+    await announce("hw-0001");
+    const [pendente] = (await listPending(token)).json();
+
+    const vinculo = await app
+      .inject({
+        method: "POST",
+        url: `/api/v1/devices/pending/${pendente.id}/assign`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { storeId: store.id, name: "Balcão 1" },
+      })
+      .then((response) => response.json());
+
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/devices/${vinculo.deviceId}/unlink`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { reason: "tablet foi para a assistência" },
+    });
+
+    // Mostrar a tela de login de um tablet desvinculado só levaria a pessoa a
+    // digitar o PIN para ouvir que o aparelho não está ativo.
+    const depoisDoDesvinculo = await announce("hw-0001");
+    expect(depoisDoDesvinculo.json().vinculado).toBe(false);
+
+    const fila = (await listPending(token)).json();
+    expect(fila).toHaveLength(1);
+
+    const revinculo = await app.inject({
+      method: "POST",
+      url: `/api/v1/devices/pending/${fila[0].id}/assign`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { storeId: store.id, name: "Balcão 1 (de volta)" },
+    });
+
+    expect(revinculo.statusCode).toBe(200);
+  });
+
   it("descarta da fila o aparelho que não é da loja", async () => {
     const { token } = await setupStoreWithOwner();
 
