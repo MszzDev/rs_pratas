@@ -3,6 +3,7 @@ import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
 import { badRequest, conflict, forbidden, notFound } from "../../core/errors.js";
 import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
+import { resumirConta } from "./terminal-credentials.service.js";
 
 /**
  * Toda maquininha nasce amarrada à cadeia inteira: empresa, loja, estação,
@@ -85,7 +86,7 @@ export async function listTerminals(params: { request: FastifyRequest; storeId?:
 
   const seesEverything = request.user.role === "DONO" || request.user.role === "DESENVOLVEDOR";
 
-  return prisma.paymentTerminal.findMany({
+  const terminais = await prisma.paymentTerminal.findMany({
     where: {
       companyId: request.user.companyId,
       deletedAt: null,
@@ -95,6 +96,13 @@ export async function listTerminals(params: { request: FastifyRequest; storeId?:
     include: { device: { select: { name: true, status: true } } },
     orderBy: { createdAt: "desc" },
   });
+
+  // A credencial cifrada não sai daqui: a tela recebe só o apelido da conta e
+  // os quatro últimos caracteres do token, o bastante para reconhecer qual é.
+  return terminais.map(({ credentialsEncrypted: _cifrado, ...terminal }) => ({
+    ...terminal,
+    conta: resumirConta({ ...terminal, credentialsEncrypted: _cifrado }),
+  }));
 }
 
 /**

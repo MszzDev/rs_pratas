@@ -580,6 +580,22 @@ model PaymentTerminal {
   /// O índice parcial abaixo garante uma só principal por caixa.
   isPrimary Boolean @default(false)
 
+  /// Conta do Mercado Pago DESTA maquininha.
+  ///
+  /// Na prática cada aparelho está numa conta própria — foi assim que a loja
+  /// contratou, e é assim que o dinheiro cai. Uma credencial só para a empresa
+  /// inteira faria o sistema consultar a conta errada: o pagamento existiria na
+  /// maquininha e "não seria encontrado" na conferência.
+  ///
+  /// Nulo enquanto a conta não for informada. A maquininha continua servindo
+  /// para cobrar — só não dá para consultar nem estornar pelo sistema.
+  mpAccountLabel       String?
+  /// user_id da conta, respondido pelo próprio Mercado Pago ao testar o token.
+  mpExternalAccountId  String?
+  /// AES-256-GCM. NUNCA sai da API — nem para o dono.
+  credentialsEncrypted String?
+  credentialsUpdatedAt DateTime?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?

@@ -9,6 +9,10 @@ import {
   setPrimaryTerminal,
   setTerminalStatus,
 } from "./terminals.service.js";
+import {
+  clearTerminalCredentials,
+  setTerminalCredentials,
+} from "./terminal-credentials.service.js";
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 
@@ -26,6 +30,16 @@ const moveSchema = z.object({
 const replaceSchema = z.object({
   newSerialNumber: z.string().min(1).max(60),
   reason: z.string().min(3, "Informe o motivo da troca.").max(500),
+});
+
+const credentialsSchema = z.object({
+  accessToken: z
+    .string()
+    .min(20, "Cole o access token inteiro, começando por APP_USR-.")
+    .max(300),
+  publicKey: z.string().max(300).optional(),
+  /** Como esta conta é chamada na loja. Vazio: usa o apelido da conta no MP. */
+  label: z.string().max(60).optional(),
 });
 
 const statusSchema = z.object({
@@ -93,6 +107,33 @@ export async function terminalRoutes(app: FastifyInstance) {
     async (request) => {
       const { id } = idParamSchema.parse(request.params);
       return setPrimaryTerminal({ terminalId: id, request });
+    },
+  );
+
+  /**
+   * A conta do Mercado Pago desta maquininha.
+   *
+   * Cada aparelho está numa conta própria — foi assim que a loja contratou.
+   * Guardar uma credencial só da empresa faria o sistema consultar a conta
+   * errada e dizer que um pagamento que existe não foi encontrado.
+   */
+  app.put(
+    "/terminals/:id/mercadopago",
+    { preHandler: [app.requireAuth, requirePermission("TERMINAL_EDIT")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      const input = credentialsSchema.parse(request.body);
+
+      return setTerminalCredentials({ terminalId: id, ...input, request });
+    },
+  );
+
+  app.delete(
+    "/terminals/:id/mercadopago",
+    { preHandler: [app.requireAuth, requirePermission("TERMINAL_EDIT")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      return clearTerminalCredentials({ terminalId: id, request });
     },
   );
 

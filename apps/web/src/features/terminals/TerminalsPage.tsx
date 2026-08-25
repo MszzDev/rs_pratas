@@ -18,6 +18,20 @@ interface Terminal {
   storeId: string;
   deviceId: string;
   device: { name: string; status: string };
+  /**
+   * Conta do Mercado Pago desta maquininha. O token nunca vem — só o fim dele.
+   *
+   * Opcional porque o site e a API sobem em serviços separados: por alguns
+   * minutos a tela nova pode estar conversando com a API antiga, e uma tela em
+   * branco no meio do expediente é pior que um campo a menos.
+   */
+  conta?: {
+    configurada: boolean;
+    apelido: string | null;
+    contaId: string | null;
+    tokenPreview: string | null;
+    atualizadoEm: string | null;
+  };
 }
 
 interface DeviceRow {
@@ -46,6 +60,10 @@ export function TerminalsPage() {
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ deviceId: "", provider: "", serialNumber: "" });
+  const [aviso, setAviso] = useState<string | null>(null);
+  /** Maquininha cuja conta está sendo informada agora. */
+  const [configurando, setConfigurando] = useState<string | null>(null);
+  const [conta, setConta] = useState({ accessToken: "", label: "" });
 
   const terminals = useQuery({
     queryKey: ["terminals"],
@@ -78,6 +96,35 @@ export function TerminalsPage() {
       setError(null);
       setAdding(false);
       setForm({ deviceId: "", provider: "", serialNumber: "" });
+      invalidate();
+    },
+    onError: handleError,
+  });
+
+  const salvarConta = useMutation({
+    mutationFn: (params: { id: string; accessToken: string; label: string }) =>
+      apiFetch<{ aviso: string }>(`/api/v1/terminals/${params.id}/mercadopago`, {
+        method: "PUT",
+        body: {
+          accessToken: params.accessToken.trim(),
+          ...(params.label.trim() ? { label: params.label.trim() } : {}),
+        },
+      }),
+    onSuccess: (resultado) => {
+      setError(null);
+      setAviso(resultado.aviso);
+      setConfigurando(null);
+      invalidate();
+    },
+    onError: handleError,
+  });
+
+  const removerConta = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/api/v1/terminals/${id}/mercadopago`, { method: "DELETE" }),
+    onSuccess: () => {
+      setError(null);
+      setAviso("Conta removida. A maquininha continua cobrando normalmente.");
       invalidate();
     },
     onError: handleError,
@@ -139,6 +186,12 @@ export function TerminalsPage() {
       {error && (
         <div className="mb-5">
           <Alert tone="error">{error}</Alert>
+        </div>
+      )}
+
+      {aviso && (
+        <div className="mb-5">
+          <Alert tone="success">{aviso}</Alert>
         </div>
       )}
 
@@ -228,10 +281,38 @@ export function TerminalsPage() {
                     </span>
                   )}
                 </div>
+
+                {/*
+                  Cada maquininha está numa conta do Mercado Pago diferente —
+                  foi assim que a loja contratou. Dizer QUAL conta é esta, aqui
+                  do lado do número de série, é o que evita colar o token de um
+                  aparelho no outro.
+                */}
+                <p className="mt-2 text-sm text-text-muted">
+                  {terminal.conta?.configurada ? (
+                    <>
+                      Conta <strong className="text-text-secondary">{terminal.conta?.apelido}</strong>{" "}
+                      · token {terminal.conta?.tokenPreview}
+                    </>
+                  ) : (
+                    "Sem conta do Mercado Pago — cobra normalmente, mas o sistema não consulta nem estorna."
+                  )}
+                </p>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setConfigurando(configurando === terminal.id ? null : terminal.id);
+                  setConta({ accessToken: "", label: terminal.conta?.apelido ?? "" });
+                }}
+              >
+                {terminal.conta?.configurada ? "Trocar conta" : "Informar conta"}
+              </Button>
+
               {terminal.status === "ACTIVE" && !terminal.isPrimary && (
                 <Button
                   type="button"
@@ -278,6 +359,67 @@ export function TerminalsPage() {
                 Remover
               </Button>
             </div>
+
+            {configurando === terminal.id && (
+              <form
+                className="w-full border-t border-border/70 pt-4"
+                onSubmit={(evento) => {
+                  evento.preventDefault();
+                  salvarConta.mutate({ id: terminal.id, ...conta });
+                }}
+              >
+                <p className="mb-3 text-sm text-text-secondary">
+                  No painel do Mercado Pago desta conta: <strong>Credenciais de produção</strong> →
+                  Access Token. O sistema confere o token com o Mercado Pago antes de guardar, e
+                  ele nunca volta para esta tela.
+                </p>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field
+                    label="Access token de produção"
+                    type="password"
+                    required
+                    autoComplete="off"
+                    value={conta.accessToken}
+                    onChange={(evento) =>
+                      setConta((atual) => ({ ...atual, accessToken: evento.target.value }))
+                    }
+                    placeholder="APP_USR-..."
+                  />
+
+                  <Field
+                    label="Como chamar esta conta"
+                    value={conta.label}
+                    onChange={(evento) =>
+                      setConta((atual) => ({ ...atual, label: evento.target.value }))
+                    }
+                    placeholder="Conta da Loja Centro"
+                    hint="Vazio: usa o apelido da conta no Mercado Pago."
+                  />
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button type="submit" disabled={salvarConta.isPending}>
+                    {salvarConta.isPending ? "Conferindo..." : "Conferir e guardar"}
+                  </Button>
+
+                  <Button type="button" variant="ghost" onClick={() => setConfigurando(null)}>
+                    Cancelar
+                  </Button>
+
+                  {terminal.conta?.configurada && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={removerConta.isPending}
+                      onClick={() => removerConta.mutate(terminal.id)}
+                    >
+                      Tirar a conta desta maquininha
+                    </Button>
+                  )}
+                </div>
+              </form>
+            )}
           </li>
         ))}
       </ul>
