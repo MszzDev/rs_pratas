@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Pencil, Plus } from "lucide-react";
+import { Building2, Clock, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { Badge, Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { horarioVazio, resumirHorario, type StoreHours } from "@rs-pratas/shared";
+import { OpeningHoursEditor } from "./OpeningHoursEditor";
 
 interface StoreAddress {
   cep?: string;
@@ -27,6 +29,7 @@ interface Store {
   email: string | null;
   timezone: string;
   addressJson: StoreAddress | null;
+  openingHours: StoreHours | null;
   isActive: boolean;
   isOpen: boolean;
 }
@@ -45,6 +48,10 @@ const EMPTY = {
   cidade: "",
   uf: "",
 };
+
+/** Alguma linha preenchida? Horário todo nulo é "não configurado", não "fechada". */
+const temAlgumHorario = (horas: StoreHours): boolean =>
+  Object.values(horas).some((intervalo) => intervalo?.abre && intervalo.fecha);
 
 const linhaDoEndereco = (address: StoreAddress | null): string | null => {
   if (!address) return null;
@@ -68,6 +75,7 @@ export function StoresPage() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...EMPTY });
+  const [horario, setHorario] = useState<StoreHours>(horarioVazio());
 
   const stores = useQuery({
     queryKey: ["stores"],
@@ -92,12 +100,16 @@ export function StoresPage() {
       ...(form.cidade ? { cidade: form.cidade } : {}),
       ...(form.uf ? { uf: form.uf.toUpperCase() } : {}),
     },
+    // Só vai se algum dia tiver horário: mandar oito dias nulos gravaria
+    // "fechada a semana toda" em quem só não preencheu.
+    ...(temAlgumHorario(horario) ? { openingHours: horario } : {}),
   });
 
   const fechar = () => {
     setCreating(false);
     setEditingId(null);
     setForm({ ...EMPTY });
+    setHorario(horarioVazio());
   };
 
   const salvar = useMutation({
@@ -117,6 +129,7 @@ export function StoresPage() {
     const address = store.addressJson ?? {};
     setEditingId(store.id);
     setCreating(false);
+    setHorario(store.openingHours ?? horarioVazio());
     setForm({
       code: store.code,
       name: store.name,
@@ -147,6 +160,7 @@ export function StoresPage() {
             onClick={() => {
               setCreating(true);
               setForm({ ...EMPTY });
+              setHorario(horarioVazio());
             }}
           >
             <Plus className="h-5 w-5" aria-hidden />
@@ -264,6 +278,10 @@ export function StoresPage() {
                 </div>
               </fieldset>
 
+              <div className="mt-6">
+                <OpeningHoursEditor valor={horario} aoMudar={setHorario} />
+              </div>
+
               <div className="mt-6 flex gap-3">
                 <Button type="submit" disabled={salvar.isPending}>
                   {editingId ? "Salvar alterações" : "Cadastrar loja"}
@@ -303,6 +321,13 @@ export function StoresPage() {
                 {linhaDoEndereco(store.addressJson) && (
                   <p className="mt-1 text-sm text-text-muted">
                     {linhaDoEndereco(store.addressJson)}
+                  </p>
+                )}
+
+                {resumirHorario(store.openingHours) && (
+                  <p className="mt-1 flex items-center gap-1.5 text-sm text-text-muted">
+                    <Clock className="h-4 w-4 shrink-0" aria-hidden />
+                    {resumirHorario(store.openingHours)}
                   </p>
                 )}
               </div>

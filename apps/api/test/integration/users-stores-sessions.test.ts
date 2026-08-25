@@ -388,6 +388,69 @@ describe("lojas", () => {
     expect(duplicada.statusCode).toBe(409);
   });
 
+  it("guarda endereço e horário já na criação, sem exigir uma segunda passada", async () => {
+    const { token } = await ownerContext();
+
+    const criada = await app.inject({
+      method: "POST",
+      url: "/api/v1/stores",
+      headers: auth(token),
+      payload: {
+        code: "ELIS",
+        name: "Quiosque Elis Maas",
+        cnpj: "43.577.085/0001-88",
+        email: "elis@rspratas.com.br",
+        address: { logradouro: "Avenida Elis Maas", numero: "855", cidade: "São Paulo", uf: "SP" },
+        openingHours: {
+          segunda: { abre: "10:00", fecha: "19:00" },
+          terca: { abre: "10:00", fecha: "19:00" },
+          quarta: { abre: "10:00", fecha: "19:00" },
+          quinta: { abre: "10:00", fecha: "19:00" },
+          sexta: { abre: "10:00", fecha: "19:00" },
+          sabado: { abre: "10:00", fecha: "19:00" },
+          domingo: { abre: "10:00", fecha: "14:00" },
+          feriado: { abre: "10:00", fecha: "14:00" },
+        },
+      },
+    });
+
+    expect(criada.statusCode).toBe(201);
+
+    // O endereço vinha preenchido da tela e era descartado aqui: quem
+    // cadastrava a loja digitava tudo, salvava, e precisava abrir a edição
+    // para digitar de novo.
+    const loja = criada.json();
+    expect(loja.addressJson).toMatchObject({ logradouro: "Avenida Elis Maas", numero: "855" });
+    expect(loja.email).toBe("elis@rspratas.com.br");
+    expect(loja.openingHours.domingo).toEqual({ abre: "10:00", fecha: "14:00" });
+  });
+
+  it("recusa horário com fechamento antes da abertura", async () => {
+    const { token } = await ownerContext();
+
+    const resposta = await app.inject({
+      method: "POST",
+      url: "/api/v1/stores",
+      headers: auth(token),
+      payload: {
+        code: "XPTO",
+        name: "Loja de teste",
+        openingHours: {
+          segunda: { abre: "19:00", fecha: "10:00" },
+          terca: null,
+          quarta: null,
+          quinta: null,
+          sexta: null,
+          sabado: null,
+          domingo: null,
+          feriado: null,
+        },
+      },
+    });
+
+    expect(resposta.statusCode).toBe(400);
+  });
+
   it("vendedor só enxerga as lojas às quais tem acesso", async () => {
     const { company, store } = await ownerContext();
     await createTestStore(company.id, "L99");

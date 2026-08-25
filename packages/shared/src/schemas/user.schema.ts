@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isValidCpf, onlyDigits } from "../cpf.js";
 import { USER_ROLES } from "../roles.const.js";
+import { storeHoursSchema } from "../store-hours.js";
 
 /**
  * A identidade do funcionário é a matrícula, gerada pelo sistema. O e-mail é
@@ -108,6 +109,8 @@ export const createStoreSchema = z.object({
   email: z.string().email().max(160).optional(),
   timezone: z.string().max(60).default("America/Sao_Paulo"),
   address: storeAddressSchema.optional(),
+  /** Horário anunciado da loja. Ausente = ainda não configurado. */
+  openingHours: storeHoursSchema.optional(),
 });
 
 export const updateStoreSchema = createStoreSchema.partial();

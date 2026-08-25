@@ -54,6 +54,12 @@ export async function storeRoutes(app: FastifyInstance) {
         timezone: input.timezone,
         cnpj: input.cnpj ?? null,
         phone: input.phone ?? null,
+        // Endereço, e-mail e horário vinham preenchidos da tela e eram
+        // descartados aqui: quem cadastrava a loja digitava o endereço, salvava
+        // e precisava abrir a edição para digitar tudo de novo.
+        email: input.email ?? null,
+        ...(input.address !== undefined ? { addressJson: input.address } : {}),
+        ...(input.openingHours !== undefined ? { openingHours: input.openingHours } : {}),
       },
     });
 
@@ -95,6 +101,7 @@ export async function storeRoutes(app: FastifyInstance) {
         // O endereço vai inteiro: substituir o bloco é mais previsível que
         // mesclar campo a campo, e é assim que a tela manda.
         ...(input.address !== undefined ? { addressJson: input.address } : {}),
+        ...(input.openingHours !== undefined ? { openingHours: input.openingHours } : {}),
       },
     });
 

@@ -258,6 +258,14 @@ model Store {
   /// O dono abre e fecha qualquer loja de onde estiver, e é ele quem fecha no
   /// fim do dia: deixar a loja fechar sozinha por inatividade esconderia o
   /// tablet que ficou ligado a noite toda.
+  /// Horário ANUNCIADO da loja, por dia da semana mais feriado.
+  ///
+  /// Não se confunde com `isOpen`, que diz se ela está aberta agora: um é o
+  /// que a placa na porta promete, o outro é o que o tablet registrou. Serve
+  /// para o comprovante, para responder "abre segunda?" sem ligar para a loja,
+  /// e para já preencher a jornada de quem for cadastrado ali.
+  openingHours     Json?
+
   isOpen           Boolean   @default(false)
   openedAt         DateTime?
   openedById       String?

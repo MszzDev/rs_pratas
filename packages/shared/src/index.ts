@@ -9,3 +9,4 @@ export * from "./schemas/first-access.schema.js";
 export * from "./schemas/user.schema.js";
 export * from "./schemas/timeclock.schema.js";
 export * from "./timeclock.rules.js";
+export * from "./store-hours.js";
