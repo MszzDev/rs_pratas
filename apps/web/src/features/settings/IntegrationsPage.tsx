@@ -15,7 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
-import { apiFetch, ApiError } from "@/lib/api-client";
+import { API_BASE_URL, apiFetch, ApiError } from "@/lib/api-client";
+import { useAuth } from "@/features/auth/auth-context";
 
 type Provider = "NUVEMSHOP" | "MERCADOPAGO" | "REDE";
 type Status = "DESCONECTADA" | "CONECTADA" | "ERRO";
@@ -114,6 +115,68 @@ const STATUS_LABEL: Record<Status, string> = {
   DESCONECTADA: "Não conectada",
   ERRO: "Com erro",
 };
+
+/**
+ * Os endereços que a Nuvemshop e o Mercado Pago precisam conhecer.
+ *
+ * Eles carregam o identificador da empresa no meio da URL, que não é coisa que
+ * alguém saiba de cabeça. Montar aqui e oferecer o botão de copiar evita o
+ * caminho que existia antes: pedir o identificador a quem instalou o sistema.
+ *
+ * O endereço não é segredo — receber um evento falso não cria venda nenhuma,
+ * porque tudo o que chega é conferido depois contra a API do próprio serviço.
+ */
+function WebhookAddresses() {
+  const { user } = useAuth();
+  const [copiado, setCopiado] = useState<string | null>(null);
+
+  if (!user) return null;
+
+  // O endereço é o da API, não o do site: quem vai chamar é o servidor do
+  // serviço, e ele precisa bater onde o sistema atende de verdade.
+  const base = `${API_BASE_URL}/api/v1/integrations`;
+
+  const enderecos = [
+    { nome: "Mercado Pago", url: `${base}/mercadopago/webhook/${user.companyId}` },
+    { nome: "Nuvemshop", url: `${base}/nuvemshop/webhook/${user.companyId}` },
+  ];
+
+  return (
+    <section className="mt-8">
+      <h2 className="mb-1 text-lg font-medium text-text-primary">Onde eles avisam o sistema</h2>
+      <p className="mb-3 text-sm text-text-secondary">
+        Cole estes endereços no campo de webhook de cada serviço. É por eles que um pagamento
+        aprovado ou um pedido novo chega sozinho, em vez de o sistema ficar perguntando.
+      </p>
+
+      <ul className="space-y-2">
+        {enderecos.map((endereco) => (
+          <li
+            key={endereco.nome}
+            className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface px-4 py-3"
+          >
+            <span className="w-32 shrink-0 font-medium text-text-primary">{endereco.nome}</span>
+
+            <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-sm text-text-secondary">
+              {endereco.url}
+            </code>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void navigator.clipboard.writeText(endereco.url);
+                setCopiado(endereco.nome);
+              }}
+            >
+              {copiado === endereco.nome ? "Copiado" : "Copiar"}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 const formatDateTime = (iso: string | null) =>
   iso === null ? "—" : new Date(iso).toLocaleString("pt-BR");
@@ -524,6 +587,8 @@ export function IntegrationsPage() {
           );
         })}
       </ul>
+
+      <WebhookAddresses />
 
       {(eventos.data?.length ?? 0) > 0 && (
         <section className="mt-8">
