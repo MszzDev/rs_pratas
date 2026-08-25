@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">RS Pratas</string>
+    <string name="title_activity_main">RS Pratas</string>
+    <string name="package_name">com.rspratas.app</string>
+    <string name="custom_url_scheme">com.rspratas.app</string>
+</resources>

@@ -40,39 +40,65 @@ adb shell dpm set-device-owner com.rspratas.app/.KioskDeviceAdminReceiver
 adb shell dumpsys device_policy | grep -i "device owner"
 ```
 
-### Implementação nativa pendente
 
-Falta escrever, em `apps/web/android`:
+### Gerar o APK
 
-- `KioskDeviceAdminReceiver` (subclasse de `DeviceAdminReceiver`);
-- chamada de `startLockTask()` na `MainActivity`;
-- `setLockTaskPackages()` para autorizar o próprio pacote;
-- plugin Capacitor expondo `enterKiosk()` / `exitKiosk()` ao TypeScript;
-- desabilitar a barra de status e a navegação por gestos via
-  `DevicePolicyManager.setStatusBarDisabled()` e `setKeyguardDisabled()`.
+```bash
+pnpm turbo run build --filter=@rs-pratas/web
+cd apps/web && pnpm exec cap sync android
+cd android && ./gradlew assembleDebug
+```
 
-## Saída do quiosque
+O arquivo sai em `apps/web/android/app/build/outputs/apk/debug/app-debug.apk`.
 
-Pela especificação, sair exige: 5 toques na logo, login, permissão
-`DEVICE_EXIT_KIOSK`, reautenticação (step-up com propósito `EXIT_KIOSK`),
-confirmação e motivo. O backend já implementa a parte de autorização — o
-`requireStepUp(EXIT_KIOSK)` e a permissão existem. Falta a interface dos 5
-toques e a chamada nativa de `stopLockTask()`.
+O `local.properties` com o caminho do SDK **não** vai para o Git — cada máquina
+tem o seu, e o arquivo já está no `.gitignore`.
 
-Toda saída precisa gerar `AuditLog(DEVICE_KIOSK_EXIT)` com o motivo informado.
+## O que já está implementado no nativo
 
-## Bloqueio de captura de tela
+`MainActivity` entra no Lock Task ao abrir **e ao voltar do segundo plano**. A
+segunda chamada não é redundante: uma atualização do sistema ou um encerramento
+forçado tira o aparelho do confinamento, e sem reentrar o tablet ficaria solto
+sem que ninguém percebesse — a tela continua a mesma.
 
-Telas com credenciais e dados administrativos devem chamar
-`getWindow().setFlags(FLAG_SECURE, FLAG_SECURE)` na Activity. Ainda não
-implementado.
+Quando o aplicativo **não** é Device Owner, ele roda normalmente e apenas não
+confina. Essa escolha é deliberada: um tablet de vitrine, o celular do gerente
+ou um aparelho de teste continuam usáveis, e a loja não fica sem PDV porque o
+provisionamento não foi feito.
 
-## Estado atual
+`FLAG_SECURE` está ativo na Activity inteira: o Android não fotografa a tela
+para a lista de recentes nem permite captura. O resumo do caixa não fica
+visível na miniatura para quem pegar o tablet.
+
+O aplicativo também se declara como tela inicial (`category.HOME`). Com Device
+Owner, ligar o tablet cai direto no PDV e o botão Home volta para cá em vez de
+sair.
+
+## O que ainda falta
 
 | Item | Situação |
 |---|---|
-| Reforços no app (voltar, contexto, segundo plano) | Implementado |
-| Autorização de saída no backend (permissão + step-up + auditoria) | Implementado |
-| Lock Task Mode / Device Owner | Pendente — requer código nativo |
-| Interface dos 5 toques | Pendente |
-| FLAG_SECURE em telas sensíveis | Pendente |
+| Reforços no app (voltar, contexto, segundo plano) | Pronto |
+| Autorização de saída no backend (permissão + step-up + auditoria) | Pronto |
+| `KioskDeviceAdminReceiver` e Lock Task Mode | Pronto |
+| `FLAG_SECURE` | Pronto |
+| App como tela inicial | Pronto |
+| Interface dos 5 toques para sair | Pendente |
+| Provisionamento num tablet real | Pendente — exige o aparelho |
+
+A saída do quiosque exige, pela especificação: 5 toques na logo, login,
+permissão `DEVICE_EXIT_KIOSK`, reautenticação com propósito `EXIT_KIOSK`,
+confirmação e motivo. **O backend já faz toda a parte de autorização.** Falta a
+interface dos 5 toques chamando `stopLockTask()`.
+
+Toda saída gera `AuditLog(DEVICE_KIOSK_EXIT)` com o motivo.
+
+## Aviso honesto
+
+Nada disto foi testado num tablet físico — não havia aparelho. O que está
+verificado é que o APK **compila** e que o receptor, a permissão de
+administrador, a categoria HOME e o retorno após reinício estão dentro do
+pacote gerado (conferido no manifesto compilado com `aapt2`).
+
+O comportamento do Lock Task só se confirma no aparelho, depois do
+provisionamento.

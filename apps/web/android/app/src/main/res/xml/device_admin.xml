@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Políticas que o RS Pratas pede como administrador do dispositivo.
+
+  A lista é curta de propósito: pedir menos poder do que se precisa é o padrão
+  correto, e cada política aqui teria de ser justificada a quem entrega o
+  tablet. O confinamento em si (Lock Task Mode) não vem desta lista — vem de o
+  aplicativo ser Device Owner.
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-policies>
+    <!-- Permite bloquear a tela por inatividade. -->
+    <force-lock />
+  </uses-policies>
+</device-admin>

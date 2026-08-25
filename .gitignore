@@ -11,6 +11,10 @@
 **/credentials/
 **/secrets/
 
+# Cópias do banco. NUNCA no Git: o repositório é público e o dump tem dados
+# de clientes e hashes de senha.
+backups/
+
 # Dependências / build
 node_modules/
 dist/
