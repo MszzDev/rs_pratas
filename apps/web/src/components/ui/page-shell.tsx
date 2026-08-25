@@ -37,6 +37,8 @@ import { Logo, LogoMark } from "@/components/ui/logo";
 import { StatusStrip } from "@/components/ui/status-strip";
 import { PinExpiryNotice } from "@/features/auth/PinExpiryNotice";
 import { KioskExitDialog, useKioskExitGesture } from "@/features/kiosk/KioskExit";
+import { LeaveWithoutClockOut } from "@/features/timeclock/LeaveWithoutClockOut";
+import { useShiftGuard } from "@/features/timeclock/use-shift-guard";
 
 type NavSection = "dia-a-dia" | "gestao" | "sistema";
 
@@ -217,6 +219,20 @@ export function PageShell({
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // Sair do sistema em turno aberto passa por uma pergunta: quem vai embora
+  // sem bater a saída deixa um buraco no espelho de ponto que ninguém
+  // consegue reconstruir depois.
+  const turno = useShiftGuard();
+  const [confirmandoSaida, setConfirmandoSaida] = useState(false);
+
+  const sair = () => {
+    if (turno.turnoAberto) {
+      setConfirmandoSaida(true);
+      return;
+    }
+    void logout();
+  };
+
   const items = NAV_ITEMS.filter(
     (item) => !item.roles || (user && item.roles.includes(user.role)),
   );
@@ -248,7 +264,7 @@ export function PageShell({
     <div className="min-h-screen bg-background-secondary lg:flex">
       <Sidebar
         items={items}
-        onLogout={() => void logout()}
+        onLogout={sair}
         user={user}
         onLogoTap={quiosque.registrarToque}
       />
@@ -257,7 +273,7 @@ export function PageShell({
         open={drawerOpen}
         onToggle={() => setDrawerOpen((current) => !current)}
         items={items}
-        onLogout={() => void logout()}
+        onLogout={sair}
         user={user}
         onLogoTap={quiosque.registrarToque}
       />
@@ -265,6 +281,26 @@ export function PageShell({
       <div className="flex-1 lg:min-w-0">
         <main className="mx-auto w-full max-w-[82rem] px-4 py-6 md:px-6 md:py-8">
           <PinExpiryNotice />
+
+          {/*
+            No computador a entrada é lembrada, não exigida: o gerente que abre
+            o sistema em casa às dez da noite não está começando um turno.
+          */}
+          {turno.precisaEntrada && !turno.exigirEntrada && location.pathname !== "/ponto" && (
+            <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-ocean/30 bg-ocean-soft/40 p-4 text-sm">
+              <Clock className="h-5 w-5 shrink-0 text-ocean" aria-hidden />
+              <p className="flex-1 text-text-primary">
+                <strong className="font-semibold">Você ainda não bateu o ponto hoje.</strong> A
+                entrada e a saída são obrigatórias.
+              </p>
+              <NavLink
+                to="/ponto"
+                className="flex min-h-[40px] items-center rounded-md bg-ocean px-4 font-medium text-white"
+              >
+                Bater ponto
+              </NavLink>
+            </div>
+          )}
 
           <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
@@ -309,6 +345,17 @@ export function PageShell({
       </div>
 
       {quiosque.aberto && <KioskExitDialog onClose={quiosque.fechar} />}
+
+      {confirmandoSaida && (
+        <LeaveWithoutClockOut
+          diaCurto={turno.diaCurto}
+          onCancelar={() => setConfirmandoSaida(false)}
+          onSairMesmoAssim={() => {
+            setConfirmandoSaida(false);
+            void logout();
+          }}
+        />
+      )}
     </div>
   );
 }

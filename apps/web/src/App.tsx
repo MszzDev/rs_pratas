@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import { installBackgroundPrivacy, installKioskGuards } from "./lib/kiosk";
 import { useDeviceRegistration } from "./features/devices/use-device-registration";
 import { WaitingForStore } from "./features/devices/WaitingForStore";
 import { ChangePinPage } from "./features/auth/ChangePinPage";
+import { useShiftGuard } from "./features/timeclock/use-shift-guard";
 import { restaurarBrilho } from "./components/ui/brightness-control";
 import { AuthProvider, useAuth } from "./features/auth/auth-context";
 import { LoginPage } from "./features/auth/LoginPage";
@@ -47,6 +48,8 @@ import { DashboardPage } from "./features/dashboard/DashboardPage";
  */
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
+  const turno = useShiftGuard();
 
   if (loading) {
     return (
@@ -73,6 +76,13 @@ function RequireAuth({ children }: { children: ReactNode }) {
   // PIN novo. Sem isto, o PIN dito em voz alta no balcão valeria trinta dias.
   if (user.pinExpired) {
     return <Navigate to="/trocar-pin" replace />;
+  }
+
+  // No tablet, o expediente começa pelo relógio de ponto. Quem chegou e ainda
+  // não registrou a entrada é levado para lá antes de qualquer outra tela —
+  // não é bloqueio, é a primeira coisa do dia acontecendo na ordem certa.
+  if (turno.exigirEntrada && turno.precisaEntrada && location.pathname !== "/ponto") {
+    return <Navigate to="/ponto" replace />;
   }
 
   return <>{children}</>;
