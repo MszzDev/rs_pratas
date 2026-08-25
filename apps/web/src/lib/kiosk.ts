@@ -38,16 +38,20 @@ export function installKioskGuards(): () => void {
 }
 
 /**
- * Oculta a tela quando o app vai para segundo plano.
+ * Oculta a tela quando o aplicativo vai para segundo plano.
  *
- * O Android tira um retrato do app para a lista de recentes; sem isso, dados de
- * caixa ou de venda ficariam visíveis na miniatura para quem pegasse o tablet.
+ * O Android tira um retrato do aplicativo para a lista de recentes; sem isso,
+ * dados de caixa ou de venda ficariam visíveis na miniatura para quem pegasse
+ * o tablet.
+ *
+ * Só no TABLET. No computador isto cobria a tela a cada troca de aba — e a
+ * troca de aba é o gesto mais comum de quem trabalha ali: conferir um pedido
+ * no site, voltar. O risco que a cortina evita é o retrato do Android, que no
+ * navegador não existe; o incômodo, esse, existia toda hora.
  */
 export function installBackgroundPrivacy(onChange: (hidden: boolean) => void): () => void {
   if (!Capacitor.isNativePlatform()) {
-    const handleVisibility = () => onChange(document.hidden);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    return () => undefined;
   }
 
   const listener = App.addListener("appStateChange", ({ isActive }) => onChange(!isActive));
