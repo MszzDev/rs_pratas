@@ -137,6 +137,41 @@ describe("remover peça do catálogo", () => {
     expect(itens[0]?.productId).toBe(produto.id);
   });
 
+  it("peça com movimentação de estoque sai do catálogo, mas o histórico fica", async () => {
+    const { company, store, token } = await cenario();
+    const produto = await criarPeca(company.id, store.id, "TESTE-05", 0);
+
+    // Uma entrada de estoque, como a que acontece quando a mercadoria chega.
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/entries",
+      headers: auth(token),
+      payload: {
+        storeId: store.id,
+        productId: produto.id,
+        quantity: 4,
+        reason: "chegada do fornecedor",
+      },
+    });
+
+    const resposta = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/products/${produto.id}`,
+      headers: auth(token),
+      payload: { reason: "limpeza dos dados de demonstração" },
+    });
+
+    // Antes isto estourava com erro de banco: a movimentação aponta para o
+    // saldo, e o saldo estava sendo apagado embaixo dela.
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().removido).toBe("desativado");
+
+    const movimentos = await prisma.stockMovement.count({
+      where: { stockItem: { productId: produto.id } },
+    });
+    expect(movimentos).toBeGreaterThan(0);
+  });
+
   it("recusa remover peça reservada para um cliente", async () => {
     const { company, store, token } = await cenario();
     const produto = await criarPeca(company.id, store.id, "TESTE-03");

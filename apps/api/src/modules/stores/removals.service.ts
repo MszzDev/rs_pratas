@@ -683,12 +683,20 @@ export async function removeProduct(params: {
     throw notFound("PRODUCT_NOT_FOUND", "Peça não encontrada.");
   }
 
-  const [reservada, emOrdem] = await Promise.all([
+  const [reservada, emOrdem, movimentacoes] = await Promise.all([
     prisma.reservation.count({ where: { productId: product.id, status: "ATIVA" } }),
     prisma.stockItem.aggregate({
       where: { productId: product.id },
       _sum: { quantity: true },
     }),
+    /**
+     * Entradas, saídas e ajustes lançados nesta peça.
+     *
+     * É histórico de estoque: diz quantas peças entraram, quando, e quem
+     * ajustou. Apagar a peça levaria isso junto — e é justamente o que
+     * explica um saldo que não bate na contagem do mês passado.
+     */
+    prisma.stockMovement.count({ where: { stockItem: { productId: product.id } } }),
   ]);
 
   if (reservada > 0) {
@@ -698,7 +706,7 @@ export async function removeProduct(params: {
     );
   }
 
-  const jaVendeu = product._count.saleItems > 0;
+  const jaVendeu = product._count.saleItems > 0 || movimentacoes > 0;
   const temSaldo = (emOrdem._sum.quantity ?? 0) > 0;
 
   if (jaVendeu) {
@@ -726,7 +734,9 @@ export async function removeProduct(params: {
     outcome: {
       removido: jaVendeu ? "desativado" : "apagado",
       mensagem: jaVendeu
-        ? "Peça tirada do catálogo. As vendas antigas dela continuam no histórico — é o que sustenta a garantia e o relatório."
+        ? product._count.saleItems > 0
+          ? "Peça tirada do catálogo. As vendas antigas dela continuam no histórico — é o que sustenta a garantia e o relatório."
+          : "Peça tirada do catálogo. Ela nunca foi vendida, mas tem entradas e ajustes de estoque lançados — e é isso que explica um saldo que não bate na contagem."
         : temSaldo
           ? "Peça apagada, junto com o saldo que estava lançado nela."
           : "Peça apagada.",
