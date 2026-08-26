@@ -2432,3 +2432,40 @@ model PinResetRequest {
   @@index([userId, requestedAt])
   @@map("pin_reset_requests")
 }
+
+/// Arquivo guardado dentro do banco.
+///
+/// A hospedagem apaga o disco do servidor a cada publicação. Foto de peça e
+/// atestado de funcionário iam junto, sem aviso: o cadastro continuava
+/// apontando para um arquivo que não existia mais, e ninguém descobria até
+/// abrir a peça na tela.
+///
+/// Guardar aqui resolve dois problemas de uma vez. O arquivo passa a viver
+/// onde o resto do sistema já vive, e entra na cópia semanal do banco — que é
+/// testada e restaurável. No disco, ele ficaria de fora do backup.
+///
+/// O preço é ocupar espaço do banco. No tamanho desta rede — centenas de
+/// peças, algumas centenas de kilobytes cada — não chega perto de doer, e a
+/// interface StorageProvider continua existindo para o dia em que doer.
+model StoredFile {
+  id  String @id @default(uuid())
+  /// A chave que o cadastro guarda. É ela que chega pela API, então precisa
+  /// ser impossível de adivinhar: um id sequencial deixaria qualquer sessão
+  /// autenticada varrer os documentos de todo mundo.
+  key String @unique
+
+  /// Para que serve: "product-image", "employee-document". Serve para saber o
+  /// que ocupa espaço sem abrir arquivo nenhum.
+  scope String
+
+  content   Bytes
+  sizeBytes Int
+  /// SHA-256 do conteúdo. Responde "é o mesmo arquivo que foi enviado?" sem
+  /// depender de confiar no nome.
+  checksum  String
+
+  createdAt DateTime @default(now())
+
+  @@index([scope])
+  @@map("stored_files")
+}

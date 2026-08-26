@@ -2,8 +2,7 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
 import { badRequest } from "../../core/errors.js";
-import { env } from "../../config/env.js";
-import { LocalDiskStorage } from "../../core/storage/local-disk.storage.js";
+import { DatabaseStorage } from "../../core/storage/database.storage.js";
 import {
   readProductImage,
   removeProductImage,
@@ -70,9 +69,10 @@ const updateProductSchema = z.object({
 });
 
 export async function catalogRoutes(app: FastifyInstance) {
-  // Mesma pasta dos documentos, em subpasta propria: fica fora da raiz web e
-  // entra na mesma rotina de backup.
-  const storage = new LocalDiskStorage(env.DOCUMENT_STORAGE_DIR);
+  // No banco, e não em disco: o disco do servidor é apagado a cada
+  // publicação, e as fotos das peças sumiam junto. No banco elas entram na
+  // cópia semanal, que é testada.
+  const storage = new DatabaseStorage();
 
   app.get(
     "/categories",

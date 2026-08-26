@@ -60,6 +60,15 @@ const envSchema = z.object({
    * download passa pela API para a permissão ser checada. Precisa entrar na
    * rotina de backup junto com o banco.
    */
+  /**
+   * Pasta de arquivos em disco.
+   *
+   * Não é mais usada pelo sistema: foto de peça e documento de funcionário
+   * passaram a morar no banco, porque o disco da hospedagem é apagado a cada
+   * publicação. Continua aqui para a classe LocalDiskStorage, que segue
+   * existindo como a outra implementação possível de StorageProvider — quem
+   * rodar o sistema num servidor com disco de verdade tem essa opção.
+   */
   DOCUMENT_STORAGE_DIR: z.string().default("./storage/documents"),
 
   /**

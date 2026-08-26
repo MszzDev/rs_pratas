@@ -1,9 +1,8 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { EmployeeDocumentType } from "@prisma/client";
-import { env } from "../../config/env.js";
 import { badRequest } from "../../core/errors.js";
-import { LocalDiskStorage } from "../../core/storage/local-disk.storage.js";
+import { DatabaseStorage } from "../../core/storage/database.storage.js";
 import { RuleBasedDocumentAnalysis } from "../../core/documents/rule-based.analysis.js";
 import {
   downloadDocument,
@@ -20,7 +19,9 @@ const reviewSchema = z.object({
 });
 
 export async function documentRoutes(app: FastifyInstance) {
-  const storage = new LocalDiskStorage(env.DOCUMENT_STORAGE_DIR);
+  // No banco. Atestado e documento de funcionário sumiam a cada publicação
+  // exatamente como as fotos — e este é o material que a lei manda guardar.
+  const storage = new DatabaseStorage();
   const analysis = new RuleBasedDocumentAnalysis();
 
   /**
