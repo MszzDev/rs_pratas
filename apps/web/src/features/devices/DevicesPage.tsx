@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Unlink } from "lucide-react";
+import { Plus, Trash2, Unlink, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
@@ -54,6 +54,7 @@ export function DevicesPage() {
 
   const [storeId, setStoreId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const stores = useQuery({
     queryKey: ["stores"],
@@ -90,6 +91,42 @@ export function DevicesPage() {
     onError: (caught) => handleError(caught, "Não foi possível criar a estação."),
   });
 
+  /**
+   * Remover estação e caixa.
+   *
+   * Quem decide entre apagar e desativar é o servidor: caixa que já teve turno
+   * carrega o dinheiro conferido daquele dia, e apagá-lo apagaria a
+   * conferência junto. Estação com caixa dentro é recusada — desmontar de
+   * cima para baixo deixaria caixa órfão.
+   */
+  const removerEstacao = useMutation({
+    mutationFn: (params: { id: string; reason: string }) =>
+      apiFetch<{ mensagem: string }>(`/api/v1/pos-stations/${params.id}`, {
+        method: "DELETE",
+        body: { reason: params.reason },
+      }),
+    onSuccess: (resultado) => {
+      setError(null);
+      setAviso(resultado.mensagem);
+      void queryClient.invalidateQueries({ queryKey: ["pos-stations"] });
+    },
+    onError: (caught) => handleError(caught, "Não foi possível remover a estação."),
+  });
+
+  const removerCaixa = useMutation({
+    mutationFn: (params: { id: string; reason: string }) =>
+      apiFetch<{ mensagem: string }>(`/api/v1/cash-registers/${params.id}`, {
+        method: "DELETE",
+        body: { reason: params.reason },
+      }),
+    onSuccess: (resultado) => {
+      setError(null);
+      setAviso(resultado.mensagem);
+      void queryClient.invalidateQueries({ queryKey: ["pos-stations"] });
+    },
+    onError: (caught) => handleError(caught, "Não foi possível remover o caixa."),
+  });
+
   const createRegister = useMutation({
     mutationFn: (input: { posStationId: string; code: string; name: string }) =>
       apiFetch("/api/v1/cash-registers", { method: "POST", body: input }),
@@ -105,6 +142,12 @@ export function DevicesPage() {
       {error && (
         <div className="mb-5">
           <Alert tone="error">{error}</Alert>
+        </div>
+      )}
+
+      {aviso && (
+        <div className="mb-5">
+          <Alert tone="success">{aviso}</Alert>
         </div>
       )}
 
@@ -151,21 +194,46 @@ export function DevicesPage() {
                       {station.name} <span className="text-text-muted">({station.code})</span>
                     </span>
                     {isOwner && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          const nextCode = `C${String(station.cashRegisters.length + 1).padStart(2, "0")}`;
-                          createRegister.mutate({
-                            posStationId: station.id,
-                            code: nextCode,
-                            name: `Caixa ${nextCode}`,
-                          });
-                        }}
-                        disabled={createRegister.isPending}
-                      >
-                        Adicionar caixa
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            const nextCode = `C${String(station.cashRegisters.length + 1).padStart(2, "0")}`;
+                            createRegister.mutate({
+                              posStationId: station.id,
+                              code: nextCode,
+                              name: `Caixa ${nextCode}`,
+                            });
+                          }}
+                          disabled={createRegister.isPending}
+                        >
+                          Adicionar caixa
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={removerEstacao.isPending}
+                          onClick={async () => {
+                            const motivo = await confirmar({
+                              titulo: `Remover a ${station.name}?`,
+                              descricao:
+                                "A estação precisa estar sem caixas. Ela agrupa caixa, tablet, maquininha e impressora — removê-la desfaz esse agrupamento.",
+                              acao: "Remover estação",
+                              destrutivo: true,
+                              pedirMotivo: true,
+                            });
+
+                            if (motivo !== null) {
+                              removerEstacao.mutate({ id: station.id, reason: motivo });
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden />
+                          Remover
+                        </Button>
+                      </div>
                     )}
                   </div>
 
@@ -176,9 +244,34 @@ export function DevicesPage() {
                       {station.cashRegisters.map((register) => (
                         <li
                           key={register.id}
-                          className="rounded bg-background-secondary px-3 py-1 text-sm"
+                          className="flex items-center gap-1 rounded bg-background-secondary py-1 pl-3 pr-1 text-sm"
                         >
                           {register.name}
+
+                          {isOwner && (
+                            <button
+                              type="button"
+                              aria-label={`Remover ${register.name}`}
+                              disabled={removerCaixa.isPending}
+                              onClick={async () => {
+                                const motivo = await confirmar({
+                                  titulo: `Remover o ${register.name}?`,
+                                  descricao:
+                                    "Caixa que já teve turno sai de uso mas continua no histórico. Caixa com tablet vinculado precisa ser desvinculado antes, e caixa aberto precisa ser fechado.",
+                                  acao: "Remover caixa",
+                                  destrutivo: true,
+                                  pedirMotivo: true,
+                                });
+
+                                if (motivo !== null) {
+                                  removerCaixa.mutate({ id: register.id, reason: motivo });
+                                }
+                              }}
+                              className="flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-danger/10 hover:text-danger"
+                            >
+                              <X className="h-4 w-4" aria-hidden />
+                            </button>
+                          )}
                         </li>
                       ))}
                     </ul>
