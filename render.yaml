@@ -88,14 +88,21 @@ services:
       # garantia e credencial de funcionário ficam só na tela. É de propósito
       # — melhor não enviar do que fingir que enviou.
       #
-      # SMTP_URL é a conexão do provedor, no formato
-      # smtps://usuario:senha@servidor:465. Vem do painel de quem envia
-      # (Brevo, Resend, ou a própria caixa de e-mail da loja com senha de
-      # aplicativo). PREENCHA no painel do Render, nunca no código: é
-      # credencial.
+      # Os quatro campos vêm do painel do provedor de e-mail — pode ser a
+      # própria caixa da loja. Separados de propósito: montar a URL à mão é
+      # onde as pessoas erram, porque a senha costuma ter @ ou / no meio, e
+      # qualquer um deles quebra a URL em silêncio.
+      #
+      # PREENCHA no painel do Render, nunca no código: é credencial.
       - key: MAIL_TRANSPORT
         value: smtp
-      - key: SMTP_URL
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
         sync: false
       # O remetente que o cliente vê. Precisa ser um endereço do domínio
       # autorizado no provedor, senão a mensagem cai em spam ou é recusada.

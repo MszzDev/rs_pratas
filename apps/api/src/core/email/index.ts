@@ -8,13 +8,37 @@ export type { EmailMessage, EmailProvider } from "./email.provider.js";
 
 let provider: EmailProvider | null = null;
 
+/**
+ * Está configurado para enviar de verdade?
+ *
+ * Duas formas de dizer a mesma coisa: a URL inteira, para quem já a tem, ou os
+ * quatro campos separados, que é o caminho de quem está copiando do painel do
+ * provedor — e onde não há URL para montar errado.
+ */
+export function emailConfigurado(): boolean {
+  if (env.MAIL_TRANSPORT !== "smtp") return false;
+
+  return Boolean(
+    env.SMTP_URL || (env.SMTP_HOST && env.SMTP_PORT && env.SMTP_USER && env.SMTP_PASSWORD),
+  );
+}
+
 function resolveProvider(): EmailProvider {
   if (provider) return provider;
 
-  provider =
-    env.MAIL_TRANSPORT === "smtp" && env.SMTP_URL
-      ? new SmtpEmailProvider(env.SMTP_URL)
-      : new LogEmailProvider();
+  if (!emailConfigurado()) {
+    provider = new LogEmailProvider();
+    return provider;
+  }
+
+  provider = env.SMTP_URL
+    ? new SmtpEmailProvider(env.SMTP_URL)
+    : new SmtpEmailProvider({
+        host: env.SMTP_HOST as string,
+        port: env.SMTP_PORT as number,
+        user: env.SMTP_USER as string,
+        password: env.SMTP_PASSWORD as string,
+      });
 
   return provider;
 }

@@ -70,6 +70,22 @@ const envSchema = z.object({
   MAIL_TRANSPORT: z.enum(["log", "smtp"]).default("log"),
   /** Ex.: smtps://loja%40dominio.com.br:SENHA_DE_APP@smtp.dominio.com.br:465 */
   SMTP_URL: z.string().optional(),
+
+  /**
+   * A mesma conexão, em pedaços.
+   *
+   * Existe porque montar a URL à mão é onde as pessoas erram: a senha do
+   * provedor costuma ter `@`, `/` ou `:`, e qualquer um desses no meio da URL
+   * a quebra em silêncio — o sistema sobe, e o e-mail simplesmente nunca sai.
+   * Com os campos separados, é copiar e colar cada um do painel do provedor.
+   *
+   * Se `SMTP_URL` estiver preenchida, ela ganha: quem já tem a URL pronta não
+   * precisa refazer nada.
+   */
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().default("RS Pratas <nao-responda@rspratas.com.br>"),
 
   CORS_ALLOWED_ORIGINS: z

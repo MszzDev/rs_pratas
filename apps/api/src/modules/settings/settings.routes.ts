@@ -6,7 +6,7 @@ import { badRequest, notFound } from "../../core/errors.js";
 import { assertStoreAccess, requireRole } from "../../core/rbac/require-role.hook.js";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
 import { env } from "../../config/env.js";
-import { sendEmail } from "../../core/email/index.js";
+import { emailConfigurado, sendEmail } from "../../core/email/index.js";
 
 const settingBodySchema = z.object({
   key: z.string().min(1).max(120),
@@ -74,14 +74,16 @@ export async function settingsRoutes(app: FastifyInstance) {
    * tela poder dizer.
    */
   app.get("/settings/email", { preHandler: ownerOnly }, async () => {
-    const ligado = env.MAIL_TRANSPORT === "smtp" && Boolean(env.SMTP_URL);
-
     return {
-      ligado,
+      ligado: emailConfigurado(),
       remetente: env.MAIL_FROM,
-      // O endereço do servidor sem a senha: o suficiente para conferir que é o
+      // O endereço do servidor SEM a senha: o suficiente para conferir que é o
       // provedor certo, sem devolver credencial para a tela.
-      servidor: env.SMTP_URL ? env.SMTP_URL.replace(/\/\/[^@]*@/, "//") : null,
+      servidor: env.SMTP_URL
+        ? env.SMTP_URL.replace(/\/\/[^@]*@/, "//")
+        : env.SMTP_HOST
+          ? `${env.SMTP_HOST}:${env.SMTP_PORT}`
+          : null,
     };
   });
 
@@ -105,10 +107,10 @@ export async function settingsRoutes(app: FastifyInstance) {
       );
     }
 
-    if (env.MAIL_TRANSPORT !== "smtp" || !env.SMTP_URL) {
+    if (!emailConfigurado()) {
       throw badRequest(
         "EMAIL_OFF",
-        "O envio de e-mail ainda não está configurado. Preencha SMTP_URL e MAIL_FROM no painel do Render.",
+        "O envio de e-mail ainda não está configurado. Preencha SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD e MAIL_FROM no painel do Render.",
       );
     }
 

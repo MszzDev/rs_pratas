@@ -77,9 +77,10 @@ export function EmailStatus() {
 
             {!ligado && (
               <p className="mt-2 max-w-2xl text-sm text-text-muted">
-                Para ligar, preencha <code>SMTP_URL</code> e <code>MAIL_FROM</code> nas variáveis de
-                ambiente da API no painel do Render. O endereço vem do provedor de e-mail — pode ser
-                a própria caixa da loja, com senha de aplicativo.
+                Para ligar, preencha no painel do Render (serviço da API, aba Environment):{" "}
+                <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>,{" "}
+                <code>SMTP_PASSWORD</code> e <code>MAIL_FROM</code>. Os quatro primeiros vêm do
+                provedor da caixa de e-mail da loja; o último é o endereço que o cliente vê.
               </p>
             )}
           </div>
