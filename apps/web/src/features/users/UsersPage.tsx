@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, CheckCircle2, Copy, KeyRound, Pencil, UserPlus } from "lucide-react";
+import { Ban, CheckCircle2, Copy, KeyRound, Pencil, UserMinus, UserPlus } from "lucide-react";
 import type { UserRole, UserSummary } from "@rs-pratas/shared";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -49,6 +49,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function UsersPage() {
   const confirmar = useConfirm();
+  const [avisoDesligamento, setAvisoDesligamento] = useState<string | null>(null);
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const isOwner = user?.role === "DONO";
@@ -212,6 +213,28 @@ export function UsersPage() {
     onError: (caught) => handleError(caught, "Não foi possível concluir."),
   });
 
+  /**
+   * Desligar.
+   *
+   * Não existe apagar funcionário: o ponto tem valor legal e precisa ser
+   * guardado depois da saída, e a venda que a pessoa fez continua sendo dela
+   * no relatório. O que acaba é o acesso — na hora, junto com as sessões
+   * abertas no tablet.
+   */
+  const desligar = useMutation({
+    mutationFn: (params: { id: string; reason: string }) =>
+      apiFetch<{ mensagem: string }>(`/api/v1/users/${params.id}`, {
+        method: "DELETE",
+        body: { reason: params.reason },
+      }),
+    onSuccess: (resultado) => {
+      setError(null);
+      setAvisoDesligamento(resultado.mensagem);
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (caught) => handleError(caught, "Não foi possível desligar."),
+  });
+
   const regenerate = useMutation({
     mutationFn: (target: UserRow) =>
       apiFetch<{
@@ -248,6 +271,12 @@ export function UsersPage() {
       }
     >
       {/* Quem esqueceu o PIN está esperando agora — por isso vem antes de tudo. */}
+      {avisoDesligamento && (
+        <div className="mb-5">
+          <Alert tone="success">{avisoDesligamento}</Alert>
+        </div>
+      )}
+
       <PinResetRequests />
 
       {/*
@@ -693,6 +722,30 @@ export function UsersPage() {
                               Bloquear
                             </>
                           )}
+                        </Button>
+                      )}
+
+                      {entry.id !== user?.id && (
+                        <Button
+                          variant="ghost"
+                          disabled={desligar.isPending}
+                          onClick={async () => {
+                            const motivo = await confirmar({
+                              titulo: `Desligar ${entry.name}?`,
+                              descricao:
+                                "O acesso acaba agora e a pessoa sai da lista de funcionários. O ponto, as vendas e a auditoria dela continuam guardados — a lei exige, e é o que protege os dois lados.",
+                              acao: "Desligar",
+                              destrutivo: true,
+                              pedirMotivo: true,
+                            });
+
+                            if (motivo !== null) {
+                              desligar.mutate({ id: entry.id, reason: motivo });
+                            }
+                          }}
+                        >
+                          <UserMinus className="h-4 w-4" aria-hidden />
+                          Desligar
                         </Button>
                       )}
                     </div>

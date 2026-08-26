@@ -67,6 +67,27 @@ export async function saveDeviceLabel(loja: string, aparelho: string): Promise<v
   localStorage.setItem(DEVICE_LABEL_KEY, valor);
 }
 
+/**
+ * Esquece a que loja este tablet pertencia.
+ *
+ * Chamado quando o servidor diz que o vínculo não vale mais. Junto com o
+ * identificador vai a SESSÃO: quem estava logado aqui trabalhava por uma loja
+ * que este aparelho não representa mais, e deixar a sessão aberta manteria a
+ * pessoa vendendo por um caixa do qual o tablet já saiu.
+ */
+export async function limparIdentidadeDoAparelho(): Promise<void> {
+  if (isNative) {
+    await Preferences.remove({ key: DEVICE_ID_KEY });
+    await Preferences.remove({ key: DEVICE_LABEL_KEY });
+    await Preferences.remove({ key: REFRESH_TOKEN_KEY });
+    return;
+  }
+
+  localStorage.removeItem(DEVICE_ID_KEY);
+  localStorage.removeItem(DEVICE_LABEL_KEY);
+  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
 export async function readDeviceLabel(): Promise<{ loja: string; aparelho: string } | null> {
   const valor = isNative
     ? (await Preferences.get({ key: DEVICE_LABEL_KEY })).value

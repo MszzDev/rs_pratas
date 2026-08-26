@@ -27,7 +27,36 @@ import {
 } from "node:fs";
 import { createGunzip, gzipSync } from "node:zlib";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
+
+/**
+ * A conexão guardada em ./.env.backup.
+ *
+ * Existe porque a cópia automática roda sem ninguém por perto: o Agendador de
+ * Tarefas do Windows dispara o script sozinho, e não há onde digitar a senha
+ * do banco. O arquivo fica fora do git (.gitignore) — é a única credencial que
+ * mora no computador do dono.
+ *
+ * Aceita arquivo salvo em UTF-16, que é o que o PowerShell gera com `>` e foi
+ * o que quebrou a primeira tentativa: o conteúdo parecia certo na tela e
+ * chegava aqui como caracteres separados por zeros.
+ */
+function conexaoGuardada() {
+  const caminho = join(process.cwd(), ".env.backup");
+  if (!existsSync(caminho)) return null;
+
+  const bruto = readFileSync(caminho);
+  const utf16 = bruto[0] === 0xff && bruto[1] === 0xfe;
+  const texto = bruto.toString(utf16 ? "utf16le" : "utf8").replace(/^\uFEFF/, "");
+
+  for (const linha of texto.split(/\r?\n/)) {
+    const achou = /^\s*(?:export\s+)?DATABASE_URL\s*=\s*(.+)$/.exec(linha);
+    if (achou) return achou[1].trim().replace(/^["']|["']$/g, "");
+  }
+
+  return null;
+}
 
 /** Quantas cópias manter. As mais antigas saem sozinhas. */
 const MANTER = 14;
@@ -217,7 +246,10 @@ async function main() {
     return;
   }
 
-  const url = argumentos.find((a) => a.startsWith("postgres")) ?? process.env.DATABASE_URL;
+  const url =
+    argumentos.find((a) => a.startsWith("postgres")) ??
+    process.env.DATABASE_URL ??
+    conexaoGuardada();
 
   if (!url) {
     console.error(

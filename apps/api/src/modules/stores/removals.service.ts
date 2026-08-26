@@ -2,7 +2,7 @@ import type { AuditAction, Prisma } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
 import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
-import { conflict, notFound } from "../../core/errors.js";
+import { conflict, forbidden, notFound } from "../../core/errors.js";
 import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
 
 /**
@@ -740,6 +740,109 @@ export async function removeProduct(params: {
         : temSaldo
           ? "Peça apagada, junto com o saldo que estava lançado nela."
           : "Peça apagada.",
+    },
+  });
+}
+
+/**
+ * Desliga um funcionário.
+ *
+ * Aqui não existe apagar, e não é escolha de projeto: é a lei. O registro de
+ * ponto tem valor legal e precisa ser guardado por anos depois do
+ * desligamento; a venda que a pessoa fez continua sendo dela no relatório e na
+ * comissão; e a auditoria de quem fez o quê deixaria de responder a pergunta
+ * mais importante que ela existe para responder.
+ *
+ * Então "excluir" significa: perde o acesso agora, some da lista de quem
+ * trabalha na loja, e continua inteiro no histórico. As sessões abertas caem
+ * junto — quem foi desligado não continua vendendo no tablet até o token
+ * vencer.
+ */
+export async function removeUser(params: {
+  userId: string;
+  reason: string;
+  request: FastifyRequest;
+}): Promise<RemovalOutcome> {
+  const { userId, reason, request } = params;
+
+  if (userId === request.user.sub) {
+    throw conflict(
+      "SELF_REMOVAL",
+      "Você não pode desligar a si mesmo. Peça a outro dono, ou o sistema fica sem ninguém no comando.",
+    );
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { id: userId, companyId: request.user.companyId, deletedAt: null },
+  });
+
+  if (!user) {
+    throw notFound("USER_NOT_FOUND", "Funcionário não encontrado.");
+  }
+
+  if (request.user.role !== "DONO") {
+    throw forbidden("FORBIDDEN_ROLE", "Apenas o dono desliga um funcionário.");
+  }
+
+  // O último dono não sai: sem ele ninguém cadastra, promove nem desbloqueia
+  // ninguém — e a única saída seria mexer no banco à mão.
+  if (user.role === "DONO") {
+    const outrosDonos = await prisma.user.count({
+      where: {
+        companyId: request.user.companyId,
+        role: "DONO",
+        deletedAt: null,
+        status: "ACTIVE",
+        id: { not: user.id },
+      },
+    });
+
+    if (outrosDonos === 0) {
+      throw conflict(
+        "LAST_OWNER",
+        "Este é o único dono ativo. Promova outra pessoa a dono antes de desligar este.",
+      );
+    }
+  }
+
+  const turnoAberto = await prisma.cashSession.count({
+    where: { openedById: user.id, status: "ABERTO" },
+  });
+
+  if (turnoAberto > 0) {
+    throw conflict(
+      "CASH_OPEN",
+      "Esta pessoa tem caixa aberto. Feche o turno dela antes de desligá-la — senão o dinheiro do dia fica sem conferência.",
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { status: "INACTIVE", deletedAt: new Date() },
+    }),
+    // O acesso acaba agora, não quando o token vencer.
+    prisma.refreshToken.updateMany({
+      where: { session: { userId: user.id }, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: "funcionário desligado" },
+    }),
+    prisma.deviceSession.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: "funcionário desligado" },
+    }),
+  ]);
+
+  return finish({
+    request,
+    action: "USER_BLOCK",
+    entityType: "User",
+    entityId: user.id,
+    reason,
+    previousData: { name: user.name, employeeCode: user.employeeCode, role: user.role },
+    outcome: {
+      removido: "desativado",
+      mensagem:
+        "Funcionário desligado. O acesso acabou agora e as sessões abertas foram encerradas. O ponto, as vendas e a auditoria dele continuam guardados — a lei exige, e é o que protege os dois lados.",
     },
   });
 }

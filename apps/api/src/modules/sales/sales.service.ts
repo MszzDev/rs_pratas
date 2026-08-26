@@ -9,6 +9,7 @@ import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
 import { applyMovement } from "../stock/stock.service.js";
 import { assertSessionOpen } from "../cash/cash.service.js";
 import { assertTerminalCanCharge } from "../terminals/terminals.service.js";
+import { enviarComprovanteAutomatico } from "./receipt.service.js";
 
 /**
  * Venda.
@@ -433,6 +434,15 @@ export async function completeSale(params: {
       ...(input.discountReason ? { reason: input.discountReason } : {}),
     });
   }
+
+  /**
+   * O comprovante sai sozinho, por trás, sem prender a tela.
+   *
+   * Sem `await` de propósito: a vendedora já pode começar a próxima venda
+   * enquanto o e-mail sai. Se o envio falhar, ele registra e cala — a venda
+   * está gravada, e o reenvio manual continua na tela.
+   */
+  void enviarComprovanteAutomatico({ saleId: sale.id, request });
 
   return sale;
 }

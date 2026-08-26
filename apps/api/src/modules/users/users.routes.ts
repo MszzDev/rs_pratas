@@ -20,6 +20,7 @@ import {
   setUserBlocked,
   updateUser,
 } from "./users.service.js";
+import { removeUser } from "../stores/removals.service.js";
 import {
   grantPermission,
   listUserPermissions,
@@ -126,5 +127,20 @@ export async function userRoutes(app: FastifyInstance) {
     const { id } = idParamSchema.parse(request.params);
     const { reason } = blockUserSchema.parse(request.body);
     return setUserBlocked({ userId: id, blocked: false, reason, request });
+  });
+
+  /**
+   * Desligar um funcionário.
+   *
+   * O nome no botão é "Desligar", e não "Excluir", porque é o que de fato
+   * acontece: o acesso acaba na hora, a pessoa sai da lista de quem trabalha
+   * na loja, e o ponto, as vendas e a auditoria dela continuam guardados — a
+   * lei do ponto exige, e é o que protege os dois lados numa discussão
+   * trabalhista.
+   */
+  app.delete("/users/:id", { preHandler: ownerOnly }, async (request) => {
+    const { id } = idParamSchema.parse(request.params);
+    const { reason } = blockUserSchema.parse(request.body);
+    return removeUser({ userId: id, reason, request });
   });
 }

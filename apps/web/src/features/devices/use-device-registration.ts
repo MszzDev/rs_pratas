@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { apiFetch } from "@/lib/api-client";
-import { saveDeviceId, saveDeviceLabel } from "@/lib/secure-storage";
+import {
+  limparIdentidadeDoAparelho,
+  readDeviceLabel,
+  saveDeviceId,
+  saveDeviceLabel,
+} from "@/lib/secure-storage";
 
 /**
  * O tablet se apresenta ao sistema e espera o dono vinculá-lo a uma loja.
@@ -36,6 +41,17 @@ export type EstadoDoTablet =
  * e esperar um minuto pareceria que não funcionou.
  */
 const INTERVALO_MS = 10_000;
+
+/**
+ * Já vinculado, ele continua conferindo — mais devagar.
+ *
+ * Um tablet desvinculado pelo dono continuava mostrando a tela de entrada da
+ * loja antiga até alguém reiniciar o aplicativo: a vendedora digitava o PIN e
+ * só então ouvia que o aparelho não está ativo. Trinta segundos é o intervalo
+ * de quem tira um tablet de circulação e espera que ele obedeça enquanto ainda
+ * está com ele na mão.
+ */
+const INTERVALO_VINCULADO_MS = 30_000;
 
 export function useDeviceRegistration(): EstadoDoTablet {
   const [estado, setEstado] = useState<EstadoDoTablet>({ estado: "verificando" });
@@ -76,8 +92,17 @@ export function useDeviceRegistration(): EstadoDoTablet {
             storeName: registro.storeName ?? "",
             deviceName: registro.deviceName ?? "",
           });
+
+          // Continua conferindo, mais devagar: o dono pode desvincular este
+          // aparelho a qualquer momento, e o tablet precisa obedecer sem
+          // depender de alguém reiniciar o aplicativo.
+          timer = setTimeout(() => void anunciar(), INTERVALO_VINCULADO_MS);
           return;
         }
+
+        // Chegou aqui sem vínculo. Se havia um guardado, ele acabou de deixar
+        // de valer — o aparelho foi desvinculado, bloqueado ou removido.
+        await limparIdentidadeDoAparelho();
 
         setEstado({
           estado: "aguardando",
@@ -88,10 +113,29 @@ export function useDeviceRegistration(): EstadoDoTablet {
       } catch {
         if (!vivo) return;
 
-        // Sem rede ou API fora: continua tentando. Um tablet ligado no balcão
-        // sem internet vai ter internet em algum momento, e ninguém deveria
-        // precisar reabrir o aplicativo para isso acontecer.
-        setEstado({ estado: "aguardando", apelido: "" });
+        /**
+         * Sem rede ou API fora.
+         *
+         * Um tablet JÁ VINCULADO não pode cair na tela de espera por causa
+         * disso: a internet da loja oscila, e mandar a vendedora para "este
+         * tablet ainda não tem loja" no meio de uma venda seria trocar um
+         * problema de rede por um susto. Ele fica onde está e tenta de novo.
+         *
+         * Quem nunca foi vinculado continua esperando — é o estado correto
+         * dele, com ou sem internet.
+         */
+        const guardado = await readDeviceLabel();
+
+        if (guardado) {
+          setEstado({
+            estado: "vinculado",
+            storeName: guardado.loja,
+            deviceName: guardado.aparelho,
+          });
+        } else {
+          setEstado({ estado: "aguardando", apelido: "" });
+        }
+
         timer = setTimeout(() => void anunciar(), INTERVALO_MS);
       }
     };

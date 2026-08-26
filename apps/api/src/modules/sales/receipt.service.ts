@@ -254,3 +254,58 @@ export async function sendWarrantyEmail(params: { warrantyId: string; request: F
       : "A garantia não saiu. Confira o e-mail do cliente e a configuração de envio.",
   };
 }
+
+/**
+ * O envio que acontece sozinho, assim que a venda fecha.
+ *
+ * No tablet do balcão ninguém aperta botão de comprovante: a fila anda, o
+ * cliente vai embora, e o botão que exige um toque a mais é o botão que não
+ * é apertado. Então o comprovante — e a garantia, quando já existe — saem por
+ * conta própria, por trás, sem tela nenhuma e sem abrir outro aplicativo.
+ *
+ * Três decisões que valem explicar:
+ *
+ * - NÃO derruba a venda. É chamado sem esperar resposta, e engole qualquer
+ *   erro: servidor de e-mail fora do ar não pode desfazer uma venda que já
+ *   está gravada e paga.
+ * - Sem e-mail do cliente, não faz nada e não reclama. Venda sem cadastro é o
+ *   caso comum no quiosque, e transformar isso em aviso na tela treinaria a
+ *   vendedora a ignorar avisos.
+ * - O que sai fica auditado. "O cliente diz que não recebeu" é uma pergunta
+ *   que se responde com registro, não com memória.
+ */
+export async function enviarComprovanteAutomatico(params: {
+  saleId: string;
+  request: FastifyRequest;
+}): Promise<void> {
+  const { saleId, request } = params;
+
+  try {
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, companyId: request.user.companyId },
+      select: {
+        id: true,
+        customer: { select: { email: true } },
+        items: {
+          select: {
+            warranty: { select: { id: true, voidedAt: true } },
+          },
+        },
+      },
+    });
+
+    if (!sale?.customer?.email) return;
+
+    await sendSaleReceipt({ saleId, request });
+
+    for (const item of sale.items) {
+      if (item.warranty && !item.warranty.voidedAt) {
+        await sendWarrantyEmail({ warrantyId: item.warranty.id, request });
+      }
+    }
+  } catch (erro) {
+    // Só o log: quem está no balcão não tem o que fazer com esta informação, e
+    // o reenvio manual continua disponível na tela da venda.
+    request.log.warn({ erro, saleId }, "comprovante automático não saiu");
+  }
+}

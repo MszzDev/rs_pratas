@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Capacitor } from "@capacitor/core";
 import {
   Bell,
   ChevronDown,
@@ -179,6 +180,12 @@ export function PosPage() {
    * O sistema escreve a mensagem; quem manda é a pessoa, do aparelho dela. Sai
    * do número que o cliente conhece, e não depende de conta de API nem de
    * mensalidade — que é o que tornaria isso um projeto, e não um botão.
+   *
+   * NÃO aparece no tablet. Lá o aparelho está em modo quiosque: abrir o
+   * WhatsApp tiraria a vendedora do sistema no meio do expediente e deixaria o
+   * tablet da loja com uma conversa aberta na tela. No balcão o comprovante
+   * sai sozinho por e-mail, assim que a venda fecha; este botão é para o
+   * computador do dono, onde mandar a mensagem à mão faz sentido.
    */
   const enviarWhatsApp = useMutation({
     mutationFn: (saleId: string) =>
@@ -263,15 +270,17 @@ export function PosPage() {
               venda depois para mandar o comprovante é o passo que ninguém dá.
             */}
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={enviarWhatsApp.isPending}
-                onClick={() => enviarWhatsApp.mutate(lastSale.id)}
-              >
-                <MessageCircle className="h-5 w-5" aria-hidden />
-                WhatsApp
-              </Button>
+              {!Capacitor.isNativePlatform() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={enviarWhatsApp.isPending}
+                  onClick={() => enviarWhatsApp.mutate(lastSale.id)}
+                >
+                  <MessageCircle className="h-5 w-5" aria-hidden />
+                  WhatsApp
+                </Button>
+              )}
 
               <Button
                 type="button"
