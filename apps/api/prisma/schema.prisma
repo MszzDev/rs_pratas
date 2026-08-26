@@ -1090,6 +1090,14 @@ model Product {
   /// O arquivo fica fora da raiz web, como os documentos: o download passa
   /// pela API para a permissão ser conferida. Guardar só a chave (e não o
   /// binário no banco) mantém o dump de backup no tamanho do texto.
+  /// Identificador da peça no serviço de onde ela veio (a variação, na
+  /// Nuvemshop).
+  ///
+  /// É por ele que a importação reencontra a mesma peça na vez seguinte. Sem
+  /// isso, a única chave seria o SKU — e a loja virtual não preenche SKU, o
+  /// que faria cada importação criar tudo de novo.
+  externalId String?
+
   imageStorageKey String?
   imageMimeType   String?
   /// Foto que mora na loja virtual, trazida junto com o produto importado.
@@ -1117,6 +1125,8 @@ model Product {
   deletedAt DateTime?
 
   @@unique([companyId, sku])
+  /// Uma peça de lá é uma peça aqui: importar duas vezes atualiza, não duplica.
+  @@unique([companyId, externalId])
   @@index([companyId, categoryId])
   @@index([companyId, name])
   @@map("products")

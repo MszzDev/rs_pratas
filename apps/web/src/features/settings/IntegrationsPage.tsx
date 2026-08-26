@@ -309,7 +309,13 @@ export function IntegrationsPage() {
    */
   const importar = useMutation({
     mutationFn: (oQue: "products" | "customers") =>
-      apiFetch<{ criados: number; atualizados: number; total: number; ignorados: string[] }>(
+      apiFetch<{
+        criados: number;
+        atualizados: number;
+        total: number;
+        ignorados: string[];
+        semCodigoProprio?: number;
+      }>(
         `/api/v1/integrations/nuvemshop/import-${oQue}`,
         { method: "POST" },
       ),
@@ -326,8 +332,15 @@ export function IntegrationsPage() {
             }`
           : "";
 
+      // Peça sem código na loja virtual recebe um gerado aqui. Dizer isso
+      // explica de onde vieram os códigos "NS-..." que a pessoa vai encontrar
+      // no catálogo daqui a pouco.
+      const codigosGerados = resultado.semCodigoProprio
+        ? ` ${resultado.semCodigoProprio} peça(s) não tinham código na loja virtual e receberam um gerado (NS-...). Você pode trocar por códigos próprios em Produtos, sem risco de duplicar na próxima importação.`
+        : "";
+
       setAviso(
-        `${resultado.criados} criado(s) e ${resultado.atualizados} atualizado(s), de ${resultado.total}.${foraDaLista}`,
+        `${resultado.criados} criado(s) e ${resultado.atualizados} atualizado(s), de ${resultado.total}.${codigosGerados}${foraDaLista}`,
       );
 
       void queryClient.invalidateQueries({ queryKey: ["integrations"] });

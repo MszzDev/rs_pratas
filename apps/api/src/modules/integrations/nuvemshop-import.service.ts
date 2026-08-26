@@ -23,6 +23,8 @@ export interface ResultadoImportacao {
   atualizados: number;
   ignorados: string[];
   total: number;
+  /** Peças que não tinham código próprio e receberam um gerado pelo sistema. */
+  semCodigoProprio?: number;
 }
 
 /** Só dígitos, como o cadastro de cliente guarda. */
@@ -55,10 +57,13 @@ async function credenciaisDaNuvemshop(companyId: string) {
 /**
  * Importa o catálogo.
  *
- * Cada variação da Nuvemshop vira uma peça aqui. Uma variação SEM SKU é
- * ignorada e devolvida na lista: sem código, não há como reencontrá-la numa
- * próxima importação, e importar às cegas criaria uma peça nova a cada
- * execução.
+ * Cada variação da Nuvemshop vira uma peça aqui. Variação sem SKU recebe um
+ * código gerado a partir do identificador dela lá — a loja virtual não obriga
+ * ninguém a preencher SKU, e exigir isso aqui descartava o catálogo inteiro.
+ *
+ * A peça é reencontrada pelo identificador de origem, não pelo código: assim
+ * quem trocar o código por um próprio depois não vê a peça ser duplicada na
+ * importação seguinte.
  */
 export async function importProductsFromNuvemshop(params: {
   request: FastifyRequest;
@@ -70,6 +75,8 @@ export async function importProductsFromNuvemshop(params: {
   let atualizados = 0;
   const ignorados: string[] = [];
   let total = 0;
+  /** Quantas peças de lá não tinham código próprio e receberam um gerado. */
+  let semCodigoProprio = 0;
   let pagina = 1;
 
   for (;;) {
@@ -93,15 +100,34 @@ export async function importProductsFromNuvemshop(params: {
       for (const variante of produto.variants) {
         total += 1;
 
-        if (!variante.sku) {
-          ignorados.push(`${nome} (variação sem código)`);
-          continue;
-        }
+        const externalId = String(variante.id);
+
+        /**
+         * O código da peça.
+         *
+         * A loja virtual não obriga ninguém a preencher SKU, e a desta loja
+         * não preenche: das 668 variações, nenhuma tinha código. Exigir o SKU
+         * fazia a importação inteira ser descartada em silêncio — "0 de 668".
+         *
+         * Então o sistema gera um: `NS-` mais o identificador da variação lá.
+         * É estável (a mesma peça sempre recebe o mesmo código), único, e cabe
+         * numa etiqueta com código de barras. Quem quiser trocar por um código
+         * próprio depois, troca — a importação seguinte reencontra a peça pelo
+         * identificador, não pelo SKU.
+         */
+        const sku = variante.sku?.trim() || `NS-${externalId}`;
+        const geradoAqui = !variante.sku?.trim();
+
+        if (geradoAqui) semCodigoProprio += 1;
 
         const preco = variante.price ? Number(variante.price) : null;
 
         const existente = await prisma.product.findFirst({
-          where: { companyId: request.user.companyId, sku: variante.sku, deletedAt: null },
+          where: {
+            companyId: request.user.companyId,
+            deletedAt: null,
+            OR: [{ externalId }, { sku }],
+          },
         });
 
         if (existente) {
@@ -111,6 +137,7 @@ export async function importProductsFromNuvemshop(params: {
             where: { id: existente.id },
             data: {
               name: nome || existente.name,
+              externalId,
               ...(preco !== null ? { salePrice: preco } : {}),
               // Foto enviada pelo sistema tem precedência: quem fotografou a
               // peça no balcão fez isso por um motivo, e a importação não
@@ -125,8 +152,9 @@ export async function importProductsFromNuvemshop(params: {
         await prisma.product.create({
           data: {
             companyId: request.user.companyId,
-            sku: variante.sku,
-            name: nome || variante.sku,
+            sku,
+            externalId,
+            name: nome || sku,
             salePrice: preco ?? 0,
             // Custo zero e não nulo: o campo é obrigatório para a margem, e
             // zero é honesto — diz "ainda não sabemos", em vez de inventar.
@@ -157,10 +185,10 @@ export async function importProductsFromNuvemshop(params: {
     entityType: "Integration",
     entityId: integration.id,
     reason: "produtos importados da Nuvemshop",
-    metadata: { criados, atualizados, ignorados: ignorados.length, total },
+    metadata: { criados, atualizados, ignorados: ignorados.length, total, semCodigoProprio },
   });
 
-  return { criados, atualizados, ignorados: ignorados.slice(0, 50), total };
+  return { criados, atualizados, ignorados: ignorados.slice(0, 50), total, semCodigoProprio };
 }
 
 /**
