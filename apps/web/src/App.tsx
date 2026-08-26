@@ -35,12 +35,10 @@ import { CashPage } from "./features/cash/CashPage";
 import { CustomersPage } from "./features/customers/CustomersPage";
 import { LabelsPage } from "./features/labels/LabelsPage";
 import { Logo } from "./components/ui/logo";
-import { ReportsPage } from "./features/reports/ReportsPage";
 import { AfterSalesPage } from "./features/aftersales/AfterSalesPage";
 import { ServiceOrdersPage } from "@/features/aftersales/ServiceOrdersPage";
-import { CommissionRulesPage } from "@/features/reports/CommissionRulesPage";
 import { IntegrationsPage } from "@/features/settings/IntegrationsPage";
-import { DashboardPage } from "./features/dashboard/DashboardPage";
+import { PainelPage } from "./features/dashboard/PainelPage";
 
 /**
  * Guarda de rota — conveniência de navegação, NUNCA controle de acesso.
@@ -226,7 +224,7 @@ function AppRoutes() {
         path="/painel"
         element={
           <RequireAuth>
-            <DashboardPage />
+            <PainelPage />
           </RequireAuth>
         }
       />
@@ -278,14 +276,11 @@ function AppRoutes() {
           </RequireAuth>
         }
       />
-      <Route
-        path="/relatorios"
-        element={
-          <RequireAuth>
-            <ReportsPage />
-          </RequireAuth>
-        }
-      />
+      {/* Relatórios e comissões viraram abas do Painel: as três respondiam a
+          mesma pergunta — como o negócio está indo —, separadas por telas que
+          obrigavam a voltar ao menu para comparar o dia com o mês. Os
+          endereços antigos continuam levando ao lugar certo. */}
+      <Route path="/relatorios" element={<Navigate to="/painel" replace />} />
       <Route
         path="/pos-venda"
         element={
@@ -302,14 +297,7 @@ function AppRoutes() {
           </RequireAuth>
         }
       />
-      <Route
-        path="/comissoes"
-        element={
-          <RequireAuth>
-            <CommissionRulesPage />
-          </RequireAuth>
-        }
-      />
+      <Route path="/comissoes" element={<Navigate to="/painel" replace />} />
       <Route
         path="/ordens-de-servico"
         element={

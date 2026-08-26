@@ -16,7 +16,6 @@ import {
   Menu,
   MonitorSmartphone,
   Package,
-  Percent,
   Plug,
   RotateCcw,
   ScrollText,
@@ -24,7 +23,6 @@ import {
   ShoppingCart,
   Tablet,
   Tag,
-  TrendingUp,
   UserRound,
   Users,
   Wallet,
@@ -85,7 +83,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/produtos", label: "Produtos", icon: Package, section: "gestao", tone: "bg-rose-soft text-rose-primary" },
   { to: "/estoque", label: "Estoque", icon: Boxes, section: "gestao", tone: "bg-ocean-soft text-ocean" },
   { to: "/etiquetas", label: "Etiquetas", icon: Tag, section: "gestao", roles: GESTAO, tone: "bg-gold-soft text-gold-dark" },
-  { to: "/relatorios", label: "Relatórios", icon: TrendingUp, section: "gestao", roles: GESTAO, tone: "bg-sage-soft text-sage" },
   // Quem trabalha no balcão não precisa da lista de colegas: matrícula, perfil
   // e situação de cada um são assunto de quem administra.
   { to: "/funcionarios", label: "Funcionários", icon: Users, section: "gestao", roles: GESTAO, tone: "bg-plum-soft text-plum" },
@@ -115,11 +112,6 @@ const SUBPAGINAS: Record<string, Atalho[]> = {
     { to: "/integracoes", label: "Integrações", icon: Plug, permission: "SETTINGS_MANAGE_APP" },
   ],
   "/integracoes": [{ to: "/configuracoes", label: "Configurações", icon: Settings }],
-  "/relatorios": [
-    { to: "/comissoes", label: "Comissões e metas", icon: Percent, permission: "COMMISSION_MANAGE" },
-    { to: "/painel", label: "Painel", icon: LayoutDashboard },
-  ],
-  "/comissoes": [{ to: "/relatorios", label: "Relatórios", icon: TrendingUp }],
   "/pos-venda": [
     { to: "/ordens-de-servico", label: "Ordens de serviço", icon: Wrench },
     { to: "/venda", label: "Venda", icon: ShoppingCart },

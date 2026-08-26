@@ -4,7 +4,6 @@ import { Percent, Plus, Target, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
-import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { StorePicker } from "@/features/stores/store-picker";
 
@@ -61,7 +60,7 @@ function mesCorrente() {
   return { inicio, fim };
 }
 
-export function CommissionRulesPage() {
+export function CommissionRulesContent() {
   const queryClient = useQueryClient();
 
   const [storeId, setStoreId] = useState("");
@@ -182,11 +181,7 @@ export function CommissionRulesPage() {
   };
 
   return (
-    <PageShell
-      eyebrow="Gestão"
-      title="Comissões e metas"
-      description="Quanto se paga sobre a venda e quanto se espera vender. Só o dono define."
-    >
+    <>
       {error && (
         <div className="mb-5">
           <Alert tone="error">{error}</Alert>
@@ -512,6 +507,6 @@ export function CommissionRulesPage() {
           })}
         </ul>
       </section>
-    </PageShell>
+    </>
   );
 }

@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Target, TrendingUp } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
-import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
 import { StorePicker } from "@/features/stores/store-picker";
@@ -98,7 +97,7 @@ function lastDays(days: number) {
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
-export function ReportsPage() {
+export function ReportsContent() {
   const [days, setDays] = useState(30);
   const [storeId, setStoreId] = useState("");
 
@@ -147,10 +146,7 @@ export function ReportsPage() {
   });
 
   return (
-    <PageShell
-      title="Relatórios"
-      description="Tudo calculado a partir das vendas concluídas — não de saldos acumulados."
-    >
+    <>
       <div className="mb-6 flex flex-wrap gap-4">
         <div className="min-w-[10rem]">
           <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="periodo">
@@ -340,7 +336,7 @@ export function ReportsPage() {
           </section>
         )}
       </div>
-    </PageShell>
+    </>
   );
 }
 

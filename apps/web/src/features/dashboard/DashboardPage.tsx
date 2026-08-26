@@ -13,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Badge, Card, CardBody, CardHeader, MetricCard } from "@/components/ui/card";
-import { PageShell } from "@/components/ui/page-shell";
 import { BarList, DonutChart, TrendChart } from "@/components/charts/charts";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
@@ -127,7 +126,7 @@ function last30Days(): string {
  * entrou hoje, quem está trabalhando, o que está acabando e qual caixa não
  * bateu.
  */
-export function DashboardPage() {
+export function DashboardContent() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   // Memorizado por garantia: mesmo com o arredondamento, recalcular a cada
@@ -208,11 +207,7 @@ export function DashboardPage() {
   const abertas = (network.data ?? []).filter((store) => store.isOpen).length;
 
   return (
-    <PageShell
-      eyebrow="Visão geral"
-      title="Painel"
-      description="Como a rede está agora, e como foi o último mês."
-    >
+    <>
       {error && (
         <div className="mb-5">
           <Alert tone="error">{error}</Alert>
@@ -458,6 +453,6 @@ export function DashboardPage() {
         <Users className="h-4 w-4" aria-hidden />
         Os números vêm das vendas concluídas — nada aqui é saldo acumulado.
       </p>
-    </PageShell>
+    </>
   );
 }
