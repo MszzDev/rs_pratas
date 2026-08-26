@@ -398,3 +398,83 @@ export async function assertProductBelongsToCompany(
     }
   }
 }
+
+/**
+ * Onde mais existe esta peça na rede.
+ *
+ * O PDV mostra o estoque da loja onde o caixa está aberto — que é o certo:
+ * vender o que não está na gaveta é o pior erro que um PDV comete. Só que
+ * quando a peça não está ali, a vendedora ficava sem saída: abria um pedido
+ * manual, com dias de espera, para uma peça que podia estar a seis quilômetros
+ * dali no outro quiosque.
+ *
+ * Numa rede de cinco lojas isso é venda perdida toda semana.
+ *
+ * Duas escolhas deliberadas:
+ *
+ * - **Atravessa o escopo de loja de propósito.** O resto do sistema devolve
+ *   404 quando alguém pede dado de uma loja que não é dele — é a defesa contra
+ *   IDOR. Aqui a vendedora VÊ as outras lojas da mesma empresa, porque a
+ *   pergunta "onde tem?" só tem resposta se puder olhar para fora. O que ela
+ *   vê é quantidade e nome de loja: nada de dinheiro, nada de cliente, nada
+ *   que ela possa alterar.
+ * - **Nunca inclui a loja de onde ela está perguntando.** Esse saldo o PDV já
+ *   mostra, e repeti-lo aqui faria a vendedora achar que existe estoque a mais
+ *   em algum lugar.
+ */
+export async function findStockAcrossStores(params: {
+  request: FastifyRequest;
+  search: string;
+  exceptStoreId?: string | undefined;
+}) {
+  const { request, search, exceptStoreId } = params;
+
+  const termo = search.trim();
+
+  // Busca curta demais varreria o catálogo inteiro e devolveria tudo — que é o
+  // mesmo que não responder nada.
+  if (termo.length < 2) return [];
+
+  const items = await prisma.stockItem.findMany({
+    where: {
+      companyId: request.user.companyId,
+      quantity: { gt: 0 },
+      ...(exceptStoreId ? { storeId: { not: exceptStoreId } } : {}),
+      store: { deletedAt: null, isActive: true },
+      product: {
+        deletedAt: null,
+        OR: [
+          { name: { contains: termo, mode: "insensitive" } },
+          { sku: { contains: termo, mode: "insensitive" } },
+        ],
+      },
+    },
+    include: {
+      product: { select: { id: true, sku: true, name: true, salePrice: true } },
+      variation: { select: { sku: true, size: true } },
+      store: { select: { id: true, name: true, phone: true } },
+    },
+    orderBy: [{ product: { name: "asc" } }, { store: { name: "asc" } }],
+    take: 60,
+  });
+
+  return items
+    .map((item) => ({
+      productId: item.productId,
+      name: item.product.name,
+      sku: item.variation?.sku ?? item.product.sku,
+      size: item.variation?.size ?? null,
+      salePrice: item.product.salePrice,
+      storeId: item.storeId,
+      storeName: item.store.name,
+      /** Para a vendedora ligar e pedir para separar, sem procurar o número. */
+      storePhone: item.store.phone,
+      /**
+       * O que aquela loja pode de fato separar. O reservado é de outro cliente
+       * — mandar alguém atravessar a cidade atrás de peça reservada é pior que
+       * dizer que não tem.
+       */
+      disponivel: item.quantity - item.reservedQuantity,
+    }))
+    .filter((linha) => linha.disponivel > 0);
+}

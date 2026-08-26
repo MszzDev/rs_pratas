@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, RotateCcw, Search, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -85,14 +86,27 @@ const formatDate = (iso: string | null) =>
  */
 export function AfterSalesPage() {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"devolucao" | "garantia">("devolucao");
+
+  /**
+   * A tela de triagem manda o caso já classificado.
+   *
+   * "Cliente voltou com uma peça" pergunta o que houve em português e
+   * traduz para os conceitos do sistema. Chegando aqui com a aba e o tipo
+   * já escolhidos, a vendedora não precisa acertar a tradução de novo — que
+   * era justamente onde ela errava, e errar ali custa dinheiro.
+   */
+  const [searchParams] = useSearchParams();
+  const abaPedida = searchParams.get("aba") === "garantia" ? "garantia" : "devolucao";
+  const tipoPedido = searchParams.get("tipo") === "TROCA" ? "TROCA" : "DEVOLUCAO";
+
+  const [tab, setTab] = useState<"devolucao" | "garantia">(abaPedida);
   const [error, setError] = useState<string | null>(null);
 
   // --- devolução
   const [saleSearch, setSaleSearch] = useState("");
   const [selectedSale, setSelectedSale] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState("");
-  const [type, setType] = useState<"DEVOLUCAO" | "TROCA">("DEVOLUCAO");
+  const [type, setType] = useState<"DEVOLUCAO" | "TROCA">(tipoPedido);
   const [reason, setReason] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [damaged, setDamaged] = useState<Record<string, boolean>>({});

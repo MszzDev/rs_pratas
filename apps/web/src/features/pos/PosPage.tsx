@@ -11,6 +11,7 @@ import {
   Printer,
   Search,
   ShoppingCart,
+  Tag,
   Trash2,
   X,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { ProductPhoto } from "@/components/ui/product-photo";
 import { formatMoney } from "@/lib/money";
+import { OtherStoresStock } from "./OtherStoresStock";
 import { PaymentDialog } from "./PaymentDialog";
 import type { CartLine, StockRow } from "./types";
 import { groupByProduct } from "./group-stock";
@@ -59,6 +61,20 @@ export function PosPage() {
 
   const [storeId, setStoreId] = useState("");
   const [search, setSearch] = useState("");
+
+  /**
+   * Consulta de preço: bipar sem vender.
+   *
+   * "Quanto é esse?" acontece dezenas de vezes por dia, e para responder a
+   * vendedora precisava jogar a peça no carrinho e depois tirar. Um carrinho
+   * que enche de peça que ninguém vai levar é como se vende errado com pressa.
+   *
+   * Ligado, o leitor mostra o preço em vez de somar. Volta sozinho ao normal
+   * quando a venda começa — deixar o modo ligado esquecido faria a vendedora
+   * bipar o carrinho inteiro sem nada entrar.
+   */
+  const [consultando, setConsultando] = useState(false);
+  const [precoConsultado, setPrecoConsultado] = useState<StockRow | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [customer, setCustomer] = useState<{ id: string; name: string } | null>(null);
   const [customerName, setCustomerName] = useState("");
@@ -255,6 +271,8 @@ export function PosPage() {
     setCustomerName("");
     setCustomerPhone("");
     setPaying(false);
+    setConsultando(false);
+    setPrecoConsultado(null);
     void queryClient.invalidateQueries({ queryKey: ["pos-stock"] });
     void queryClient.invalidateQueries({ queryKey: ["reservations"] });
   }
@@ -274,6 +292,12 @@ export function PosPage() {
     const linha = (stock.data ?? []).find((row) => row.sku.toUpperCase() === lido.toUpperCase());
 
     if (linha) {
+      if (consultando) {
+        setPrecoConsultado(linha);
+        setError(null);
+        return;
+      }
+
       addToCart(linha);
       setSearch("");
       return;
@@ -414,6 +438,70 @@ export function PosPage() {
               />
             </div>
 
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant={consultando ? "primary" : "outline"}
+                onClick={() => {
+                  setConsultando(!consultando);
+                  setPrecoConsultado(null);
+                }}
+              >
+                <Tag className="h-5 w-5" aria-hidden />
+                {consultando ? "Consultando preço" : "Só consultar preço"}
+              </Button>
+
+              {consultando && (
+                <span className="text-sm text-text-secondary">
+                  Bipe a etiqueta: o preço aparece e nada entra no carrinho.
+                </span>
+              )}
+            </div>
+
+            {precoConsultado && (
+              <div className="mb-4 rounded-lg border-2 border-gold-dark bg-gold-soft p-6">
+                <p className="text-lg font-medium text-text-primary">{precoConsultado.name}</p>
+                <p className="text-sm text-text-secondary">
+                  {precoConsultado.sku}
+                  {precoConsultado.size && ` · ${precoConsultado.size}`}
+                </p>
+
+                <p className="mt-3 text-5xl font-semibold text-text-primary">
+                  {formatMoney(precoConsultado.salePrice)}
+                </p>
+
+                <p className="mt-2 text-sm text-text-secondary">
+                  {precoConsultado.availableQuantity === 0
+                    ? "Sem peça disponível nesta loja."
+                    : precoConsultado.availableQuantity === 1
+                      ? "Última peça nesta loja."
+                      : `${precoConsultado.availableQuantity} peças nesta loja.`}
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {precoConsultado.availableQuantity > 0 && (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        // Ela decidiu levar: some do modo consulta e vira venda,
+                        // sem obrigar a bipar de novo.
+                        addToCart(precoConsultado);
+                        setPrecoConsultado(null);
+                        setConsultando(false);
+                      }}
+                    >
+                      <Plus className="h-5 w-5" aria-hidden />
+                      Vai levar
+                    </Button>
+                  )}
+
+                  <Button type="button" variant="ghost" onClick={() => setPrecoConsultado(null)}>
+                    Fechar
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <ul className="space-y-2">
               {grupos.map((grupo) => {
                 const aberto = tamanhosAbertos === grupo.productId;
@@ -502,12 +590,21 @@ export function PosPage() {
             </ul>
 
             {grupos.length === 0 && (
-              <Alert tone="info">
-                <span className="flex items-center gap-2">
-                  <Search className="h-4 w-4" aria-hidden />
-                  Nenhuma peça encontrada nesta loja.
-                </span>
-              </Alert>
+              <>
+                <Alert tone="info">
+                  <span className="flex items-center gap-2">
+                    <Search className="h-4 w-4" aria-hidden />
+                    Nenhuma peça encontrada nesta loja.
+                  </span>
+                </Alert>
+
+                {/*
+                  O instante em que a venda estava prestes a ser perdida. A
+                  peça pode estar no outro quiosque, e até hoje a vendedora não
+                  tinha como saber.
+                */}
+                <OtherStoresStock search={search} storeId={storeId} />
+              </>
             )}
           </div>
 

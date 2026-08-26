@@ -36,9 +36,12 @@ import { CashPage } from "./features/cash/CashPage";
 import { CustomersPage } from "./features/customers/CustomersPage";
 import { LabelsPage } from "./features/labels/LabelsPage";
 import { Logo } from "./components/ui/logo";
+import { CloseDayPage } from "@/features/timeclock/CloseDayPage";
+import { CustomerReturnedPage } from "@/features/aftersales/CustomerReturnedPage";
 import { AfterSalesPage } from "./features/aftersales/AfterSalesPage";
 import { ServiceOrdersPage } from "@/features/aftersales/ServiceOrdersPage";
 import { IntegrationsPage } from "@/features/settings/IntegrationsPage";
+import { MyDayPage } from "@/features/dashboard/MyDayPage";
 import { PainelPage } from "./features/dashboard/PainelPage";
 
 /**
@@ -165,6 +168,19 @@ function AppRoutes() {
         }
       />
 
+      {/*
+        O roteiro do fim do turno. Caixa e ponto moravam em telas separadas de
+        um menu, e nada avisava que faltou uma — o caixa esquecido aberto trava
+        a abertura do dia seguinte.
+      */}
+      <Route
+        path="/fechar-o-dia"
+        element={
+          <RequireAuth>
+            <CloseDayPage />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/espelho-de-ponto"
         element={
@@ -229,6 +245,19 @@ function AppRoutes() {
           </RequireAuth>
         }
       />
+      {/*
+        A tela onde a vendedora vê o próprio número. Sem exigência de perfil:
+        a permissão é ser você mesma, e o servidor só devolve o dado de quem
+        pediu.
+      */}
+      <Route
+        path="/meu-dia"
+        element={
+          <RequireAuth>
+            <MyDayPage />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/venda"
         element={
@@ -282,6 +311,19 @@ function AppRoutes() {
           obrigavam a voltar ao menu para comparar o dia com o mês. Os
           endereços antigos continuam levando ao lugar certo. */}
       <Route path="/relatorios" element={<Navigate to="/painel" replace />} />
+      {/*
+        A porta única de quem chegou com uma peça na mão. Traduz "o que houve"
+        para devolução, troca, garantia ou ordem de serviço — a escolha que a
+        vendedora tinha de fazer sozinha, e onde errar custava dinheiro.
+      */}
+      <Route
+        path="/cliente-voltou"
+        element={
+          <RequireAuth>
+            <CustomerReturnedPage />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/pos-venda"
         element={

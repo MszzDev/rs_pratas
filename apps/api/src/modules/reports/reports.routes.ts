@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
+import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
+import { getMyDay } from "./my-day.service.js";
 import {
   cashDifferences,
   paymentBreakdown,
@@ -124,6 +126,21 @@ export async function reportRoutes(app: FastifyInstance) {
       return calculateCommissions({ request, ...query });
     },
   );
+
+  /**
+   * O dia da própria vendedora.
+   *
+   * Sem requirePermission de propósito: a permissão aqui é ser você mesma. O
+   * serviço não aceita userId — o dono da sessão é quem o token diz, e é só o
+   * número dele que sai. Exigir REPORT_VIEW_STORE deixaria de fora justamente
+   * quem esta tela existe para atender.
+   */
+  app.get("/reports/my-day", { preHandler: app.requireAuth }, async (request) => {
+    const { storeId } = z.object({ storeId: z.string().uuid() }).parse(request.query);
+    await assertStoreAccess(request, storeId);
+
+    return getMyDay({ request, storeId });
+  });
 
   // ---------------------------------------------------------------- metas
 

@@ -6,6 +6,7 @@ import {
   Building2,
   Calculator,
   CalendarClock,
+  Check,
   Clock,
   CreditCard,
   FileCheck,
@@ -23,6 +24,7 @@ import {
   ShoppingCart,
   Tablet,
   Tag,
+  TrendingUp,
   UserRound,
   Users,
   Wallet,
@@ -75,9 +77,14 @@ const DONO = ["DONO", "DESENVOLVEDOR"];
 const NAV_ITEMS: NavItem[] = [
   { to: "/painel", label: "Painel", icon: LayoutDashboard, section: "dia-a-dia", roles: GESTAO, tone: "bg-rose-soft text-rose-primary" },
   { to: "/venda", label: "Venda", icon: ShoppingCart, section: "dia-a-dia", tone: "bg-sage-soft text-sage" },
+  // Existe para quem NÃO tem o Painel: antes disto o vendedor não enxergava o
+  // próprio resultado e perguntava à gerente, várias vezes por dia.
+  { to: "/meu-dia", label: "Meu dia", icon: TrendingUp, section: "dia-a-dia", tone: "bg-sage-soft text-sage" },
   { to: "/caixa", label: "Caixa", icon: Wallet, section: "dia-a-dia", tone: "bg-gold-soft text-gold-dark" },
   { to: "/clientes", label: "Clientes", icon: UserRound, section: "dia-a-dia", tone: "bg-plum-soft text-plum" },
-  { to: "/pos-venda", label: "Pós-venda", icon: RotateCcw, section: "dia-a-dia", tone: "bg-clay-soft text-clay" },
+  // A entrada é a triagem, não a tela técnica: quem está no balcão sabe o que
+  // o cliente disse, não se aquilo é devolução, troca ou garantia.
+  { to: "/cliente-voltou", label: "Cliente voltou", icon: RotateCcw, section: "dia-a-dia", tone: "bg-clay-soft text-clay" },
   { to: "/ponto", label: "Ponto", icon: Clock, section: "dia-a-dia", tone: "bg-ocean-soft text-ocean" },
 
   { to: "/produtos", label: "Produtos", icon: Package, section: "gestao", tone: "bg-rose-soft text-rose-primary" },
@@ -112,11 +119,17 @@ const SUBPAGINAS: Record<string, Atalho[]> = {
     { to: "/integracoes", label: "Integrações", icon: Plug, permission: "SETTINGS_MANAGE_APP" },
   ],
   "/integracoes": [{ to: "/configuracoes", label: "Configurações", icon: Settings }],
+  "/cliente-voltou": [
+    { to: "/pos-venda", label: "Trocas e garantias", icon: RotateCcw },
+    { to: "/ordens-de-servico", label: "Ordens de serviço", icon: Wrench },
+  ],
   "/pos-venda": [
+    { to: "/cliente-voltou", label: "Cliente voltou", icon: RotateCcw },
     { to: "/ordens-de-servico", label: "Ordens de serviço", icon: Wrench },
     { to: "/venda", label: "Venda", icon: ShoppingCart },
   ],
   "/ordens-de-servico": [
+    { to: "/cliente-voltou", label: "Cliente voltou", icon: RotateCcw },
     { to: "/pos-venda", label: "Trocas e garantias", icon: RotateCcw },
     { to: "/clientes", label: "Clientes", icon: UserRound },
   ],
@@ -132,7 +145,12 @@ const SUBPAGINAS: Record<string, Atalho[]> = {
     { to: "/venda", label: "Venda", icon: ShoppingCart },
     { to: "/orcamentos", label: "Orçamentos", icon: Calculator },
   ],
+  "/fechar-o-dia": [
+    { to: "/caixa", label: "Caixa", icon: Wallet },
+    { to: "/ponto", label: "Bater ponto", icon: Clock },
+  ],
   "/ponto": [
+    { to: "/fechar-o-dia", label: "Fechar o dia", icon: Check },
     { to: "/espelho-de-ponto", label: "Meu espelho", icon: CalendarClock },
     { to: "/meus-documentos", label: "Meus documentos", icon: FileText },
     { to: "/sessoes", label: "Meus acessos", icon: MonitorSmartphone },

@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
 import {
   adjustStock,
+  findStockAcrossStores,
   listMovements,
   listStock,
   registerEntry,
@@ -86,6 +87,28 @@ export async function stockRoutes(app: FastifyInstance) {
         .parse(request.query);
 
       return listStock({ request, ...query });
+    },
+  );
+
+  /**
+   * "Onde tem essa peça?"
+   *
+   * Consulta que atravessa as lojas da empresa de propósito — ver a
+   * explicação em findStockAcrossStores. Só leitura, e só quantidade e nome
+   * de loja.
+   */
+  app.get(
+    "/stock/other-stores",
+    { preHandler: [app.requireAuth, requirePermission("STOCK_VIEW")] },
+    async (request) => {
+      const query = z
+        .object({
+          search: z.string().min(2).max(120),
+          exceptStoreId: z.string().uuid().optional(),
+        })
+        .parse(request.query);
+
+      return findStockAcrossStores({ request, ...query });
     },
   );
 
