@@ -43,7 +43,7 @@ export async function startFirstAccess(params: {
   const user = await prisma.user.findFirst({
     where: {
       deletedAt: null,
-      employeeCode: input.identifier,
+      employeeCode: { equals: input.identifier, mode: "insensitive" },
     },
   });
 

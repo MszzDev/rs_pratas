@@ -167,7 +167,10 @@ export async function requestPinReset(params: {
   deviceId?: string | undefined;
 }) {
   const user = await prisma.user.findFirst({
-    where: { employeeCode: params.employeeCode, deletedAt: null },
+    where: {
+      employeeCode: { equals: params.employeeCode, mode: "insensitive" },
+      deletedAt: null,
+    },
     select: { id: true, companyId: true, status: true },
   });
 

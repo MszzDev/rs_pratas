@@ -91,7 +91,7 @@ export function LoginPage() {
               <Field
                 label="Matrícula"
                 value={identifier}
-                onChange={(event) => setIdentifier(event.target.value)}
+                onChange={(event) => setIdentifier(event.target.value.toUpperCase())}
                 autoComplete="username"
                 autoCapitalize="none"
                 required

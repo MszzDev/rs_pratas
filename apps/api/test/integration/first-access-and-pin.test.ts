@@ -180,6 +180,20 @@ describe("primeiro acesso", () => {
     expect(denovo.statusCode).toBe(200);
   });
 
+  /**
+   * A matrícula é escrita "RS000010" no crachá, mas quem digita num teclado de
+   * tablet escreve minúsculo sem pensar. A busca era exata, e a resposta era
+   * "matrícula não encontrada" — a pior mensagem possível, porque manda a
+   * pessoa procurar um cadastro que existe.
+   */
+  it("aceita a matrícula digitada em minúsculas", async () => {
+    const company = await createTestCompany();
+    const user = await createPendingUser(company.id);
+
+    const resposta = await startOnboarding(user.employeeCode.toLowerCase());
+    expect(resposta.statusCode).toBe(200);
+  });
+
   it("recusa senha temporária incorreta", async () => {
     const company = await createTestCompany();
     const user = await createPendingUser(company.id);

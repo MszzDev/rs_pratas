@@ -282,7 +282,19 @@ export async function loginWithPassword(params: {
   const user = await prisma.user.findFirst({
     where: {
       deletedAt: null,
-      employeeCode: input.identifier,
+      /**
+       * A matrícula não diferencia maiúscula de minúscula.
+       *
+       * Ela é escrita "RS626959" em todo lugar — no crachá, no papel que o
+       * dono entrega — mas quem digita num teclado de tablet escreve
+       * "rs626959" sem pensar. A busca era exata, e a resposta era "matrícula
+       * não encontrada": a pior mensagem possível, porque manda a pessoa
+       * procurar um cadastro que existe.
+       *
+       * A tela do PIN já corrigia o texto enquanto se digitava; a da senha
+       * não. Corrigir aqui vale para as duas e para qualquer tela futura.
+       */
+      employeeCode: { equals: input.identifier, mode: "insensitive" },
     },
   });
 

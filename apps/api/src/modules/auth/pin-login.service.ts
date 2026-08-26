@@ -56,7 +56,7 @@ export async function loginWithPin(params: {
   const user = await prisma.user.findFirst({
     where: {
       companyId: device.companyId,
-      employeeCode: input.employeeCode,
+      employeeCode: { equals: input.employeeCode, mode: "insensitive" },
       deletedAt: null,
     },
   });
