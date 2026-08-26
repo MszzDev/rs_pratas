@@ -39,6 +39,8 @@ interface Terminal {
    * dela. Só uma não cobra nada.
    */
   aceitaCobranca?: boolean;
+  /** Sem conta própria, usa a da empresa. */
+  usandoContaDaEmpresa?: boolean;
 }
 
 interface DeviceRow {
@@ -343,12 +345,14 @@ export function TerminalsPage() {
                       Conta <strong className="text-text-secondary">{terminal.conta?.apelido}</strong>{" "}
                       · token {terminal.conta?.tokenPreview}
                     </>
+                  ) : terminal.usandoContaDaEmpresa ? (
+                    "Usando a conta do Mercado Pago da empresa. Informe uma conta própria se o dinheiro desta maquininha cai em outra."
                   ) : (
                     "Sem conta do Mercado Pago — cobra normalmente, mas o sistema não consulta nem estorna."
                   )}
                 </p>
 
-                {terminal.conta?.configurada && (
+                {(terminal.conta?.configurada || terminal.usandoContaDaEmpresa) && (
                   <p className="mt-1 text-sm">
                     {terminal.aceitaCobranca ? (
                       <span className="text-sage-dark">
@@ -377,7 +381,7 @@ export function TerminalsPage() {
                 {terminal.conta?.configurada ? "Trocar conta" : "Informar conta"}
               </Button>
 
-              {terminal.conta?.configurada && (
+              {(terminal.conta?.configurada || terminal.usandoContaDaEmpresa) && (
                 <Button
                   type="button"
                   variant="outline"

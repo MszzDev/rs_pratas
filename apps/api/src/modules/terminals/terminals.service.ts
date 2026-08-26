@@ -99,9 +99,24 @@ export async function listTerminals(params: { request: FastifyRequest; storeId?:
 
   // A credencial cifrada não sai daqui: a tela recebe só o apelido da conta e
   // os quatro últimos caracteres do token, o bastante para reconhecer qual é.
+  /**
+   * A conta da empresa, quando existe.
+   *
+   * Vale para as maquininhas que não têm conta própria — o caso de quem
+   * recebe tudo numa conta só. Sem isto, a tela dizia "sem conta" para uma
+   * maquininha que já consegue consultar e estornar pela credencial da
+   * empresa, e escondia o botão de ligar ao aparelho.
+   */
+  const contaDaEmpresa = await prisma.integration.findFirst({
+    where: { companyId: request.user.companyId, provider: "MERCADOPAGO", status: "CONECTADA" },
+    select: { id: true },
+  });
+
   return terminais.map(({ credentialsEncrypted: _cifrado, ...terminal }) => ({
     ...terminal,
     conta: resumirConta({ ...terminal, credentialsEncrypted: _cifrado }),
+    /** Herda a conta da empresa por não ter uma própria. */
+    usandoContaDaEmpresa: !_cifrado && Boolean(contaDaEmpresa),
     /**
      * Pode receber o valor da venda direto do PDV.
      *
@@ -109,7 +124,7 @@ export async function listTerminals(params: { request: FastifyRequest; storeId?:
      * aparelho escolhido (para saber em qual das maquininhas da conta o valor
      * aparece). Só uma delas não cobra nada.
      */
-    aceitaCobranca: Boolean(_cifrado && terminal.mpDeviceId),
+    aceitaCobranca: Boolean((_cifrado || contaDaEmpresa) && terminal.mpDeviceId),
   }));
 }
 
