@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { PinResetRequests } from "@/features/auth/PinResetRequests";
 import { apiFetch, ApiError, requestStepUpToken } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useAuth } from "../auth/auth-context";
 import { OffDeviceAccessDialog } from "./OffDeviceAccessDialog";
 
@@ -47,6 +48,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function UsersPage() {
+  const confirmar = useConfirm();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const isOwner = user?.role === "DONO";
@@ -657,18 +659,25 @@ export function UsersPage() {
                         <Button
                           variant="ghost"
                           disabled={bloquear.isPending}
-                          onClick={() => {
+                          onClick={async () => {
                             const bloqueando = entry.status !== "BLOCKED";
-                            const reason = window.prompt(
-                              bloqueando
-                                ? `Bloquear ${entry.name}. Por quê?`
-                                : `Desbloquear ${entry.name}. Por quê?`,
-                            );
-                            if (reason && reason.trim().length >= 3) {
+                            const motivo = await confirmar({
+                              titulo: bloqueando
+                                ? `Bloquear ${entry.name}?`
+                                : `Desbloquear ${entry.name}?`,
+                              descricao: bloqueando
+                                ? "A pessoa deixa de entrar no sistema, no tablet e no computador. As vendas dela continuam no histórico."
+                                : "A pessoa volta a entrar com a matrícula e o PIN de sempre.",
+                              acao: bloqueando ? "Bloquear" : "Desbloquear",
+                              destrutivo: bloqueando,
+                              pedirMotivo: true,
+                            });
+
+                            if (motivo !== null) {
                               bloquear.mutate({
                                 id: entry.id,
                                 bloquear: bloqueando,
-                                reason: reason.trim(),
+                                reason: motivo,
                               });
                             }
                           }}

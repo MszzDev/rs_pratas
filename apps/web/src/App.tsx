@@ -8,6 +8,7 @@ import { WaitingForStore } from "./features/devices/WaitingForStore";
 import { ChangePinPage } from "./features/auth/ChangePinPage";
 import { useShiftGuard } from "./features/timeclock/use-shift-guard";
 import { ScreenLock } from "./features/kiosk/ScreenLock";
+import { ConfirmProvider } from "./components/ui/confirm-dialog";
 import { restaurarBrilho } from "./components/ui/brightness-control";
 import { AuthProvider, useAuth } from "./features/auth/auth-context";
 import { LoginPage } from "./features/auth/LoginPage";
@@ -361,27 +362,29 @@ export function App() {
 
   return (
     <AuthProvider>
-      <AppRoutes />
+      <ConfirmProvider>
+        <AppRoutes />
 
-      {/*
-        Trava a tela depois do tempo configurado sem toque. Fica fora das
-        rotas porque não pertence a tela nenhuma: vale para todas.
-      */}
-      <ScreenLock />
+        {/*
+          Trava a tela depois do tempo configurado sem toque. Fica fora das
+          rotas porque não pertence a tela nenhuma: vale para todas.
+        */}
+        <ScreenLock />
 
-      {/*
-        Cortina opaca enquanto o app está em segundo plano: o Android fotografa
-        a tela para a lista de recentes, e sem isso dados de venda ou de caixa
-        ficariam visíveis na miniatura para quem pegasse o tablet.
-      */}
-      {hidden && (
-        <div
-          aria-hidden
-          className="fixed inset-0 z-50 flex items-center justify-center bg-background"
-        >
-          <Logo size="lg" />
-        </div>
-      )}
+        {/*
+          Cortina opaca enquanto o app está em segundo plano: o Android
+          fotografa a tela para a lista de recentes, e sem isso dados de venda
+          ou de caixa ficariam visíveis na miniatura para quem pegasse o tablet.
+        */}
+        {hidden && (
+          <div
+            aria-hidden
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background"
+          >
+            <Logo size="lg" />
+          </div>
+        )}
+      </ConfirmProvider>
     </AuthProvider>
   );
 }

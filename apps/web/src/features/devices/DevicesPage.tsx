@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useAuth } from "../auth/auth-context";
 import { PendingDevices } from "./PendingDevices";
 
@@ -48,6 +49,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function DevicesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const confirmar = useConfirm();
   const isOwner = user?.role === "DONO";
 
   const [storeId, setStoreId] = useState("");
@@ -227,13 +229,21 @@ export function DevicesPage() {
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={() => {
-                        const reason = window.prompt("Motivo do desvínculo:");
-                        if (!reason || reason.trim().length < 3) return;
+                      onClick={async () => {
+                        const motivo = await confirmar({
+                          titulo: `Desvincular "${device.name}"?`,
+                          descricao:
+                            "O tablet volta para a fila de aparelhos sem loja e para de abrir o login. As sessões abertas nele são encerradas.",
+                          acao: "Desvincular",
+                          destrutivo: true,
+                          pedirMotivo: true,
+                        });
+
+                        if (motivo === null) return;
 
                         void apiFetch(`/api/v1/devices/${device.id}/unlink`, {
                           method: "POST",
-                          body: { reason: reason.trim() },
+                          body: { reason: motivo },
                         })
                           .then(() => queryClient.invalidateQueries({ queryKey: ["devices"] }))
                           .catch((caught) =>

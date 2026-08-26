@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { StorePicker } from "@/features/stores/store-picker";
 
 type Status =
@@ -87,6 +88,7 @@ const formatDate = (iso: string | null) =>
   iso === null ? "—" : new Date(iso).toLocaleDateString("pt-BR");
 
 export function ServiceOrdersPage() {
+  const confirmar = useConfirm();
   const queryClient = useQueryClient();
 
   const [storeId, setStoreId] = useState("");
@@ -464,13 +466,16 @@ export function ServiceOrdersPage() {
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={() => {
-                        const reason = window.prompt(
-                          `Cancelar a ordem ${order.code}. Por quê?`,
-                        );
-                        if (reason && reason.trim().length >= 3) {
-                          cancelar.mutate({ id: order.id, reason: reason.trim() });
-                        }
+                      onClick={async () => {
+                        const motivo = await confirmar({
+                          titulo: `Cancelar a ordem ${order.code}?`,
+                          descricao: "O serviço deixa de estar em andamento. O que já foi feito continua registrado.",
+                          acao: "Cancelar ordem",
+                          destrutivo: true,
+                          pedirMotivo: true,
+                        });
+
+                        if (motivo !== null) cancelar.mutate({ id: order.id, reason: motivo });
                       }}
                     >
                       Cancelar

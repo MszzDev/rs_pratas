@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge, Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { formatMoney } from "@/lib/money";
 import { StorePicker } from "@/features/stores/store-picker";
 
@@ -79,6 +80,7 @@ const formatPhone = (digits: string) =>
  * próxima compra do fornecedor.
  */
 export function PieceRequestsPage() {
+  const confirmar = useConfirm();
   const queryClient = useQueryClient();
   const [storeId, setStoreId] = useState("");
   const [mostrarTodos, setMostrarTodos] = useState(false);
@@ -358,13 +360,16 @@ export function PieceRequestsPage() {
                       type="button"
                       variant="ghost"
                       disabled={cancelar.isPending}
-                      onClick={() => {
-                        const reason = window.prompt(
-                          `Cancelar o pedido de ${pedido.customerName}. Por quê?`,
-                        );
-                        if (reason && reason.trim().length >= 3) {
-                          cancelar.mutate({ id: pedido.id, reason: reason.trim() });
-                        }
+                      onClick={async () => {
+                        const motivo = await confirmar({
+                          titulo: `Cancelar o pedido de ${pedido.customerName}?`,
+                          descricao: "A peça deixa de ser procurada. O cliente não é avisado pelo sistema.",
+                          acao: "Cancelar pedido",
+                          destrutivo: true,
+                          pedirMotivo: true,
+                        });
+
+                        if (motivo !== null) cancelar.mutate({ id: pedido.id, reason: motivo });
                       }}
                     >
                       <X className="h-5 w-5" aria-hidden />

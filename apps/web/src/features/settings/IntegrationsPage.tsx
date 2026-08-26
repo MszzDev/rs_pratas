@@ -16,6 +16,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { API_BASE_URL, apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useAuth } from "@/features/auth/auth-context";
 import { lerCodigoDeAutorizacao, limparCodigoDeAutorizacao } from "./authorization-code";
 import { LgpdRequests } from "./LgpdRequests";
@@ -184,6 +185,7 @@ const formatDateTime = (iso: string | null) =>
   iso === null ? "—" : new Date(iso).toLocaleString("pt-BR");
 
 export function IntegrationsPage() {
+  const confirmar = useConfirm();
   const queryClient = useQueryClient();
 
   const [abrindo, setAbrindo] = useState<Provider | null>(null);
@@ -518,11 +520,15 @@ export function IntegrationsPage() {
                       <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => {
+                        onClick={async () => {
                           if (
-                            window.confirm(
-                              `Desconectar ${servico.nome}? A credencial será apagada e você precisará colá-la de novo.`,
-                            )
+                            (await confirmar({
+                              titulo: `Desconectar ${servico.nome}?`,
+                              descricao:
+                                "A credencial é apagada. Para voltar, você precisa colá-la de novo — e, no caso da Nuvemshop, autorizar o aplicativo outra vez.",
+                              acao: "Desconectar",
+                              destrutivo: true,
+                            })) !== null
                           ) {
                             desconectar.mutate(integracao.provider);
                           }

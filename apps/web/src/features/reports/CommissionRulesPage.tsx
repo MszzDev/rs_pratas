@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { StorePicker } from "@/features/stores/store-picker";
 
 interface CommissionRule {
@@ -61,6 +62,7 @@ function mesCorrente() {
 }
 
 export function CommissionRulesContent() {
+  const confirmar = useConfirm();
   const queryClient = useQueryClient();
 
   const [storeId, setStoreId] = useState("");
@@ -169,15 +171,21 @@ export function CommissionRulesContent() {
       setError(caught instanceof ApiError ? caught.message : "Não foi possível remover."),
   });
 
-  const pedirMotivoERemover = (
+  const pedirMotivoERemover = async (
     tipo: "commission-rules" | "goals",
     id: string,
     pergunta: string,
   ) => {
-    const reason = window.prompt(pergunta);
-    if (reason && reason.trim().length >= 3) {
-      remover.mutate({ tipo, id, reason: reason.trim() });
-    }
+    const motivo = await confirmar({
+      titulo: pergunta,
+      descricao:
+        "O que já foi calculado com esta regra continua valendo. Ela deixa de valer para as vendas a partir de agora.",
+      acao: "Remover",
+      destrutivo: true,
+      pedirMotivo: true,
+    });
+
+    if (motivo !== null) remover.mutate({ tipo, id, reason: motivo });
   };
 
   return (

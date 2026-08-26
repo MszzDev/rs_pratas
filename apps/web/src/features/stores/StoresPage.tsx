@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge, Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { horarioVazio, resumirHorario, type StoreHours } from "@rs-pratas/shared";
 import { OpeningHoursEditor } from "./OpeningHoursEditor";
 
@@ -71,6 +72,7 @@ const linhaDoEndereco = (address: StoreAddress | null): string | null => {
  */
 export function StoresPage() {
   const queryClient = useQueryClient();
+  const confirmar = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -370,12 +372,17 @@ export function StoresPage() {
                 type="button"
                 variant="ghost"
                 disabled={remover.isPending}
-                onClick={() => {
-                  const motivo = window.prompt(
-                    `Remover "${store.name}". Por quê?\n\nSe a loja já vendeu, ela sai da operação mas o histórico permanece.`,
-                  );
-                  if (!motivo || motivo.trim().length < 3) return;
-                  remover.mutate({ id: store.id, reason: motivo.trim() });
+                onClick={async () => {
+                  const motivo = await confirmar({
+                    titulo: `Remover "${store.name}"?`,
+                    descricao:
+                      "Se a loja já vendeu, teve caixa ou registrou ponto, ela sai da operação mas o histórico permanece. Se nunca operou, é apagada de vez.",
+                    acao: "Remover",
+                    destrutivo: true,
+                    pedirMotivo: true,
+                  });
+
+                  if (motivo !== null) remover.mutate({ id: store.id, reason: motivo });
                 }}
               >
                 <Trash2 className="h-5 w-5" aria-hidden />

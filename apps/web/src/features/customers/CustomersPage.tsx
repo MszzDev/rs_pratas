@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { formatMoney } from "@/lib/money";
 import { useAuth } from "../auth/auth-context";
 
@@ -47,6 +48,7 @@ const formatDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
 
 export function CustomersPage() {
+  const confirmar = useConfirm();
   const queryClient = useQueryClient();
   const { can } = useAuth();
   // Cadastrar quem está comprando agora é parte de vender. Mexer em quem já
@@ -246,13 +248,17 @@ export function CustomersPage() {
                     type="button"
                     variant="ghost"
                     disabled={remove.isPending}
-                    onClick={() => {
-                      const reason = window.prompt(
-                        `Remover ${customer.name} do cadastro. Por quê?`,
-                      );
-                      if (reason && reason.trim().length >= 3) {
-                        remove.mutate({ id: customer.id, reason: reason.trim() });
-                      }
+                    onClick={async () => {
+                      const motivo = await confirmar({
+                        titulo: `Remover ${customer.name}?`,
+                        descricao:
+                          "Cliente que já comprou sai do cadastro mas continua no histórico das vendas dele. O telefone é liberado para um cadastro novo.",
+                        acao: "Remover",
+                        destrutivo: true,
+                        pedirMotivo: true,
+                      });
+
+                      if (motivo !== null) remove.mutate({ id: customer.id, reason: motivo });
                     }}
                   >
                     <Trash2 className="h-5 w-5" aria-hidden />

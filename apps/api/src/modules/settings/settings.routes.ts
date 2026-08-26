@@ -2,9 +2,11 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
-import { notFound } from "../../core/errors.js";
+import { badRequest, notFound } from "../../core/errors.js";
 import { assertStoreAccess, requireRole } from "../../core/rbac/require-role.hook.js";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
+import { env } from "../../config/env.js";
+import { sendEmail } from "../../core/email/index.js";
 
 const settingBodySchema = z.object({
   key: z.string().min(1).max(120),
@@ -60,6 +62,77 @@ export async function settingsRoutes(app: FastifyInstance) {
       inactivityLockSeconds: Number.isFinite(segundos) && segundos > 0 ? segundos : 0,
       receiptFooter: typeof valor("receipt_footer") === "string" ? valor("receipt_footer") : null,
     };
+  });
+
+  /**
+   * O e-mail está ligado?
+   *
+   * Sem SMTP configurado o sistema não envia nada — e faz isso em silêncio, de
+   * propósito: uma falha de envio nunca derruba o cadastro que já deu certo.
+   * O efeito colateral é que ninguém descobre que o e-mail está desligado até
+   * um cliente reclamar que não recebeu o comprovante. Esta rota existe para a
+   * tela poder dizer.
+   */
+  app.get("/settings/email", { preHandler: ownerOnly }, async () => {
+    const ligado = env.MAIL_TRANSPORT === "smtp" && Boolean(env.SMTP_URL);
+
+    return {
+      ligado,
+      remetente: env.MAIL_FROM,
+      // O endereço do servidor sem a senha: o suficiente para conferir que é o
+      // provedor certo, sem devolver credencial para a tela.
+      servidor: env.SMTP_URL ? env.SMTP_URL.replace(/\/\/[^@]*@/, "//") : null,
+    };
+  });
+
+  /**
+   * Manda um e-mail de teste para quem pediu.
+   *
+   * Para o próprio endereço do dono, e não para um digitado na hora: assim o
+   * teste não vira um jeito de mandar mensagem em nome da loja para qualquer
+   * um.
+   */
+  app.post("/settings/email/test", { preHandler: ownerOnly }, async (request) => {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: request.user.sub },
+      select: { email: true, name: true },
+    });
+
+    if (!user.email) {
+      throw badRequest(
+        "NO_EMAIL",
+        "Sua conta não tem e-mail cadastrado. Coloque um em Funcionários para poder testar.",
+      );
+    }
+
+    if (env.MAIL_TRANSPORT !== "smtp" || !env.SMTP_URL) {
+      throw badRequest(
+        "EMAIL_OFF",
+        "O envio de e-mail ainda não está configurado. Preencha SMTP_URL e MAIL_FROM no painel do Render.",
+      );
+    }
+
+    const enviado = await sendEmail({
+      to: user.email,
+      subject: "Teste de envio — RS Pratas",
+      text: [
+        `Olá, ${user.name.split(" ")[0]}.`,
+        "",
+        "Se você está lendo isto, o envio de e-mail do sistema está funcionando:",
+        "comprovante de venda, garantia e credencial de funcionário vão chegar.",
+        "",
+        "Nada mais precisa ser feito.",
+      ].join("\n"),
+    });
+
+    if (!enviado) {
+      throw badRequest(
+        "EMAIL_FAILED",
+        "O provedor recusou o envio. Confira SMTP_URL e se o remetente (MAIL_FROM) pertence ao domínio autorizado.",
+      );
+    }
+
+    return { enviado: true, para: user.email };
   });
 
   app.put("/settings/app", { preHandler: ownerOnly }, async (request) => {

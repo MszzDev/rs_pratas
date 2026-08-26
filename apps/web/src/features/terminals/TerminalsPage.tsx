@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type TerminalStatus = "PENDING" | "ACTIVE" | "BLOCKED" | "RETIRED";
 
@@ -66,6 +67,7 @@ const STATUS_STYLES: Record<TerminalStatus, string> = {
 
 export function TerminalsPage() {
   const queryClient = useQueryClient();
+  const confirmar = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ deviceId: "", provider: "", serialNumber: "" });
@@ -431,11 +433,17 @@ export function TerminalsPage() {
                 type="button"
                 variant="ghost"
                 disabled={remove.isPending}
-                onClick={() => {
-                  const reason = window.prompt("Remover esta maquininha. Por quê?");
-                  if (reason && reason.trim().length >= 3) {
-                    remove.mutate({ id: terminal.id, reason: reason.trim() });
-                  }
+                onClick={async () => {
+                  const motivo = await confirmar({
+                    titulo: "Remover esta maquininha?",
+                    descricao:
+                      "Se ela já cobrou alguma venda, sai de uso mas continua no histórico.",
+                    acao: "Remover",
+                    destrutivo: true,
+                    pedirMotivo: true,
+                  });
+
+                  if (motivo !== null) remove.mutate({ id: terminal.id, reason: motivo });
                 }}
               >
                 <Trash2 className="h-5 w-5" aria-hidden />

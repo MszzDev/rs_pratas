@@ -82,6 +82,26 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
 
+      # ------------------------------------------------------------ e-mail
+      #
+      # Sem estas três, o sistema funciona e NÃO envia nada: comprovante,
+      # garantia e credencial de funcionário ficam só na tela. É de propósito
+      # — melhor não enviar do que fingir que enviou.
+      #
+      # SMTP_URL é a conexão do provedor, no formato
+      # smtps://usuario:senha@servidor:465. Vem do painel de quem envia
+      # (Brevo, Resend, ou a própria caixa de e-mail da loja com senha de
+      # aplicativo). PREENCHA no painel do Render, nunca no código: é
+      # credencial.
+      - key: MAIL_TRANSPORT
+        value: smtp
+      - key: SMTP_URL
+        sync: false
+      # O remetente que o cliente vê. Precisa ser um endereço do domínio
+      # autorizado no provedor, senão a mensagem cai em spam ou é recusada.
+      - key: MAIL_FROM
+        sync: false
+
   - type: web
     name: rs-pratas-web
     runtime: static

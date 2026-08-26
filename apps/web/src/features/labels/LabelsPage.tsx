@@ -8,6 +8,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { formatMoney } from "@/lib/money";
 import { ProductPhoto } from "@/components/ui/product-photo";
 import { useAuth } from "../auth/auth-context";
@@ -70,6 +71,7 @@ const formatTime = (iso: string) =>
  * preços diferentes.
  */
 export function LabelsPage() {
+  const confirmar = useConfirm();
   const queryClient = useQueryClient();
   const { can } = useAuth();
   const [storeId, setStoreId] = useState("");
@@ -565,13 +567,17 @@ export function LabelsPage() {
                 type="button"
                 variant="ghost"
                 disabled={removeTemplate.isPending}
-                onClick={() => {
-                  const reason = window.prompt(
-                    `Remover o modelo "${template.name}". Por quê?`,
-                  );
-                  if (reason && reason.trim().length >= 3) {
-                    removeTemplate.mutate({ id: template.id, reason: reason.trim() });
-                  }
+                onClick={async () => {
+                  const motivo = await confirmar({
+                    titulo: `Remover o modelo "${template.name}"?`,
+                    descricao:
+                      "As etiquetas já impressas continuam valendo. O modelo deixa de aparecer na hora de imprimir.",
+                    acao: "Remover",
+                    destrutivo: true,
+                    pedirMotivo: true,
+                  });
+
+                  if (motivo !== null) removeTemplate.mutate({ id: template.id, reason: motivo });
                 }}
               >
                 <Trash2 className="h-5 w-5" aria-hidden />

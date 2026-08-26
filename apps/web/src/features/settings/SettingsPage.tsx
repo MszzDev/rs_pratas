@@ -5,6 +5,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { EmailStatus } from "./EmailStatus";
 
 interface Setting {
   id: string;
@@ -100,6 +101,8 @@ export function SettingsPage() {
           <Alert tone="error">{error}</Alert>
         </div>
       )}
+
+      <EmailStatus />
 
       <div className="space-y-4">
         {KNOWN_SETTINGS.map((setting) => {

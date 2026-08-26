@@ -4,6 +4,7 @@ import { KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 interface Pedido {
   id: string;
@@ -41,6 +42,7 @@ function esperaEmTexto(minutos: number): string {
  */
 export function PinResetRequests() {
   const queryClient = useQueryClient();
+  const confirmar = useConfirm();
 
   const [liberado, setLiberado] = useState<Liberado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -144,10 +146,16 @@ export function PinResetRequests() {
                     type="button"
                     variant="ghost"
                     disabled={recusar.isPending}
-                    onClick={() => {
-                      const motivo = window.prompt("Por que está recusando?");
-                      if (!motivo || motivo.trim().length < 3) return;
-                      recusar.mutate({ id: pedido.id, reason: motivo.trim() });
+                    onClick={async () => {
+                      const motivo = await confirmar({
+                        titulo: `Recusar o pedido de ${pedido.name}?`,
+                        descricao:
+                          "A pessoa continua sem entrar até resolver de outro jeito. Diga o porquê — ela vai perguntar.",
+                        acao: "Recusar",
+                        pedirMotivo: true,
+                      });
+
+                      if (motivo !== null) recusar.mutate({ id: pedido.id, reason: motivo });
                     }}
                   >
                     Recusar
