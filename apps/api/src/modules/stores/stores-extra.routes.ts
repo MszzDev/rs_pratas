@@ -11,6 +11,7 @@ import {
   removeGoal,
   removeLabelTemplate,
   removePOSStation,
+  removeStore,
   removeSizeGrade,
   removeTerminal,
   removeVariation,
@@ -165,6 +166,24 @@ export async function storeOperationRoutes(app: FastifyInstance) {
       const { id } = idParamSchema.parse(request.params);
       const { reason } = reasonSchema.parse(request.body);
       return removeCashRegister({ registerId: id, reason, request });
+    },
+  );
+
+  /**
+   * Remover a loja.
+   *
+   * Loja que ja vendeu, teve caixa ou registrou ponto e DESATIVADA — apagar
+   * levaria junto o faturamento, o espelho de ponto de quem trabalhou ali e a
+   * garantia de quem comprou. Loja criada por engano, que nunca operou, some
+   * de vez com a estrutura vazia junto.
+   */
+  app.delete(
+    "/stores/:id",
+    { preHandler: [app.requireAuth, requireRole("DONO")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      const { reason } = reasonSchema.parse(request.body);
+      return removeStore({ storeId: id, reason, request });
     },
   );
 }

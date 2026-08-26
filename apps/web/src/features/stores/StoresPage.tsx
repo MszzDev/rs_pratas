@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Clock, Pencil, Plus } from "lucide-react";
+import { Building2, Clock, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -76,6 +76,7 @@ export function StoresPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...EMPTY });
   const [horario, setHorario] = useState<StoreHours>(horarioVazio());
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const stores = useQuery({
     queryKey: ["stores"],
@@ -120,6 +121,20 @@ export function StoresPage() {
     onSuccess: () => {
       setError(null);
       fechar();
+      void queryClient.invalidateQueries({ queryKey: ["stores"] });
+    },
+    onError: handleError,
+  });
+
+  const remover = useMutation({
+    mutationFn: (params: { id: string; reason: string }) =>
+      apiFetch<{ removido: string; mensagem: string }>(`/api/v1/stores/${params.id}`, {
+        method: "DELETE",
+        body: { reason: params.reason },
+      }),
+    onSuccess: (resultado) => {
+      setError(null);
+      setAviso(resultado.mensagem);
       void queryClient.invalidateQueries({ queryKey: ["stores"] });
     },
     onError: handleError,
@@ -172,6 +187,12 @@ export function StoresPage() {
       {error && (
         <div className="mb-5">
           <Alert tone="error">{error}</Alert>
+        </div>
+      )}
+
+      {aviso && (
+        <div className="mb-5">
+          <Alert tone="success">{aviso}</Alert>
         </div>
       )}
 
@@ -333,10 +354,34 @@ export function StoresPage() {
               </div>
             </div>
 
-            <Button type="button" variant="outline" onClick={() => editar(store)}>
-              <Pencil className="h-5 w-5" aria-hidden />
-              Editar
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={() => editar(store)}>
+                <Pencil className="h-5 w-5" aria-hidden />
+                Editar
+              </Button>
+
+              {/*
+                Loja que já vendeu é DESATIVADA, não apagada — o servidor
+                decide isso, não a tela. Apagar levaria junto o faturamento, o
+                espelho de ponto de quem trabalhou ali e a garantia de quem
+                comprou.
+              */}
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={remover.isPending}
+                onClick={() => {
+                  const motivo = window.prompt(
+                    `Remover "${store.name}". Por quê?\n\nSe a loja já vendeu, ela sai da operação mas o histórico permanece.`,
+                  );
+                  if (!motivo || motivo.trim().length < 3) return;
+                  remover.mutate({ id: store.id, reason: motivo.trim() });
+                }}
+              >
+                <Trash2 className="h-5 w-5" aria-hidden />
+                Remover
+              </Button>
+            </div>
           </li>
         ))}
       </ul>

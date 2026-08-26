@@ -552,3 +552,105 @@ export async function removeCashRegister(params: {
     },
   });
 }
+
+/**
+ * Remove uma loja.
+ *
+ * A loja é o cadastro mais pesado do sistema: dela penduram estação, caixa,
+ * tablet, maquininha, estoque, venda e ponto. Por isso a regra aqui é a mesma
+ * do resto, só que mais rígida no que conta como "usada".
+ *
+ * Loja que já vendeu, já teve turno de caixa ou já registrou ponto é
+ * DESATIVADA — apagar levaria junto o faturamento do mês, o espelho de ponto
+ * de quem trabalhou ali e a garantia de quem comprou.
+ *
+ * Loja recém-criada por engano, que nunca operou, é apagada de vez, junto com
+ * a estrutura vazia que veio com ela. Um cadastro errado de dois minutos não
+ * precisa ficar na lista para sempre.
+ */
+export async function removeStore(params: {
+  storeId: string;
+  reason: string;
+  request: FastifyRequest;
+}): Promise<RemovalOutcome> {
+  const { storeId, reason, request } = params;
+
+  const store = await prisma.store.findFirst({
+    where: { id: storeId, companyId: request.user.companyId, deletedAt: null },
+    include: {
+      _count: {
+        select: {
+          posStations: true,
+          devices: true,
+          userStores: true,
+          timeClockEntries: true,
+          stockItems: true,
+        },
+      },
+    },
+  });
+
+  if (!store) {
+    throw notFound("STORE_NOT_FOUND", "Loja não encontrada.");
+  }
+
+  await assertStoreAccess(request, store.id);
+
+  // Aberta agora é gente trabalhando: fechar antes é o que garante que o
+  // caixa do dia foi conferido.
+  if (store.isOpen) {
+    throw conflict("STORE_OPEN", "Esta loja está aberta. Feche-a antes de removê-la.");
+  }
+
+  const [vendas, turnos] = await Promise.all([
+    prisma.sale.count({ where: { storeId: store.id } }),
+    prisma.cashSession.count({ where: { storeId: store.id } }),
+  ]);
+
+  const temHistorico =
+    vendas > 0 || turnos > 0 || store._count.timeClockEntries > 0 || store._count.stockItems > 0;
+
+  if (temHistorico) {
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { isActive: false, deletedAt: new Date() },
+    });
+
+    return finish({
+      request,
+      action: "STORE_DEACTIVATE",
+      entityType: "Store",
+      entityId: store.id,
+      storeId: store.id,
+      reason,
+      previousData: { code: store.code, name: store.name },
+      outcome: {
+        removido: "desativado",
+        mensagem:
+          "Loja removida da operação. Vendas, caixa e ponto dela continuam no histórico — é o que permite explicar o passado.",
+      },
+    });
+  }
+
+  // Sem histórico: some de vez, com a estrutura vazia junto. A ordem segue as
+  // chaves estrangeiras — do mais dependente para o menos.
+  await prisma.$transaction([
+    prisma.userStore.deleteMany({ where: { storeId: store.id } }),
+    prisma.paymentTerminal.deleteMany({ where: { storeId: store.id } }),
+    prisma.device.deleteMany({ where: { storeId: store.id } }),
+    prisma.cashRegister.deleteMany({ where: { posStation: { storeId: store.id } } }),
+    prisma.pOSStation.deleteMany({ where: { storeId: store.id } }),
+    prisma.storeSetting.deleteMany({ where: { storeId: store.id } }),
+    prisma.store.delete({ where: { id: store.id } }),
+  ]);
+
+  return finish({
+    request,
+    action: "STORE_DEACTIVATE",
+    entityType: "Store",
+    entityId: store.id,
+    reason,
+    previousData: { code: store.code, name: store.name },
+    outcome: { removido: "apagado", mensagem: "Loja apagada. Ela nunca chegou a operar." },
+  });
+}
