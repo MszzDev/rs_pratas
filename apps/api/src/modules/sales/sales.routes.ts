@@ -21,7 +21,12 @@ import {
   markQuoteConverted,
   prepareQuoteConversion,
 } from "./quotes.service.js";
-import { getReceiptText, sendSaleReceipt, sendWarrantyEmail } from "./receipt.service.js";
+import {
+  getPrintData,
+  getReceiptText,
+  sendSaleReceipt,
+  sendWarrantyEmail,
+} from "./receipt.service.js";
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 const moneySchema = z.number().min(0).max(9_999_999).multipleOf(0.01);
@@ -359,6 +364,21 @@ export async function saleRoutes(app: FastifyInstance) {
     async (request) => {
       const { id } = idParamSchema.parse(request.params);
       return getReceiptText({ saleId: id, request });
+    },
+  );
+
+  /**
+   * O comprovante para a impressora térmica do balcão.
+   *
+   * Quem monta o papel é o tablet — aqui saem só os dados, com os valores já
+   * escritos em real para que papel, e-mail e WhatsApp mostrem o mesmo número.
+   */
+  app.get(
+    "/sales/:id/print-data",
+    { preHandler: [app.requireAuth, requirePermission("SALE_CREATE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      return getPrintData({ saleId: id, request });
     },
   );
 

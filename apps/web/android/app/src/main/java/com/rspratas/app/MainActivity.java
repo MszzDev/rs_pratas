@@ -65,6 +65,7 @@ public class MainActivity extends BridgeActivity {
     // exatamente o que aconteceu com a saida do quiosque e com o anuncio do
     // aparelho.
     registerPlugin(KioskPlugin.class);
+    registerPlugin(ImpressoraPlugin.class);
 
     super.onCreate(savedInstanceState);
 

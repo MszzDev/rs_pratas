@@ -79,4 +79,26 @@
       aplicativo — e quem abre a loja de manhã não é quem instalou o sistema.
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      A impressora térmica do balcão, por Bluetooth clássico.
+
+      Duas idades do Android convivem aqui. Até o 11, conectar era permissão de
+      instalação (BLUETOOTH/BLUETOOTH_ADMIN) e ninguém perguntava nada. Do 12
+      em diante virou permissão de tempo de execução (BLUETOOTH_CONNECT), e o
+      aplicativo tem que pedir.
+
+      `neverForLocation` diz ao Android que não usamos Bluetooth para descobrir
+      onde o aparelho está — sem isso o sistema exigiria permissão de
+      localização para imprimir um comprovante, o que ninguém entenderia.
+    -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_CONNECT"
+        android:usesPermissionFlags="neverForLocation" />
 </manifest>

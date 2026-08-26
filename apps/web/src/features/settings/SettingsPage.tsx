@@ -6,6 +6,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { EmailStatus } from "./EmailStatus";
+import { PrinterSettings } from "@/features/printing/PrinterSettings";
 
 interface Setting {
   id: string;
@@ -103,6 +104,14 @@ export function SettingsPage() {
       )}
 
       <EmailStatus />
+
+      {/*
+        Some sozinha no computador do dono: impressora de balcão é assunto de
+        tablet, e a seção vazia lá só levantaria a dúvida do que está faltando.
+      */}
+      <div className="mb-5">
+        <PrinterSettings />
+      </div>
 
       <div className="space-y-4">
         {KNOWN_SETTINGS.map((setting) => {

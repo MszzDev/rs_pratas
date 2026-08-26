@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
 import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
@@ -308,4 +309,100 @@ export async function enviarComprovanteAutomatico(params: {
     // o reenvio manual continua disponível na tela da venda.
     request.log.warn({ erro, saleId }, "comprovante automático não saiu");
   }
+}
+
+/**
+ * Os dados do comprovante em papel.
+ *
+ * Endpoint próprio, e não a venda inteira, por um motivo prático: quem imprime
+ * é o tablet do balcão, com a rede da loja. Mandar a venda completa — com
+ * cadastro do cliente, reservas e o que mais o Prisma trouxer — para depois
+ * jogar quase tudo fora é gastar segundos de fila para nada.
+ *
+ * Os valores saem como texto já formatado em real. Formatar aqui, e não na
+ * tela, garante que o papel, o e-mail e o WhatsApp mostrem o mesmo número: a
+ * impressora térmica não tem `Intl.NumberFormat`, e reimplementar o
+ * arredondamento no cliente é como se cria a diferença de um centavo que
+ * ninguém consegue explicar depois.
+ */
+export async function getPrintData(params: { saleId: string; request: FastifyRequest }) {
+  const { saleId, request } = params;
+
+  const sale = await prisma.sale.findFirst({
+    where: { id: saleId, companyId: request.user.companyId },
+    include: {
+      customer: { select: { name: true, phone: true } },
+      seller: { select: { name: true } },
+      store: { select: { name: true, phone: true, cnpj: true, addressJson: true } },
+      items: {
+        include: { warranty: { select: { code: true, months: true, expiresAt: true, voidedAt: true } } },
+      },
+      payments: true,
+    },
+  });
+
+  if (!sale) {
+    throw notFound("SALE_NOT_FOUND", "Venda não encontrada.");
+  }
+
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: request.user.companyId },
+    select: { tradeName: true, cnpj: true },
+  });
+
+  const emReal = (valor: Prisma.Decimal | string | number) =>
+    Number(valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const endereco = sale.store.addressJson as {
+    logradouro?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+  } | null;
+
+  const ruaENumero = [endereco?.logradouro, endereco?.numero].filter(Boolean).join(", ");
+  const bairroECidade = [endereco?.bairro, endereco?.cidade].filter(Boolean).join(" - ");
+
+  return {
+    empresa: { nome: company.tradeName, cnpj: company.cnpj },
+    loja: {
+      nome: sale.store.name,
+      // O CNPJ da loja quando ela tem o seu; senão o da empresa. Uma das cinco
+      // lojas é de outra pessoa jurídica, e imprimir o CNPJ errado no
+      // comprovante é o tipo de detalhe que só aparece numa fiscalização.
+      cnpj: sale.store.cnpj ?? company.cnpj,
+      telefone: sale.store.phone,
+      endereco: [ruaENumero, bairroECidade].filter(Boolean).join(" · ") || null,
+    },
+    venda: {
+      codigo: sale.code,
+      quando: (sale.completedAt ?? sale.createdAt).toISOString(),
+      vendedor: sale.seller?.name ?? null,
+    },
+    cliente: sale.customer ? { nome: sale.customer.name } : null,
+    itens: sale.items.map((item) => ({
+      nome: item.productName,
+      sku: item.productSku,
+      quantidade: item.quantity,
+      unitario: emReal(item.unitPrice),
+      total: emReal(item.totalAmount),
+    })),
+    desconto: sale.discountAmount && Number(sale.discountAmount) > 0
+      ? emReal(sale.discountAmount)
+      : null,
+    total: emReal(sale.totalAmount),
+    pagamentos: sale.payments.map((pagamento) => ({
+      forma: pagamento.method,
+      valor: emReal(pagamento.amount),
+      parcelas: pagamento.installments,
+    })),
+    garantias: sale.items
+      .filter((item) => item.warranty && !item.warranty.voidedAt)
+      .map((item) => ({
+        produto: item.productName,
+        codigo: item.warranty!.code,
+        meses: item.warranty!.months,
+        ate: item.warranty!.expiresAt.toISOString(),
+      })),
+  };
 }

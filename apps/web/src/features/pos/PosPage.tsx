@@ -8,11 +8,20 @@ import {
   MessageCircle,
   Minus,
   Plus,
+  Printer,
   Search,
   ShoppingCart,
   Trash2,
   X,
 } from "lucide-react";
+import {
+  explicarFalha,
+  imprimirBytes,
+  lerImpressoraEscolhida,
+  montarComprovante,
+  temImpressora,
+  type DadosDoComprovante,
+} from "@/features/printing/printer";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -206,6 +215,22 @@ export function PosPage() {
       ),
   });
 
+  /**
+   * O comprovante em papel.
+   *
+   * O cliente do quiosque quer sair com o papel na mão — e-mail resolve o
+   * arquivo, não resolve a fila. Só existe no tablet, e só quando há impressora
+   * escolhida para aquele balcão.
+   */
+  const imprimir = useMutation({
+    mutationFn: async (saleId: string) => {
+      const dados = await apiFetch<DadosDoComprovante>(`/api/v1/sales/${saleId}/print-data`);
+      await imprimirBytes(montarComprovante(dados));
+    },
+    onSuccess: () => setEnvio("Comprovante impresso."),
+    onError: (caught) => setError(explicarFalha(caught)),
+  });
+
   const enviarEmail = useMutation({
     mutationFn: (saleId: string) =>
       apiFetch<{ enviado: boolean }>(`/api/v1/sales/${saleId}/receipt`, { method: "POST" }),
@@ -216,6 +241,14 @@ export function PosPage() {
 
   function onSaleCompleted(sale: { id: string; code: string; totalAmount: string }) {
     setLastSale({ id: sale.id, code: sale.code, total: sale.totalAmount });
+
+    // O papel sai sozinho quando o balcão tem impressora. Esperar o vendedor
+    // tocar "Imprimir" seria um toque a mais numa fila — e o comprovante que
+    // depende de alguém lembrar é o comprovante que não sai.
+    void lerImpressoraEscolhida().then((escolhida) => {
+      if (escolhida) imprimir.mutate(sale.id);
+    });
+
     setEnvio(null);
     setCart([]);
     setCustomer(null);
@@ -279,6 +312,18 @@ export function PosPage() {
                 >
                   <MessageCircle className="h-5 w-5" aria-hidden />
                   WhatsApp
+                </Button>
+              )}
+
+              {temImpressora() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={imprimir.isPending}
+                  onClick={() => imprimir.mutate(lastSale.id)}
+                >
+                  <Printer className="h-5 w-5" aria-hidden />
+                  {imprimir.isPending ? "Imprimindo..." : "Imprimir"}
                 </Button>
               )}
 
