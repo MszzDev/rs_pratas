@@ -26,6 +26,22 @@ import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
  * não vinculado não abre login, não vê preço e não vende. O pior que um
  * estranho consegue é aparecer numa fila que o dono ignora.
  */
+/**
+ * Carimba a hora em que o aparelho falou com o servidor.
+ *
+ * O tablet vinculado se anuncia a cada trinta segundos, e é esse carimbo que
+ * responde "o balcão da Vila Matilde está ligado?" — a pergunta que o dono faz
+ * do outro lado da cidade antes de telefonar para alguém. Sem ele, o campo
+ * mostrava a hora do último pareamento, que pode ser de meses atrás, e dizia
+ * exatamente nada sobre agora.
+ */
+async function marcarVisto(deviceId: string): Promise<void> {
+  await prisma.device.update({
+    where: { id: deviceId },
+    data: { lastSeenAt: new Date() },
+  });
+}
+
 export async function announceDevice(input: {
   hardwareId: string;
   model?: string | undefined;
@@ -69,6 +85,8 @@ export async function announceDevice(input: {
       data: { deviceId: jaCadastrado.id },
     });
 
+    await marcarVisto(jaCadastrado.id);
+
     return {
       vinculado: true as const,
       deviceId: jaCadastrado.id,
@@ -94,6 +112,8 @@ export async function announceDevice(input: {
 
     return { vinculado: false as const, deviceId: null, storeName: null, deviceName: null };
   }
+
+  await marcarVisto(device.id);
 
   return {
     vinculado: true as const,

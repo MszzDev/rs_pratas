@@ -38,6 +38,31 @@ interface Device {
   lastSeenAt: string | null;
 }
 
+/**
+ * Há quanto tempo o tablet falou com o servidor.
+ *
+ * O aparelho vinculado se anuncia a cada trinta segundos. Então "visto agora"
+ * quer dizer ligado agora, e qualquer coisa acima de poucos minutos quer dizer
+ * que aquele balcão está sem sistema — que é o que o dono precisa saber antes
+ * de telefonar para a loja perguntando por que ninguém vendeu hoje.
+ */
+function vistoEmTexto(iso: string | null): { texto: string; ligado: boolean } {
+  if (!iso) return { texto: "nunca se conectou", ligado: false };
+
+  const minutos = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+
+  if (minutos < 2) return { texto: "ligado agora", ligado: true };
+  if (minutos < 60) return { texto: `sem sinal há ${minutos} min`, ligado: false };
+
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) {
+    return { texto: horas === 1 ? "sem sinal há 1 hora" : `sem sinal há ${horas} horas`, ligado: false };
+  }
+
+  const dias = Math.floor(horas / 24);
+  return { texto: dias === 1 ? "sem sinal há 1 dia" : `sem sinal há ${dias} dias`, ligado: false };
+}
+
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "Aguardando pareamento",
   ACTIVE: "Ativo",
@@ -75,6 +100,9 @@ export function DevicesPage() {
     queryKey: ["devices", selectedStoreId],
     queryFn: () => apiFetch<Device[]>(`/api/v1/devices?storeId=${selectedStoreId}`),
     enabled: Boolean(selectedStoreId),
+    // Sem isto, "ligado agora" congelaria no instante em que a tela abriu — e
+    // um tablet que caiu continuaria verde enquanto o dono olha para ele.
+    refetchInterval: 30_000,
   });
 
   function handleError(caught: unknown, fallback: string) {
@@ -316,6 +344,27 @@ export function DevicesPage() {
                       {STATUS_LABELS[device.status] ?? device.status}
                       {device.model && ` — ${device.model}`}
                     </p>
+
+                    {device.status === "ACTIVE" &&
+                      (() => {
+                        const visto = vistoEmTexto(device.lastSeenAt);
+
+                        return (
+                          <p
+                            className={`mt-0.5 flex items-center gap-1.5 text-sm ${
+                              visto.ligado ? "text-success" : "text-text-muted"
+                            }`}
+                          >
+                            <span
+                              aria-hidden
+                              className={`inline-block h-2 w-2 rounded-full ${
+                                visto.ligado ? "bg-success" : "bg-text-muted"
+                              }`}
+                            />
+                            {visto.texto}
+                          </p>
+                        );
+                      })()}
                   </div>
 
                   {isOwner && device.status === "ACTIVE" && (
