@@ -41,6 +41,7 @@ import { CustomerReturnedPage } from "@/features/aftersales/CustomerReturnedPage
 import { AfterSalesPage } from "./features/aftersales/AfterSalesPage";
 import { ServiceOrdersPage } from "@/features/aftersales/ServiceOrdersPage";
 import { IntegrationsPage } from "@/features/settings/IntegrationsPage";
+import { ProfilePage } from "@/features/profile/ProfilePage";
 import { MyDayPage } from "@/features/dashboard/MyDayPage";
 import { PainelPage } from "./features/dashboard/PainelPage";
 
@@ -250,6 +251,18 @@ function AppRoutes() {
         a permissão é ser você mesma, e o servidor só devolve o dado de quem
         pediu.
       */}
+      {/*
+        O perfil de cada funcionário: foto, senha e como ele quer ver o
+        sistema. Sem exigência de perfil — é a própria pessoa.
+      */}
+      <Route
+        path="/meu-perfil"
+        element={
+          <RequireAuth>
+            <ProfilePage />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/meu-dia"
         element={

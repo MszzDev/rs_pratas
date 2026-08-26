@@ -14,6 +14,7 @@ import { authPlugin } from "./plugins/auth.plugin.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { twoFactorRoutes } from "./modules/auth/two-factor.routes.js";
 import { deviceRoutes } from "./modules/devices/devices.routes.js";
+import { profileRoutes } from "./modules/users/profile.routes.js";
 import { userRoutes } from "./modules/users/users.routes.js";
 import { storeRoutes } from "./modules/stores/stores.routes.js";
 import { timeClockRoutes } from "./modules/timeclock/timeclock.routes.js";
@@ -126,6 +127,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(twoFactorRoutes, { prefix: "/api/v1/auth" });
   await app.register(deviceRoutes, { prefix: "/api/v1" });
   await app.register(userRoutes, { prefix: "/api/v1" });
+  await app.register(profileRoutes, { prefix: "/api/v1" });
   await app.register(storeRoutes, { prefix: "/api/v1" });
   await app.register(timeClockRoutes, { prefix: "/api/v1" });
   await app.register(settingsRoutes, { prefix: "/api/v1" });

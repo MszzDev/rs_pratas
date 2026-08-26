@@ -1,4 +1,4 @@
-import type { DeviceSession, User } from "@prisma/client";
+import type { DeviceSession, User, UserTheme } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
 import type { LoginPasswordInput } from "@rs-pratas/shared";
 import { prisma } from "../../db/prisma.js";
@@ -65,6 +65,17 @@ export interface IssuedSession {
      * autorização — quem decide continua sendo o servidor, a cada requisição.
      */
     permissions: string[];
+    /**
+     * Como esta pessoa quer ver o sistema: tema, tamanho da letra, contraste
+     * e movimento. Viaja junto da sessão porque precisa valer antes de a
+     * primeira tela pintar.
+     */
+    preferences: {
+      theme: UserTheme;
+      fontScale: number;
+      highContrast: boolean;
+      reduceMotion: boolean;
+    };
   };
 }
 
@@ -220,6 +231,7 @@ export async function issueSessionForUser(params: {
       pinExpiresInDays: diasParaAviso(user),
       twoFactorPending: await isTwoFactorPending(user),
       permissions: [...(await getEffectivePermissions(user.id))],
+      preferences: preferenciasDe(user),
     },
   };
 }
@@ -567,7 +579,30 @@ export async function refreshSession(params: {
       pinExpiresInDays: diasParaAviso(session.user),
       twoFactorPending: await isTwoFactorPending(session.user),
       permissions: [...(await getEffectivePermissions(session.user.id))],
+      preferences: preferenciasDe(session.user),
     },
+  };
+}
+
+/**
+ * As preferências de tela que viajam junto do login.
+ *
+ * Vão no mesmo pacote da sessão, e não numa chamada separada, porque o tema
+ * precisa estar aplicado antes de a primeira tela pintar. Buscado depois, quem
+ * escolheu a tela escura veria um lampejo branco a cada entrada — pequeno, e
+ * exatamente o tipo de coisa que faz alguém desistir do ajuste.
+ */
+function preferenciasDe(user: {
+  theme: UserTheme;
+  fontScale: number;
+  highContrast: boolean;
+  reduceMotion: boolean;
+}) {
+  return {
+    theme: user.theme,
+    fontScale: user.fontScale,
+    highContrast: user.highContrast,
+    reduceMotion: user.reduceMotion,
   };
 }
 

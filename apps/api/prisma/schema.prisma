@@ -18,6 +18,13 @@ enum UserRole {
   DESENVOLVEDOR
 }
 
+/// Como o funcionário prefere ver o sistema. SISTEMA segue o aparelho.
+enum UserTheme {
+  CLARO
+  ESCURO
+  SISTEMA
+}
+
 enum UserStatus {
   PENDING_FIRST_ACCESS
   ACTIVE
@@ -343,6 +350,25 @@ model User {
   pinLockedUntil         DateTime?
 
   lastLoginAt DateTime?
+
+  /// Foto do funcionário. Guardada no banco como todo arquivo do sistema —
+  /// disco de servidor some a cada publicação.
+  avatarStorageKey String?
+
+  /// Como esta pessoa quer ver o sistema.
+  ///
+  /// Fica no cadastro, e não no aparelho, porque a preferência é DELA: quem
+  /// prefere a tela escura prefere em qualquer tablet da rede, e o balcão é
+  /// compartilhado. Guardar no aparelho faria a escolha de uma vendedora valer
+  /// para a colega do turno seguinte.
+  theme        UserTheme @default(SISTEMA)
+  /// Tamanho da letra em porcentagem: 100 é o padrão, 130 é a letra grande.
+  fontScale    Int       @default(100)
+  /// Reforça o contraste do texto secundário e das bordas. Serve para quem
+  /// enxerga pouco e para o quiosque com sol batendo na tela.
+  highContrast Boolean   @default(false)
+  /// Desliga as animações. Para quem sente enjoo e para os tablets lentos.
+  reduceMotion Boolean   @default(false)
 
   createdById  String?
   createdBy    User?   @relation("UserCreatedBy", fields: [createdById], references: [id])

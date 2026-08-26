@@ -3,6 +3,11 @@ import type { ReactNode } from "react";
 import type { AuthenticatedUser, LoginResponse } from "@rs-pratas/shared";
 import { apiFetch, clearSession, setAccessToken } from "@/lib/api-client";
 import { readRefreshToken, saveRefreshToken } from "@/lib/secure-storage";
+import {
+  aplicarPreferencias,
+  guardarPreferencias,
+  PADRAO,
+} from "@/features/profile/apply-preferences";
 
 interface AuthContextValue {
   user: AuthenticatedUser | null;
@@ -46,6 +51,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(session.accessToken);
     await saveRefreshToken(session.refreshToken);
     setUser(session.user);
+
+    // As preferências são da PESSOA, não do aparelho: quem prefere a tela
+    // escura prefere em qualquer tablet da rede, e o balcão troca de gente
+    // várias vezes por dia. Aplicar no login é o que faz a escolha viajar
+    // junto com a matrícula.
+    aplicarPreferencias(session.user.preferences);
+    guardarPreferencias(session.user.preferences);
+  }, []);
+
+  /**
+   * Ao sair, a tela volta ao padrão da casa.
+   *
+   * Sem isto, o tablet ficaria escuro para a próxima pessoa só porque a
+   * anterior gostava assim — e a tela de login não pertence a ninguém.
+   */
+  const limparPreferencias = useCallback(() => {
+    aplicarPreferencias(PADRAO);
+    guardarPreferencias(PADRAO);
   }, []);
 
   /**
@@ -121,7 +144,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     await clearSession();
     setUser(null);
-  }, []);
+    limparPreferencias();
+  }, [limparPreferencias]);
 
   const can = useCallback(
     (permission: string) => user?.permissions.includes(permission) ?? false,

@@ -56,6 +56,19 @@ export const authenticatedUserSchema = z.object({
   twoFactorPending: z.boolean(),
   /** Só para a tela esconder o que este usuário não pode fazer. */
   permissions: z.array(z.string()),
+  /**
+   * Como esta pessoa quer ver o sistema.
+   *
+   * Vem junto do login, e não de uma chamada depois, porque o tema precisa
+   * valer ANTES da primeira tela aparecer. Buscado em separado, quem escolheu
+   * a tela escura veria um lampejo branco a cada entrada.
+   */
+  preferences: z.object({
+    theme: z.enum(["CLARO", "ESCURO", "SISTEMA"]),
+    fontScale: z.number().int(),
+    highContrast: z.boolean(),
+    reduceMotion: z.boolean(),
+  }),
 });
 
 export const loginResponseSchema = z.object({

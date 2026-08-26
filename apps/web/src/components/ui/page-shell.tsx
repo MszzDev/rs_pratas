@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { API_BASE_URL } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-context";
 import { Logo, LogoMark } from "@/components/ui/logo";
 import { StatusStrip } from "@/components/ui/status-strip";
@@ -151,6 +152,7 @@ const SUBPAGINAS: Record<string, Atalho[]> = {
   ],
   "/ponto": [
     { to: "/fechar-o-dia", label: "Fechar o dia", icon: Check },
+    { to: "/meu-perfil", label: "Meu perfil", icon: UserRound },
     { to: "/espelho-de-ponto", label: "Meu espelho", icon: CalendarClock },
     { to: "/meus-documentos", label: "Meus documentos", icon: FileText },
     { to: "/sessoes", label: "Meus acessos", icon: MonitorSmartphone },
@@ -288,8 +290,25 @@ export function PageShell({
         onLogoTap={quiosque.registrarToque}
       />
 
+      {/*
+        Pular para o conteúdo.
+        Invisível até receber o foco do teclado. Sem ele, quem navega por Tab —
+        por deficiência motora, ou só porque o balcão é mais rápido sem mouse —
+        atravessa o menu inteiro a cada tela antes de chegar no que interessa.
+      */}
+      <a
+        href="#conteudo"
+        className="sr-only rounded-md bg-rose-primary px-4 py-2 font-semibold text-white focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+      >
+        Pular para o conteúdo
+      </a>
+
       <div className="flex-1 lg:min-w-0">
-        <main className="mx-auto w-full max-w-[82rem] px-4 py-6 md:px-6 md:py-8">
+        <main
+          id="conteudo"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-[82rem] px-4 py-6 focus:outline-none md:px-6 md:py-8"
+        >
           <PinExpiryNotice />
 
           {/*
@@ -394,19 +413,61 @@ function initialsOf(name: string | undefined): string {
  * Num tablet compartilhado, saber de cara em qual conta se está evita a venda
  * lançada no nome de quem saiu para o almoço.
  */
+/**
+ * O retrato de quem está logado.
+ *
+ * Mostra a foto quando existe e as iniciais quando não existe — e cai para as
+ * iniciais também quando a foto falha em carregar, que é o caso de um tablet
+ * momentaneamente sem rede. Um quadrado quebrado no canto do menu ficaria ali
+ * o expediente inteiro.
+ */
+function Retrato({ id, nome }: { id?: string | undefined; nome?: string | undefined }) {
+  const [semFoto, setSemFoto] = useState(false);
+
+  if (!id || semFoto) {
+    return (
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-soft text-xs font-semibold text-rose-dark">
+        {initialsOf(nome)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={`${API_BASE_URL}/api/v1/users/${id}/photo`}
+      alt=""
+      aria-hidden
+      className="h-9 w-9 shrink-0 rounded-full border border-border object-cover"
+      onError={() => setSemFoto(true)}
+    />
+  );
+}
+
 function UserFooter({
   user,
   onLogout,
 }: {
-  user: { name: string; role: string } | null;
+  user: { id: string; name: string; role: string } | null;
   onLogout: () => void;
 }) {
   return (
     <div className="border-t border-border/70 p-3">
-      <div className="mb-2 flex items-center gap-3 rounded-md px-2 py-2">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-soft text-xs font-semibold text-rose-dark">
-          {initialsOf(user?.name)}
-        </div>
+      {/*
+        O próprio nome é onde a pessoa procura pelas próprias coisas — foto,
+        senha, tamanho da letra. Escondido no menu, o perfil não seria achado
+        por quem mais precisa dele.
+      */}
+      <NavLink
+        to="/meu-perfil"
+        className={({ isActive }) =>
+          cn(
+            "mb-2 flex items-center gap-3 rounded-md px-2 py-2 transition-colors",
+            isActive ? "bg-rose-soft" : "hover:bg-background-secondary",
+          )
+        }
+      >
+        <Retrato id={user?.id} nome={user?.name} />
+
         <div className="min-w-0 leading-tight">
           <p className="truncate text-sm font-semibold text-text-primary">
             {user?.name ?? "Usuário"}
@@ -415,7 +476,7 @@ function UserFooter({
             {ROLE_LABELS[user?.role ?? ""] ?? user?.role}
           </p>
         </div>
-      </div>
+      </NavLink>
 
       <button
         type="button"
@@ -471,7 +532,7 @@ function Sidebar({
   onLogoTap,
 }: {
   items: NavItem[];
-  user: { name: string; role: string } | null;
+  user: { id: string; name: string; role: string } | null;
   onLogout: () => void;
   /** Conta os toques na logo — cinco abrem a saída do quiosque. */
   onLogoTap: () => void;
@@ -509,7 +570,7 @@ function MobileBar({
   open: boolean;
   onToggle: () => void;
   items: NavItem[];
-  user: { name: string; role: string } | null;
+  user: { id: string; name: string; role: string } | null;
   onLogout: () => void;
   /** Conta os toques na logo — cinco abrem a saída do quiosque. */
   onLogoTap: () => void;

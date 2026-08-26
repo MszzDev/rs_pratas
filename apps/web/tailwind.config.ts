@@ -8,10 +8,10 @@ export default {
     extend: {
       colors: {
         background: {
-          DEFAULT: "#FFFFFF",
-          secondary: "#F8F7F7",
+          DEFAULT: "var(--cor-background)",
+          secondary: "var(--cor-background-secondary)",
         },
-        surface: "#FFFFFF",
+        surface: "var(--cor-surface)",
         /**
          * O rosa do fundo da logo, medido do proprio arquivo.
          *
@@ -20,18 +20,18 @@ export default {
          * carrega, tambem apazigua o branco da barra lateral sem inventar um
          * tom novo.
          */
-        brand: "#FDF4F9",
+        brand: "var(--cor-brand)",
         rose: {
-          primary: "#9B4F53",
-          secondary: "#A85D62",
-          dark: "#7C3D41",
-          light: "#C98F93",
-          soft: "#F4E8E9",
+          primary: "var(--cor-rose-primary)",
+          secondary: "var(--cor-rose-secondary)",
+          dark: "var(--cor-rose-dark)",
+          light: "var(--cor-rose-light)",
+          soft: "var(--cor-rose-soft)",
         },
         text: {
-          primary: "#262323",
-          secondary: "#6F6868",
-          muted: "#A6A0A0",
+          primary: "var(--cor-text-primary)",
+          secondary: "var(--cor-text-secondary)",
+          muted: "var(--cor-text-muted)",
         },
         /**
          * Acentos por área do sistema.
@@ -46,17 +46,17 @@ export default {
          * item ativo do menu e a logo. Os acentos identificam a área, não
          * competem com ele.
          */
-        gold: { DEFAULT: "#B8873B", soft: "#FBF1DF", dark: "#8A6423" },
-        sage: { DEFAULT: "#4F7D63", soft: "#E6F0E9", dark: "#3A5F4A" },
-        ocean: { DEFAULT: "#3F6C8F", soft: "#E4EDF4", dark: "#2E5069" },
-        plum: { DEFAULT: "#7A5080", soft: "#F0E7F1", dark: "#5C3B61" },
-        clay: { DEFAULT: "#A45D45", soft: "#F7E9E3", dark: "#7C4432" },
+        gold: { DEFAULT: "var(--cor-gold)", soft: "var(--cor-gold-soft)", dark: "var(--cor-gold-dark)" },
+        sage: { DEFAULT: "var(--cor-sage)", soft: "var(--cor-sage-soft)", dark: "var(--cor-sage-dark)" },
+        ocean: { DEFAULT: "var(--cor-ocean)", soft: "var(--cor-ocean-soft)", dark: "var(--cor-ocean-dark)" },
+        plum: { DEFAULT: "var(--cor-plum)", soft: "var(--cor-plum-soft)", dark: "var(--cor-plum-dark)" },
+        clay: { DEFAULT: "var(--cor-clay)", soft: "var(--cor-clay-soft)", dark: "var(--cor-clay-dark)" },
 
-        border: "#E7DFE0",
-        success: "#2E7D5B",
-        warning: "#C88A2C",
-        danger: "#C74747",
-        info: "#4176A8",
+        border: "var(--cor-border)",
+        success: "var(--cor-success)",
+        warning: "var(--cor-warning)",
+        danger: "var(--cor-danger)",
+        info: "var(--cor-info)",
       },
       fontFamily: {
         sans: ["Inter", "Manrope", "Plus Jakarta Sans", "sans-serif"],

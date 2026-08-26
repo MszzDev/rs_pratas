@@ -2,6 +2,166 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =====================================================================
+   AS CORES DO SISTEMA
+   =====================================================================
+
+   Ficam aqui, e nao no arquivo do Tailwind, para poderem mudar em tempo de
+   execucao. O Tailwind aponta para estas variaveis; entao `bg-surface`,
+   escrito em cinquenta telas, passa a seguir o tema sem que nenhuma delas
+   precise saber que existe um tema.
+
+   O modo escuro nao e a paleta clara invertida. Branco puro sobre preto puro
+   vibra e cansa a vista de quem passa oito horas na frente do tablet: o fundo
+   e um cinza quente, o texto e um branco quebrado, e o vinho da marca clareia
+   um pouco para continuar legivel sobre o escuro. */
+
+:root {
+  --cor-background: #FFFFFF;
+  --cor-background-secondary: #F8F7F7;
+  --cor-surface: #FFFFFF;
+  --cor-brand: #FDF4F9;
+
+  --cor-rose-primary: #9B4F53;
+  --cor-rose-secondary: #A85D62;
+  --cor-rose-dark: #7C3D41;
+  --cor-rose-light: #C98F93;
+  --cor-rose-soft: #F4E8E9;
+
+  --cor-text-primary: #262323;
+  --cor-text-secondary: #6F6868;
+  --cor-text-muted: #A6A0A0;
+
+  --cor-gold: #B8873B;
+  --cor-gold-soft: #FBF1DF;
+  --cor-gold-dark: #8A6423;
+  --cor-sage: #4F7D63;
+  --cor-sage-soft: #E6F0E9;
+  --cor-sage-dark: #3A5F4A;
+  --cor-ocean: #3F6C8F;
+  --cor-ocean-soft: #E4EDF4;
+  --cor-ocean-dark: #2E5069;
+  --cor-plum: #7A5080;
+  --cor-plum-soft: #F0E7F1;
+  --cor-plum-dark: #5C3B61;
+  --cor-clay: #A45D45;
+  --cor-clay-soft: #F7E9E3;
+  --cor-clay-dark: #7C4432;
+
+  --cor-border: #E7DFE0;
+  --cor-success: #2E7D5B;
+  --cor-warning: #C88A2C;
+  --cor-danger: #C74747;
+  --cor-info: #4176A8;
+
+  /* Base do tamanho da letra. A acessibilidade multiplica isto. */
+  --escala-texto: 1;
+}
+
+.dark {
+  --cor-background: #1A1717;
+  --cor-background-secondary: #221E1E;
+  --cor-surface: #221E1E;
+  --cor-brand: #2A2224;
+
+  /* O vinho da marca clareia: o tom original some no fundo escuro. */
+  --cor-rose-primary: #C97F84;
+  --cor-rose-secondary: #B96F74;
+  --cor-rose-dark: #A85D62;
+  --cor-rose-light: #DBA5A9;
+  --cor-rose-soft: #3A2A2C;
+
+  --cor-text-primary: #F0EBEB;
+  --cor-text-secondary: #BDB4B4;
+  --cor-text-muted: #8A8080;
+
+  /* Os acentos ficam mais claros e os "soft" viram fundos escuros do mesmo
+     matiz — senao a etiqueta colorida vira um bloco aceso na tela. */
+  --cor-gold: #D2A45C;
+  --cor-gold-soft: #33291A;
+  --cor-gold-dark: #E0B876;
+  --cor-sage: #7BAE90;
+  --cor-sage-soft: #1E2E25;
+  --cor-sage-dark: #93C2A6;
+  --cor-ocean: #7BA5C6;
+  --cor-ocean-soft: #1C2833;
+  --cor-ocean-dark: #97BBD8;
+  --cor-plum: #B58ABA;
+  --cor-plum-soft: #2A2130;
+  --cor-plum-dark: #C9A4CD;
+  --cor-clay: #CE8E76;
+  --cor-clay-soft: #33231D;
+  --cor-clay-dark: #DFA88F;
+
+  --cor-border: #3A3333;
+  --cor-success: #5FB08A;
+  --cor-warning: #DDA84F;
+  --cor-danger: #E07373;
+  --cor-info: #6E9FCF;
+}
+
+/* =====================================================================
+   ACESSIBILIDADE
+   =====================================================================
+
+   Tres ajustes, e cada um resolve uma queixa concreta de quem trabalha oito
+   horas no balcao — nao sao opcoes de vitrine. */
+
+/* Tamanho da letra. Multiplica a base do documento, entao TODA medida em rem
+   acompanha: texto, espacamento, altura de botao. Aumentar so a fonte
+   deixaria a letra grande espremida numa caixa do mesmo tamanho. */
+html {
+  font-size: calc(100% * var(--escala-texto));
+}
+
+/* Alto contraste. Para quem enxerga pouco, e para o quiosque com sol batendo
+   na tela — situacao em que o cinza claro sobre branco simplesmente some. */
+.alto-contraste {
+  --cor-text-secondary: var(--cor-text-primary);
+  --cor-text-muted: #4A4444;
+  --cor-border: #6B6161;
+}
+
+.dark.alto-contraste {
+  --cor-text-secondary: var(--cor-text-primary);
+  --cor-text-muted: #D8D2D2;
+  --cor-border: #8A8080;
+}
+
+/* Menos movimento. Vale para quem sente enjoo com animacao e para os tablets
+   mais lentos, onde a transicao vira travada em vez de suave. Respeita
+   tambem a preferencia do proprio sistema, sem ninguem precisar marcar nada. */
+.menos-movimento *,
+.menos-movimento *::before,
+.menos-movimento *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@layer base {
+  /* O foco do teclado precisa ser visivel SEMPRE.
+     Quem navega por Tab — por deficiencia motora, ou so porque o balcao e
+     mais rapido sem mouse — fica perdido sem isto. O contorno usa a cor da
+     marca e tem folga para nao encostar no texto. */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 3px solid var(--cor-rose-primary);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+}
+
 @layer base {
   html,
   body,
