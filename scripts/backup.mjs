@@ -16,8 +16,16 @@
  * não backup.
  */
 import { execFileSync, execSync } from "node:child_process";
-import { createReadStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
-import { createGunzip } from "node:zlib";
+import {
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { createGunzip, gzipSync } from "node:zlib";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
@@ -62,6 +70,19 @@ function comoRodar() {
   process.exit(1);
 }
 
+/**
+ * A versão do servidor, quando ele reclama de incompatibilidade.
+ *
+ * O pg_dump se recusa a copiar um banco mais novo que ele — e com razão: o
+ * formato muda, e um dump truncado só se descobre inútil no dia em que era a
+ * única cópia. A mensagem de recusa diz a versão do servidor, e é dela que
+ * sai a imagem certa para tentar de novo.
+ */
+function versaoDoServidor(erro) {
+  const texto = `${erro?.stderr ?? ""}`;
+  return /server version: (\d+)/.exec(texto)?.[1] ?? null;
+}
+
 function gerar(url, destino) {
   const modo = comoRodar();
 
@@ -70,18 +91,48 @@ function gerar(url, destino) {
   // restauração falha em cada GRANT que menciona uma role inexistente.
   const argumentos = ["--no-owner", "--no-acl", "--format=plain", url];
 
+  const noDocker = (imagem) =>
+    execFileSync(
+      "docker",
+      ["run", "--rm", "-i", "--network=host", imagem, "pg_dump", ...argumentos],
+      { maxBuffer: 1024 * 1024 * 512 },
+    );
+
   console.log(`  gerando com pg_dump (${modo})...`);
 
-  const saida =
-    modo === "nativo"
-      ? execFileSync("pg_dump", argumentos, { maxBuffer: 1024 * 1024 * 512 })
-      : execFileSync(
-          "docker",
-          ["run", "--rm", "-i", "--network=host", IMAGEM, "pg_dump", ...argumentos],
-          { maxBuffer: 1024 * 1024 * 512 },
-        );
+  let saida;
 
-  execSync(`gzip -c > "${destino}"`, { input: saida });
+  try {
+    saida =
+      modo === "nativo"
+        ? execFileSync("pg_dump", argumentos, { maxBuffer: 1024 * 1024 * 512 })
+        : noDocker(IMAGEM);
+  } catch (erro) {
+    const versao = versaoDoServidor(erro);
+
+    if (!versao) throw erro;
+
+    // O servidor é mais novo que o pg_dump daqui. Em vez de falhar pedindo
+    // que alguém atualize o Postgres da máquina, busca a ferramenta na
+    // versão que o servidor pede — o backup não pode depender do que está
+    // instalado no computador de quem o roda.
+    if (!existe("docker")) {
+      console.error(
+        `O banco é PostgreSQL ${versao} e o pg_dump desta máquina é mais antigo.\n` +
+          "Instale o Docker Desktop (o script busca a versão certa sozinho) ou\n" +
+          `atualize as ferramentas do PostgreSQL para a versão ${versao}.`,
+      );
+      process.exit(1);
+    }
+
+    console.log(`  servidor é PostgreSQL ${versao} — refazendo com a ferramenta dessa versão...`);
+    saida = noDocker(`postgres:${versao}-alpine`);
+  }
+
+  // Compressão pelo próprio Node, e não pelo `gzip` do sistema: no Windows
+  // esse comando não existe fora do Git Bash, e o backup falhava DEPOIS de
+  // copiar o banco inteiro — o trabalho todo perdido no último passo.
+  writeFileSync(destino, gzipSync(saida, { level: 9 }));
 }
 
 /**
