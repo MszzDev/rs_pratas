@@ -27,6 +27,8 @@ export default {
           dark: "var(--cor-rose-dark)",
           light: "var(--cor-rose-light)",
           soft: "var(--cor-rose-soft)",
+          /** O texto que fica EM CIMA do vinho — branco no claro, escuro no escuro. */
+          contraste: "var(--cor-sobre-rosa)",
         },
         text: {
           primary: "var(--cor-text-primary)",
@@ -52,6 +54,14 @@ export default {
         plum: { DEFAULT: "var(--cor-plum)", soft: "var(--cor-plum-soft)", dark: "var(--cor-plum-dark)" },
         clay: { DEFAULT: "var(--cor-clay)", soft: "var(--cor-clay-soft)", dark: "var(--cor-clay-dark)" },
 
+        /**
+         * O texto que fica EM CIMA de um acento ou de um aviso.
+         *
+         * Branco no claro; escuro no escuro, onde os acentos clareiam para
+         * serem vistos e branco sobre eles deixa de ter contraste. Medido: o
+         * botão "Bater ponto" dava 2,61:1 antes disto.
+         */
+        contraste: "var(--cor-sobre-acento)",
         border: "var(--cor-border)",
         success: "var(--cor-success)",
         warning: "var(--cor-warning)",

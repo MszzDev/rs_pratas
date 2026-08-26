@@ -54,7 +54,7 @@ export function LoginPage() {
         A marca ocupa a lateral em tela grande e some no celular, onde ela
         empurraria o formulário para fora da dobra.
       */}
-      <section className="hidden w-2/5 flex-col justify-between bg-rose-primary p-10 text-white lg:flex">
+      <section className="hidden w-2/5 flex-col justify-between bg-rose-primary p-10 text-rose-contraste lg:flex">
         <LogoMark className="h-28 w-28 rounded-full bg-brand p-3" />
 
         <div>

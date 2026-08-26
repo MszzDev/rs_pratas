@@ -121,7 +121,7 @@ export function PinLoginPage() {
         direita, na mão de quem digita. Numa tela em pé, a marca vira um
         cabeçalho curto — a mesma composição, sem sobrar branco no meio.
       */}
-      <section className="hidden w-2/5 flex-col justify-between bg-rose-primary p-10 text-white lg:flex">
+      <section className="hidden w-2/5 flex-col justify-between bg-rose-primary p-10 text-rose-contraste lg:flex">
         <LogoMark className="h-28 w-28 rounded-full bg-brand p-3" />
 
         <div>

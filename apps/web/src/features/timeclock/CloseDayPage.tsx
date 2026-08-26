@@ -159,8 +159,8 @@ export function CloseDayPage() {
               <span
                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg font-semibold ${
                   caixaResolvido
-                    ? "bg-success text-white"
-                    : "bg-gold-dark text-white"
+                    ? "bg-success text-contraste"
+                    : "bg-gold-dark text-contraste"
                 }`}
               >
                 {caixaResolvido ? <Check className="h-5 w-5" aria-hidden /> : "1"}
@@ -218,7 +218,7 @@ export function CloseDayPage() {
             <div className="flex items-start gap-4">
               <span
                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg font-semibold ${
-                  jaSaiu || pronto ? "bg-success text-white" : "bg-gold-dark text-white"
+                  jaSaiu || pronto ? "bg-success text-contraste" : "bg-gold-dark text-contraste"
                 }`}
               >
                 {jaSaiu || pronto ? <Check className="h-5 w-5" aria-hidden /> : "2"}

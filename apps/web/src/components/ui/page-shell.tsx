@@ -298,7 +298,7 @@ export function PageShell({
       */}
       <a
         href="#conteudo"
-        className="sr-only rounded-md bg-rose-primary px-4 py-2 font-semibold text-white focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+        className="sr-only rounded-md bg-rose-primary px-4 py-2 font-semibold text-rose-contraste focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
       >
         Pular para o conteúdo
       </a>
@@ -324,7 +324,7 @@ export function PageShell({
               </p>
               <NavLink
                 to="/ponto"
-                className="flex min-h-[40px] items-center rounded-md bg-ocean px-4 font-medium text-white"
+                className="flex min-h-[40px] items-center rounded-md bg-ocean px-4 font-medium text-contraste"
               >
                 Bater ponto
               </NavLink>

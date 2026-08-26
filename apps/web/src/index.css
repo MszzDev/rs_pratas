@@ -17,6 +17,21 @@
    um pouco para continuar legivel sobre o escuro. */
 
 :root {
+  /**
+   * Diz ao navegador que o tema é nosso.
+   *
+   * Sem esta declaração, o Chrome e o WebView do Android aplicam o
+   * escurecimento automático deles por cima da página quando o aparelho está
+   * no modo escuro — e o resultado não é o nosso modo escuro: é o nosso modo
+   * claro invertido à força, com contrastes que ninguém escolheu. Medido: o
+   * cabeçalho da tabela de funcionários caía para 1,1:1, praticamente
+   * invisível.
+   *
+   * Isso importa em especial no tablet do balcão, que roda dentro de um
+   * WebView.
+   */
+  color-scheme: light;
+
   --cor-background: #FFFFFF;
   --cor-background-secondary: #F8F7F7;
   --cor-surface: #FFFFFF;
@@ -27,10 +42,37 @@
   --cor-rose-dark: #7C3D41;
   --cor-rose-light: #C98F93;
   --cor-rose-soft: #F4E8E9;
+  /**
+   * A cor do texto QUE FICA EM CIMA do vinho da marca.
+   *
+   * No claro é branco. No escuro o vinho precisa clarear para ser visto, e
+   * branco sobre vinho claro deixa de ter contraste — medido em 3,06:1, abaixo
+   * do mínimo legível. Então lá o texto escurece. Sem este token, todo botão
+   * principal do sistema ficaria ilegível no modo escuro.
+   */
+  --cor-sobre-rosa: #FFFFFF;
+  /** Mesma ideia para os acentos de área e para os avisos. */
+  --cor-sobre-acento: #FFFFFF;
 
   --cor-text-primary: #262323;
-  --cor-text-secondary: #6F6868;
-  --cor-text-muted: #A6A0A0;
+  /**
+   * Escurecido o suficiente para valer sobre os fundos tingidos.
+   *
+   * Sobre o branco, o tom anterior passava. Sobre os avisos e os cartões com
+   * um fundo de cor — que é onde este cinza mais aparece — caía para 4,06:1 a
+   * 4,48:1, logo abaixo do mínimo de 4,5:1. A diferença é sutil na tela e
+   * decisiva para quem enxerga pouco.
+   */
+  --cor-text-secondary: #5E5757;
+  /**
+   * Medido, não escolhido a olho.
+   *
+   * O tom anterior (#A6A0A0) dava 2,39:1 contra o fundo da barra lateral — os
+   * títulos "Dia a dia", "Gestão" e "Sistema" e o relógio do tablet ficavam
+   * abaixo de metade do mínimo legível. Num sistema que fica aberto oito horas
+   * por dia, cinza bonito que não se lê é só cinza.
+   */
+  --cor-text-muted: #6B6565;
 
   --cor-gold: #B8873B;
   --cor-gold-soft: #FBF1DF;
@@ -49,16 +91,26 @@
   --cor-clay-dark: #7C4432;
 
   --cor-border: #E7DFE0;
-  --cor-success: #2E7D5B;
-  --cor-warning: #C88A2C;
-  --cor-danger: #C74747;
-  --cor-info: #4176A8;
+  /**
+   * As cores de aviso servem de TEXTO, não só de enfeite.
+   *
+   * O componente de aviso pinta a mensagem inteira com elas sobre um fundo
+   * clarinho do mesmo matiz. Medido contra esse fundo, o âmbar dava 2,82:1 —
+   * pouco mais da metade do mínimo. Os outros passavam raspando. Escurecidos
+   * o bastante para se lerem, e ainda claros o bastante para se reconhecerem.
+   */
+  --cor-success: #26694C;
+  --cor-warning: #8A5E14;
+  --cor-danger: #B03636;
+  --cor-info: #35618C;
 
   /* Base do tamanho da letra. A acessibilidade multiplica isto. */
   --escala-texto: 1;
 }
 
 .dark {
+  color-scheme: dark;
+
   --cor-background: #1A1717;
   --cor-background-secondary: #221E1E;
   --cor-surface: #221E1E;
@@ -67,13 +119,19 @@
   /* O vinho da marca clareia: o tom original some no fundo escuro. */
   --cor-rose-primary: #C97F84;
   --cor-rose-secondary: #B96F74;
-  --cor-rose-dark: #A85D62;
+  /* Clareia bastante: no escuro este tom é TEXTO sobre o fundo vinho escuro
+     (as iniciais de quem está logado), e não mais um vinho de fundo. */
+  --cor-rose-dark: #E3B0B4;
   --cor-rose-light: #DBA5A9;
   --cor-rose-soft: #3A2A2C;
+  --cor-sobre-rosa: #2A1B1D;
+  --cor-sobre-acento: #1A1717;
 
   --cor-text-primary: #F0EBEB;
-  --cor-text-secondary: #BDB4B4;
-  --cor-text-muted: #8A8080;
+  /* Medidos contra o fundo escuro, e não escolhidos a olho: os tons anteriores
+     davam 4,3:1 e 4,05:1 — abaixo do mínimo de 4,5:1 para texto normal. */
+  --cor-text-secondary: #CFC7C7;
+  --cor-text-muted: #ADA3A3;
 
   /* Os acentos ficam mais claros e os "soft" viram fundos escuros do mesmo
      matiz — senao a etiqueta colorida vira um bloco aceso na tela. */

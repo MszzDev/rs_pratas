@@ -46,7 +46,7 @@ export function PinExpiryNotice() {
       <button
         type="button"
         onClick={() => navigate("/trocar-pin")}
-        className="min-h-[40px] rounded-md bg-rose-primary px-4 font-medium text-white"
+        className="min-h-[40px] rounded-md bg-rose-primary px-4 font-medium text-rose-contraste"
       >
         Trocar agora
       </button>

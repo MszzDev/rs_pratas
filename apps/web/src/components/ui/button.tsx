@@ -12,11 +12,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-rose-primary text-white hover:bg-rose-dark",
+        primary: "bg-rose-primary text-rose-contraste hover:bg-rose-dark",
         secondary: "bg-rose-soft text-rose-dark hover:bg-rose-light hover:text-white",
         outline: "border border-border bg-surface text-text-primary hover:bg-background-secondary",
         ghost: "text-text-secondary hover:bg-background-secondary",
-        danger: "bg-danger text-white hover:opacity-90",
+        danger: "bg-danger text-contraste hover:opacity-90",
       },
       size: {
         md: "min-h-[48px] px-5 text-base",
