@@ -1,5 +1,7 @@
 import type { FastifyRequest } from "fastify";
+import { isWeakPin } from "@rs-pratas/shared";
 import type {
+  FirstAccessFinishInput,
   FirstAccessSetPasswordInput,
   FirstAccessSetPinInput,
   FirstAccessStartInput,
@@ -187,15 +189,6 @@ export async function setFirstAccessPin(params: {
   });
 }
 
-export function isWeakPin(pin: string): boolean {
-  if (/^(\d)\1+$/.test(pin)) return true; // 1111, 000000
-
-  const digits = pin.split("").map(Number) as number[];
-  const ascending = digits.every((digit, index) => index === 0 || digit === digits[index - 1]! + 1);
-  const descending = digits.every((digit, index) => index === 0 || digit === digits[index - 1]! - 1);
-
-  return ascending || descending;
-}
 
 /**
  * Fecha o primeiro acesso: só aqui o usuário vira ACTIVE e ganha uma sessão.
@@ -229,4 +222,83 @@ export async function completeFirstAccess(params: {
   });
 
   return activated;
+}
+
+/**
+ * O primeiro acesso inteiro, numa transação só.
+ *
+ * Substitui `setFirstAccessPassword` + `setFirstAccessPin` + `completeFirstAccess`.
+ *
+ * O motivo é um defeito real, reproduzido: a senha era gravada no passo dela, e
+ * o PIN só vinha depois. Quando o PIN era recusado — e ele É recusado, porque
+ * quase todo mundo escolhe 1234 —, a conta ficava assim: senha do papel já
+ * substituída, status ainda pendente, cadastro incompleto.
+ *
+ * A partir daí não havia porta. O login com a senha do papel dizia "matrícula
+ * ou senha incorretos"; o login com a senha nova mandava para o primeiro
+ * acesso; e o primeiro acesso pedia "a senha temporária", que já não existia. O
+ * dono ficou trancado para fora do próprio sistema, e nada na tela explicava o
+ * porquê.
+ *
+ * Gravar tudo junto elimina o estado intermediário. Não existe mais "meio
+ * cadastrado".
+ */
+export async function finishFirstAccess(params: {
+  userId: string;
+  input: FirstAccessFinishInput;
+  request: FastifyRequest;
+}) {
+  const { userId, input, request } = params;
+  const user = await loadOnboardingUser(userId);
+
+  // A nova senha não pode ser a própria temporária — senão o "troque a senha"
+  // vira formalidade e a credencial entregue em mãos continua valendo.
+  if (user.passwordHash && (await verifySecret(user.passwordHash, input.newPassword))) {
+    throw badRequest(
+      "PASSWORD_SAME_AS_TEMPORARY",
+      "A nova senha precisa ser diferente da senha temporária.",
+    );
+  }
+
+  // O schema compartilhado já recusa PIN previsível, e a tela recusa antes de
+  // enviar. A conferência continua aqui porque o schema é do cliente também, e
+  // o servidor não confia em validação que roda na máquina de outra pessoa.
+  if (isWeakPin(input.pin)) {
+    throw badRequest(
+      "WEAK_PIN",
+      "Escolha um PIN menos previsível — evite números repetidos ou em sequência.",
+    );
+  }
+
+  const [passwordHash, pinHash] = await Promise.all([
+    hashSecret(input.newPassword),
+    hashSecret(input.pin),
+  ]);
+
+  const ativado = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      pinHash,
+      mustChangePassword: false,
+      mustCreatePin: false,
+      pinChangedAt: new Date(),
+      status: "ACTIVE",
+      passwordFailedAttempts: 0,
+      passwordLockedUntil: null,
+      pinFailedAttempts: 0,
+      pinLockedUntil: null,
+    },
+  });
+
+  await audit(request, {
+    action: "FIRST_ACCESS_COMPLETED",
+    result: "SUCCESS",
+    userId: user.id,
+    companyId: user.companyId,
+    userRoleSnapshot: user.role,
+    reason: "senha e PIN definidos no primeiro acesso",
+  });
+
+  return ativado;
 }

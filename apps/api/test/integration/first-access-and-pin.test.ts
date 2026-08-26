@@ -117,6 +117,69 @@ describe("primeiro acesso", () => {
     expect(activated.pinHash).not.toBeNull();
   });
 
+  it("conclui senha e PIN numa chamada só", async () => {
+    const company = await createTestCompany();
+    const user = await createPendingUser(company.id);
+
+    const { onboardingToken } = (await startOnboarding(user.employeeCode)).json();
+
+    const finish = await post("/first-access/finish", {
+      onboardingToken,
+      newPassword: NEW_PASSWORD,
+      confirmPassword: NEW_PASSWORD,
+      pin: GOOD_PIN,
+      confirmPin: GOOD_PIN,
+    });
+    expect(finish.statusCode).toBe(204);
+
+    const ativado = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(ativado.status).toBe("ACTIVE");
+    expect(ativado.mustChangePassword).toBe(false);
+    expect(ativado.mustCreatePin).toBe(false);
+    expect(ativado.pinHash).not.toBeNull();
+  });
+
+  /**
+   * O defeito que trancou o dono para fora do sistema.
+   *
+   * O fluxo antigo gravava a senha nova ANTES de pedir o PIN. Quando o PIN era
+   * recusado — e ele é recusado, porque quase todo mundo escolhe 1234 —, a
+   * senha do papel já tinha sido substituída e o cadastro ficava pela metade.
+   *
+   * A partir dali não havia porta: o login com a senha do papel dizia
+   * "incorretos", o login com a senha nova mandava de volta ao primeiro
+   * acesso, e o primeiro acesso pedia "a senha temporária", que não existia
+   * mais.
+   *
+   * Este teste guarda a propriedade que impede isso de voltar: PIN recusado
+   * não pode deixar rastro nenhum na conta.
+   */
+  it("PIN recusado não invalida a senha temporária nem deixa a conta pela metade", async () => {
+    const company = await createTestCompany();
+    const user = await createPendingUser(company.id);
+
+    const { onboardingToken } = (await startOnboarding(user.employeeCode)).json();
+
+    const recusado = await post("/first-access/finish", {
+      onboardingToken,
+      newPassword: NEW_PASSWORD,
+      confirmPassword: NEW_PASSWORD,
+      pin: "1234",
+      confirmPin: "1234",
+    });
+    expect(recusado.statusCode).toBe(400);
+
+    const intacto = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(intacto.status).toBe("PENDING_FIRST_ACCESS");
+    expect(intacto.mustChangePassword).toBe(true);
+    expect(intacto.mustCreatePin).toBe(true);
+    expect(intacto.pinHash).toBeNull();
+
+    // E o principal: a senha entregue no papel continua abrindo a porta.
+    const denovo = await startOnboarding(user.employeeCode);
+    expect(denovo.statusCode).toBe(200);
+  });
+
   it("recusa senha temporária incorreta", async () => {
     const company = await createTestCompany();
     const user = await createPendingUser(company.id);

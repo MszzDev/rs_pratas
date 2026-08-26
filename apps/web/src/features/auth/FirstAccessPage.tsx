@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
+import { isWeakPin } from "@rs-pratas/shared";
 import { apiFetch, ApiError } from "@/lib/api-client";
 
 type Step = "credentials" | "password" | "pin" | "done";
@@ -31,6 +32,15 @@ export function FirstAccessPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
+
+  /**
+   * "1234" é o primeiro palpite de quem observa o teclado do balcão.
+   *
+   * Conferido enquanto a pessoa digita, e não depois de ela apertar o botão:
+   * era a recusa tardia do servidor que deixava o cadastro pela metade, com a
+   * senha do papel já invalidada e nenhuma tela capaz de explicar isso.
+   */
+  const pinFraco = isWeakPin(pin);
 
   async function run(action: () => Promise<void>) {
     setError(null);
@@ -124,7 +134,7 @@ export function FirstAccessPage() {
               type="password"
               value={tempPassword}
               onChange={(event) => setTempPassword(event.target.value)}
-              hint="A que o dono entregou para você."
+              hint="A que o dono entregou para você. Se você já criou uma senha nova e o cadastro não terminou, use a senha nova aqui."
               required
             />
             <Button type="submit" size="lg" disabled={submitting}>
@@ -138,14 +148,14 @@ export function FirstAccessPage() {
             className="flex flex-col gap-5"
             onSubmit={(event) => {
               event.preventDefault();
-              void run(async () => {
-                await apiFetch("/api/v1/auth/first-access/set-password", {
-                  method: "POST",
-                  body: { onboardingToken, newPassword, confirmPassword },
-                  skipAuthRetry: true,
-                });
-                setStep("pin");
-              });
+              // Não grava nada aqui: senha e PIN vão juntos, no fim.
+              //
+              // Gravar a senha neste passo era o defeito. Quando o PIN era
+              // recusado depois, a senha do papel já tinha sido substituída e
+              // a conta ficava impossível de acessar — a tela seguia pedindo
+              // "a senha temporária", que não existia mais.
+              setError(null);
+              setStep("pin");
             }}
           >
             <Field
@@ -194,14 +204,9 @@ export function FirstAccessPage() {
             onSubmit={(event) => {
               event.preventDefault();
               void run(async () => {
-                await apiFetch("/api/v1/auth/first-access/set-pin", {
+                await apiFetch("/api/v1/auth/first-access/finish", {
                   method: "POST",
-                  body: { onboardingToken, pin, confirmPin },
-                  skipAuthRetry: true,
-                });
-                await apiFetch("/api/v1/auth/first-access/complete", {
-                  method: "POST",
-                  body: { onboardingToken },
+                  body: { onboardingToken, newPassword, confirmPassword, pin, confirmPin },
                   skipAuthRetry: true,
                 });
                 setStep("done");
@@ -217,6 +222,7 @@ export function FirstAccessPage() {
               value={pin}
               onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))}
               hint="4 ou 6 números. Evite repetidos ou em sequência."
+              error={pinFraco ? "Esse PIN é fácil demais de adivinhar. Escolha outro." : undefined}
               required
             />
             <Field
@@ -229,7 +235,11 @@ export function FirstAccessPage() {
               onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, ""))}
               required
             />
-            <Button type="submit" size="lg" disabled={submitting}>
+            <Button
+              type="submit"
+              size="lg"
+              disabled={submitting || pinFraco || pin.length < 4 || pin !== confirmPin}
+            >
               Concluir
             </Button>
           </form>

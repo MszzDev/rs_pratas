@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import {
   firstAccessCompleteSchema,
+  firstAccessFinishSchema,
   firstAccessSetPasswordSchema,
   firstAccessSetPinSchema,
   firstAccessStartSchema,
@@ -24,6 +25,7 @@ import { loginWithPin } from "./pin-login.service.js";
 import {
   ONBOARDING_SCOPE,
   completeFirstAccess,
+  finishFirstAccess,
   onboardingSignOptions,
   setFirstAccessPassword,
   setFirstAccessPin,
@@ -109,6 +111,20 @@ export async function authRoutes(app: FastifyInstance) {
     const input = firstAccessSetPinSchema.parse(request.body);
     const userId = readOnboardingUserId(input.onboardingToken);
     await setFirstAccessPin({ userId, input, request });
+    return reply.status(204).send();
+  });
+
+  /**
+   * Senha e PIN de uma vez, gravados juntos.
+   *
+   * Os passos separados abaixo continuam existindo para não quebrar quem já
+   * está no meio do fluxo com uma tela antiga aberta, mas a tela nova usa só
+   * este: era o estado intermediário entre eles que trancava a conta.
+   */
+  app.post("/first-access/finish", async (request, reply) => {
+    const input = firstAccessFinishSchema.parse(request.body);
+    const userId = readOnboardingUserId(input.onboardingToken);
+    await finishFirstAccess({ userId, input, request });
     return reply.status(204).send();
   });
 

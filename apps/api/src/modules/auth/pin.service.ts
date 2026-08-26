@@ -4,7 +4,7 @@ import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
 import { badRequest, notFound, unauthorized } from "../../core/errors.js";
 import { hashSecret, verifySecret } from "../../core/security/password.service.js";
-import { isWeakPin } from "./first-access.service.js";
+import { isWeakPin } from "@rs-pratas/shared";
 
 /**
  * Troca e recuperação do PIN.
