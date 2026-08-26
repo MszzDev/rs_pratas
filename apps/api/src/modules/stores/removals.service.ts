@@ -654,3 +654,82 @@ export async function removeStore(params: {
     outcome: { removido: "apagado", mensagem: "Loja apagada. Ela nunca chegou a operar." },
   });
 }
+
+/**
+ * Remove uma peça do catálogo.
+ *
+ * A regra é a de sempre, e aqui ela pesa: peça que já foi vendida vira
+ * DESATIVADA. O item da venda guarda o nome e o preço do dia, mas aponta para
+ * o produto — e apagar o produto deixaria a garantia, a troca e o relatório de
+ * margem apontando para o nada.
+ *
+ * Peça que nunca saiu some de vez, junto com as variações e os saldos zerados
+ * que vieram com ela. É o caso do cadastro errado, e da limpeza dos dados de
+ * demonstração antes da loja começar de verdade.
+ */
+export async function removeProduct(params: {
+  productId: string;
+  reason: string;
+  request: FastifyRequest;
+}): Promise<RemovalOutcome> {
+  const { productId, reason, request } = params;
+
+  const product = await prisma.product.findFirst({
+    where: { id: productId, companyId: request.user.companyId, deletedAt: null },
+    include: { _count: { select: { saleItems: true, variations: true } } },
+  });
+
+  if (!product) {
+    throw notFound("PRODUCT_NOT_FOUND", "Peça não encontrada.");
+  }
+
+  const [reservada, emOrdem] = await Promise.all([
+    prisma.reservation.count({ where: { productId: product.id, status: "ATIVA" } }),
+    prisma.stockItem.aggregate({
+      where: { productId: product.id },
+      _sum: { quantity: true },
+    }),
+  ]);
+
+  if (reservada > 0) {
+    throw conflict(
+      "HAS_RESERVATION",
+      "Esta peça está reservada para um cliente. Cancele a reserva antes de removê-la.",
+    );
+  }
+
+  const jaVendeu = product._count.saleItems > 0;
+  const temSaldo = (emOrdem._sum.quantity ?? 0) > 0;
+
+  if (jaVendeu) {
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { isActive: false, deletedAt: new Date() },
+    });
+  } else {
+    // Nunca vendeu: some com o que veio junto. A ordem segue as chaves
+    // estrangeiras, do mais dependente para o menos.
+    await prisma.$transaction([
+      prisma.stockItem.deleteMany({ where: { productId: product.id } }),
+      prisma.productVariation.deleteMany({ where: { productId: product.id } }),
+      prisma.product.delete({ where: { id: product.id } }),
+    ]);
+  }
+
+  return finish({
+    request,
+    action: "PRODUCT_UPDATE",
+    entityType: "Product",
+    entityId: product.id,
+    reason,
+    previousData: { sku: product.sku, name: product.name },
+    outcome: {
+      removido: jaVendeu ? "desativado" : "apagado",
+      mensagem: jaVendeu
+        ? "Peça tirada do catálogo. As vendas antigas dela continuam no histórico — é o que sustenta a garantia e o relatório."
+        : temSaldo
+          ? "Peça apagada, junto com o saldo que estava lançado nela."
+          : "Peça apagada.",
+    },
+  });
+}

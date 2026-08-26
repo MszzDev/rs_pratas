@@ -11,6 +11,7 @@ import {
   removeGoal,
   removeLabelTemplate,
   removePOSStation,
+  removeProduct,
   removeStore,
   removeSizeGrade,
   removeTerminal,
@@ -75,6 +76,23 @@ export async function storeOperationRoutes(app: FastifyInstance) {
       const { id } = idParamSchema.parse(request.params);
       const { reason } = reasonSchema.parse(request.body);
       return removeCategory({ categoryId: id, reason, request });
+    },
+  );
+
+  /**
+   * Remover uma peca do catalogo.
+   *
+   * Peca ja vendida sai do catalogo mas continua no historico: o item da venda
+   * aponta para ela, e apagar deixaria garantia, troca e margem apontando para
+   * o nada.
+   */
+  app.delete(
+    "/products/:id",
+    { preHandler: [app.requireAuth, requirePermission("PRODUCT_EDIT")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      const { reason } = reasonSchema.parse(request.body);
+      return removeProduct({ productId: id, reason, request });
     },
   );
 

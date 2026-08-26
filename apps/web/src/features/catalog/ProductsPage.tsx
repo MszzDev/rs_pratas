@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { ProductPhoto } from "@/components/ui/product-photo";
 import { useAuth } from "../auth/auth-context";
 
@@ -62,6 +63,7 @@ const formatMoney = (value: string | null) =>
   });
 
 export function ProductsPage() {
+  const confirmar = useConfirm();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const { can } = useAuth();
@@ -192,6 +194,28 @@ export function ProductsPage() {
     },
     onError: (caught) =>
       setError(caught instanceof ApiError ? caught.message : "Não foi possível adicionar."),
+  });
+
+  /**
+   * Tira a peça do catálogo.
+   *
+   * Quem decide entre apagar e desativar é o servidor, olhando se a peça já
+   * foi vendida — a tela só pede o motivo e conta o que aconteceu.
+   */
+  const remover = useMutation({
+    mutationFn: (params: { id: string; reason: string }) =>
+      apiFetch<{ removido: string; mensagem: string }>(`/api/v1/products/${params.id}`, {
+        method: "DELETE",
+        body: { reason: params.reason },
+      }),
+    onSuccess: (resultado) => {
+      setError(null);
+      setAviso(resultado.mensagem);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      void queryClient.invalidateQueries({ queryKey: ["stock"] });
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível remover."),
   });
 
   const ativar = useMutation({
@@ -623,6 +647,30 @@ export function ProductsPage() {
                   >
                     <Power className="h-4 w-4" aria-hidden />
                     {product.isActive ? "Desativar" : "Reativar"}
+                  </button>
+                  )}
+
+                  {podeMexer && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const motivo = await confirmar({
+                        titulo: `Remover ${product.name}?`,
+                        descricao:
+                          "Peça que já foi vendida sai do catálogo mas continua no histórico — é o que sustenta a garantia e o relatório. Peça que nunca saiu é apagada de vez, com o saldo dela.",
+                        acao: "Remover",
+                        destrutivo: true,
+                        pedirMotivo: true,
+                      });
+
+                      if (motivo === null) return;
+                      setAviso(null);
+                      remover.mutate({ id: product.id, reason: motivo });
+                    }}
+                    className="flex min-h-[36px] items-center gap-1.5 rounded-md px-2 text-sm text-danger hover:bg-danger/5"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    Remover
                   </button>
                   )}
 
