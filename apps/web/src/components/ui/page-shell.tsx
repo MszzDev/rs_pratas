@@ -539,7 +539,13 @@ function Sidebar({
 }) {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border/70 bg-brand lg:sticky lg:top-0 lg:flex lg:h-screen">
-      <div className="flex min-h-[4.5rem] items-center justify-between gap-2 border-b border-border/70 px-5 py-3">
+      {/*
+        Empilhados, e não lado a lado.
+        Com a logo no tamanho certo, ela e o relógio não cabem juntos numa
+        barra de 240 pixels — e o que cedia era a logo, espremida até virar uma
+        tira. Em duas linhas cada um tem a largura inteira.
+      */}
+      <div className="flex min-h-[4.5rem] flex-col items-center gap-2 border-b border-border/70 px-4 py-3">
         <button type="button" onClick={onLogoTap} aria-label="RS Pratas">
           <Logo size="md" />
         </button>
@@ -590,7 +596,7 @@ function MobileBar({
           </button>
 
           <button type="button" onClick={onLogoTap} aria-label="RS Pratas">
-            <LogoMark className="h-11 w-11 shrink-0 sm:h-14 sm:w-14" />
+            <LogoMark className="h-11 w-11 sm:h-14 sm:w-14" />
           </button>
 
           {/*

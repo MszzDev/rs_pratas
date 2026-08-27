@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -115,79 +116,94 @@ export function MyDocumentsPage() {
         />
       </div>
 
-      <form
-        className="mb-8 grid gap-5 rounded-lg border border-border bg-surface p-6 md:grid-cols-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setSent(false);
-          upload.mutate();
-        }}
-      >
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="type" className="text-sm font-medium text-text-secondary">
-            Tipo
-          </label>
-          <select
-            id="type"
-            value={type}
-            onChange={(event) => setType(event.target.value as DocumentType)}
-            className="min-h-[48px] rounded-md border border-border bg-surface px-4"
-          >
-            {DOCUMENT_TYPES.map((option) => (
-              <option key={option} value={option}>
-                {DOCUMENT_TYPE_LABELS[option]}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/*
+        O formulário de arquivo NÃO existe no tablet.
 
-        <Field
-          label="Descrição"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="Ex.: Atestado de 2 dias"
-          required
-          minLength={3}
-        />
+        Ele abriria o seletor do Android, que enxerga o armazenamento do
+        APARELHO — e o aparelho é compartilhado: a vendedora da tarde veria
+        os arquivos que a da manhã deixou ali. Não há pasta por pessoa a
+        criar; o armazenamento é do Android, e é de quem estiver com o
+        tablet na mão.
 
-        <Field
-          label="Válido de"
-          type="date"
-          value={referenceStart}
-          onChange={(event) => setReferenceStart(event.target.value)}
-          hint={type === "MEDICAL_CERTIFICATE" ? "Primeiro dia de afastamento." : undefined}
-        />
-        <Field
-          label="Válido até"
-          type="date"
-          value={referenceEnd}
-          onChange={(event) => setReferenceEnd(event.target.value)}
-        />
+        No tablet o caminho é o QR Code acima: ele abre no celular da própria
+        pessoa, onde a galeria já é só dela. No computador do dono o
+        formulário continua, porque a máquina é dele.
+      */}
+      {!Capacitor.isNativePlatform() && (
+        <form
+          className="mb-8 grid gap-5 rounded-lg border border-border bg-surface p-6 md:grid-cols-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSent(false);
+            upload.mutate();
+          }}
+        >
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="type" className="text-sm font-medium text-text-secondary">
+              Tipo
+            </label>
+            <select
+              id="type"
+              value={type}
+              onChange={(event) => setType(event.target.value as DocumentType)}
+              className="min-h-[48px] rounded-md border border-border bg-surface px-4"
+            >
+              {DOCUMENT_TYPES.map((option) => (
+                <option key={option} value={option}>
+                  {DOCUMENT_TYPE_LABELS[option]}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="flex flex-col gap-1.5 md:col-span-2">
-          <label htmlFor="file" className="text-sm font-medium text-text-secondary">
-            Arquivo
-          </label>
-          <input
-            id="file"
-            type="file"
-            accept="application/pdf,image/*"
+          <Field
+            label="Descrição"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Ex.: Atestado de 2 dias"
             required
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            className="min-h-[48px] rounded-md border border-border bg-surface px-4 py-2.5 file:mr-4 file:rounded file:border-0 file:bg-rose-soft file:px-4 file:py-2 file:text-rose-dark"
+            minLength={3}
           />
-          <p className="text-sm text-text-muted">
-            Foto ou PDF, até 20 MB. Confira se está legível antes de enviar.
-          </p>
-        </div>
 
-        <div className="md:col-span-2">
-          <Button type="submit" size="lg" disabled={upload.isPending}>
-            <FileUp className="h-5 w-5" aria-hidden />
-            {upload.isPending ? "Enviando..." : "Enviar documento"}
-          </Button>
-        </div>
-      </form>
+          <Field
+            label="Válido de"
+            type="date"
+            value={referenceStart}
+            onChange={(event) => setReferenceStart(event.target.value)}
+            hint={type === "MEDICAL_CERTIFICATE" ? "Primeiro dia de afastamento." : undefined}
+          />
+          <Field
+            label="Válido até"
+            type="date"
+            value={referenceEnd}
+            onChange={(event) => setReferenceEnd(event.target.value)}
+          />
+
+          <div className="flex flex-col gap-1.5 md:col-span-2">
+            <label htmlFor="file" className="text-sm font-medium text-text-secondary">
+              Arquivo
+            </label>
+            <input
+              id="file"
+              type="file"
+              accept="application/pdf,image/*"
+              required
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              className="min-h-[48px] rounded-md border border-border bg-surface px-4 py-2.5 file:mr-4 file:rounded file:border-0 file:bg-rose-soft file:px-4 file:py-2 file:text-rose-dark"
+            />
+            <p className="text-sm text-text-muted">
+              Foto ou PDF, até 20 MB. Confira se está legível antes de enviar.
+            </p>
+          </div>
+
+          <div className="md:col-span-2">
+            <Button type="submit" size="lg" disabled={upload.isPending}>
+              <FileUp className="h-5 w-5" aria-hidden />
+              {upload.isPending ? "Enviando..." : "Enviar documento"}
+            </Button>
+          </div>
+        </form>
+      )}
 
       <h2 className="mb-3 text-lg font-semibold text-text-primary">Enviados</h2>
 

@@ -37,7 +37,16 @@ export function LogoMark({ className }: { className?: string }) {
        * barra estreita achataria a logo num oval.
        */
       className={cn(
-        "h-8 w-8 rounded-full bg-[#FDF4F9] p-[6%] object-contain",
+        /**
+         * `shrink-0` não é detalhe: é o que impede a deformação.
+         *
+         * Imagem dentro de um flex encolhe por padrão. Numa barra lateral de
+         * 240 pixels, dividindo espaço com o relógio e a bateria, a logo era
+         * espremida na horizontal e virava uma pílula vertical — alta,
+         * estreita, com o desenho letterboxado a ponto de sumir. Parecia um
+         * defeito de imagem, e era só a caixa cedendo.
+         */
+        "h-8 w-8 shrink-0 rounded-full bg-[#FDF4F9] p-[6%] object-contain",
         className,
       )}
       draggable={false}

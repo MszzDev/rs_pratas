@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Camera, Eye, KeyRound, Moon, Sun, Trash2, Type } from "lucide-react";
@@ -236,29 +237,50 @@ export function ProfilePage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <input
-                  ref={arquivo}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(event) => {
-                    const escolhido = event.target.files?.[0];
-                    if (escolhido) enviarFoto.mutate(escolhido);
-                    // Zera para a mesma foto poder ser escolhida de novo depois
-                    // de um erro — sem isto o campo não dispara duas vezes.
-                    event.target.value = "";
-                  }}
-                />
+                {/*
+                  O seletor de arquivos NÃO existe no tablet.
+                  Ele abriria a galeria do APARELHO, que é compartilhado: a
+                  vendedora do turno da tarde veria as fotos que a do turno da
+                  manhã tirou ali. Não há pasta por pessoa a criar — o
+                  armazenamento é do Android, e é de todo mundo que usa o
+                  tablet.
+                  No tablet, o único caminho é o QR Code logo abaixo: ele abre
+                  no celular da própria pessoa, e ali a galeria já é só dela.
+                  No computador do dono o botão continua, porque a máquina é
+                  dele.
+                */}
+                {!Capacitor.isNativePlatform() && (
+                  <>
+                    <input
+                      ref={arquivo}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(event) => {
+                        const escolhido = event.target.files?.[0];
+                        if (escolhido) enviarFoto.mutate(escolhido);
+                        // Zera para a mesma foto poder ser escolhida de novo
+                        // depois de um erro — sem isto o campo não dispara
+                        // duas vezes.
+                        event.target.value = "";
+                      }}
+                    />
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={enviarFoto.isPending}
-                  onClick={() => arquivo.current?.click()}
-                >
-                  <Camera className="h-5 w-5" aria-hidden />
-                  {enviarFoto.isPending ? "Enviando..." : dados.temFoto ? "Trocar foto" : "Pôr foto"}
-                </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={enviarFoto.isPending}
+                      onClick={() => arquivo.current?.click()}
+                    >
+                      <Camera className="h-5 w-5" aria-hidden />
+                      {enviarFoto.isPending
+                        ? "Enviando..."
+                        : dados.temFoto
+                          ? "Trocar foto"
+                          : "Pôr foto"}
+                    </Button>
+                  </>
+                )}
 
                 {dados.temFoto && (
                   <Button
