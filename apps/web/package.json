@@ -10,7 +10,8 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "apk": "node scripts/conferir-api.mjs && vite build && cap sync android && cd android && gradlew.bat assembleDebug"
+    "apk": "node scripts/conferir-api.mjs && vite build && cap sync android && cd android && gradlew.bat assembleDebug",
+    "apk:local": "cross-env-shell vite build && cap sync android && cd android && gradlew.bat assembleDebug"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.2",

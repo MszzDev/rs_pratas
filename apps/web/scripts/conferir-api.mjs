@@ -50,3 +50,39 @@ if (/localhost|127\.0\.0\.1|0\.0\.0\.0/.test(url)) {
 }
 
 console.log(`API do aplicativo: ${url}`);
+
+/**
+ * De onde o tablet carrega as TELAS.
+ *
+ * Sem CAP_SERVER_URL, o APK sai com as telas embutidas dentro dele — e a
+ * partir daí publicar o site deixa de atualizar os tablets. O aparelho fica
+ * congelado na versão do dia em que o APK foi gerado, sem nada na tela
+ * dizendo isso: ele funciona, só não muda mais.
+ *
+ * Foi o que aconteceu. Um APK gerado sem a variável deixou o tablet do balcão
+ * dias atrás do site, e a diferença só apareceu quando alguém procurou uma
+ * tela nova e não achou.
+ *
+ * Este aviso existe para a próxima vez ser percebida na hora de compilar.
+ */
+const telas = process.env.CAP_SERVER_URL;
+
+if (!telas) {
+  console.error(
+    [
+      "",
+      "CAP_SERVER_URL nao esta definida.",
+      "",
+      "O APK vai sair com as telas EMBUTIDAS: publicar o site nao vai mais",
+      "atualizar este tablet. Serve para testar uma versao local; nao serve",
+      "para o aparelho que fica na loja.",
+      "",
+      "Para o tablet da loja:",
+      "  CAP_SERVER_URL=https://rs-pratas-web.onrender.com pnpm apk",
+      "",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
+console.log(`Telas do tablet: ${telas}`);
