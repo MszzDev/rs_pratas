@@ -106,6 +106,39 @@ public class KioskPlugin extends Plugin {
   }
 
   /**
+   * Volta ao modo quiosque agora.
+   *
+   * Sem isto, quem saiu do confinamento precisava esperar a tregua de cinco
+   * minutos acabar — ou reiniciar o aplicativo — para o tablet voltar a ser um
+   * caixa. Quem terminou o servico quer devolver o aparelho a loja no mesmo
+   * minuto, e ficar tentando adivinhar quando o confinamento volta e o oposto
+   * de estar no controle.
+   *
+   * Nao exige autorizacao do servidor, ao contrario da saida: TRANCAR o
+   * aparelho e a situacao segura. Quem pode causar dano e quem destranca.
+   */
+  @PluginMethod
+  public void reativar(PluginCall call) {
+    DevicePolicyManager policy = policy();
+
+    if (policy == null || !policy.isDeviceOwnerApp(getContext().getPackageName())) {
+      call.resolve(new JSObject().put("ativo", false).put("motivo", "sem-device-owner"));
+      return;
+    }
+
+    getActivity()
+        .runOnUiThread(
+            () -> {
+              try {
+                ((MainActivity) getActivity()).reentrarAgora();
+                call.resolve(new JSObject().put("ativo", true));
+              } catch (Exception erro) {
+                call.reject("Não foi possível reativar o modo quiosque.", erro);
+              }
+            });
+  }
+
+  /**
    * Brilho da tela, ajustado pelo proprio sistema.
    *
    * Com a barra do Android desligada, nao ha mais como puxar o painel de

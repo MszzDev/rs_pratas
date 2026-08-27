@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { registerPlugin } from "@capacitor/core";
 import { Capacitor } from "@capacitor/core";
 import { ShieldAlert } from "lucide-react";
@@ -25,6 +25,7 @@ import { useAuth } from "../auth/auth-context";
 interface KioskPlugin {
   status(): Promise<{ deviceOwner: boolean; confinado: boolean }>;
   sair(): Promise<{ saiu: boolean; motivo?: string }>;
+  reativar(): Promise<{ ativo: boolean; motivo?: string }>;
 }
 
 const Kiosk = registerPlugin<KioskPlugin>("Kiosk");
@@ -61,6 +62,28 @@ export function useKioskExitGesture() {
 
 export function KioskExitDialog({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
+
+  /**
+   * O tablet está confinado agora?
+   *
+   * Os mesmos cinco toques abrem as duas portas — sair e voltar. Antes só
+   * havia a saída, e quem tinha saído ficava sem caminho de volta: precisava
+   * esperar a trégua de cinco minutos ou reiniciar o aplicativo, adivinhando
+   * quando o confinamento voltaria.
+   */
+  const [confinado, setConfinado] = useState<boolean | null>(null);
+  const [reativado, setReativado] = useState(false);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) {
+      setConfinado(null);
+      return;
+    }
+
+    void Kiosk.status()
+      .then((situacao) => setConfinado(situacao.deviceOwner ? situacao.confinado : null))
+      .catch(() => setConfinado(null));
+  }, []);
 
   const [senha, setSenha] = useState("");
   const [totp, setTotp] = useState("");
@@ -117,6 +140,34 @@ export function KioskExitDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
+  /**
+   * Reativar não pede senha, ao contrário de sair.
+   *
+   * TRANCAR o aparelho é a situação segura: quem pode causar dano é quem
+   * destranca. Exigir reautenticação para devolver o tablet ao estado de caixa
+   * só faria alguém desistir e deixá-lo solto.
+   */
+  const reativar = async () => {
+    setEnviando(true);
+    setErro(null);
+
+    try {
+      const situacao = await Kiosk.reativar();
+
+      if (!situacao.ativo) {
+        throw new Error(
+          "Este tablet não é administrado pelo sistema, então não há quiosque a reativar.",
+        );
+      }
+
+      setReativado(true);
+    } catch (caught) {
+      setErro(caught instanceof Error ? caught.message : "Não foi possível reativar.");
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   const podeEnviar =
     motivo.trim().length >= 5 && (usaTotp ? totp.trim().length >= 6 : senha.length > 0);
 
@@ -139,7 +190,39 @@ export function KioskExitDialog({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {liberado ? (
+        {reativado ? (
+          <>
+            <Alert tone="success" title="Modo quiosque ativo">
+              O tablet voltou a ser um caixa: a barra do Android sumiu e o botão de início traz de
+              volta para cá.
+            </Alert>
+            <Button type="button" className="mt-4 w-full" onClick={onClose}>
+              Fechar
+            </Button>
+          </>
+        ) : confinado === false ? (
+          <>
+            <Alert tone="info" title="O tablet está fora do modo quiosque">
+              Ele se comporta como um tablet comum: a barra do Android aparece e o botão de início
+              sai do sistema. Reative quando terminar o serviço.
+            </Alert>
+
+            {erro && (
+              <div className="mt-4">
+                <Alert tone="error">{erro}</Alert>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button type="button" disabled={enviando} onClick={() => void reativar()}>
+                {enviando ? "Reativando..." : "Reativar o modo quiosque"}
+              </Button>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Agora não
+              </Button>
+            </div>
+          </>
+        ) : liberado ? (
           <>
             <Alert tone="success" title="Tablet liberado">
               Você tem alguns minutos antes de o modo quiosque voltar sozinho. Feche o aplicativo

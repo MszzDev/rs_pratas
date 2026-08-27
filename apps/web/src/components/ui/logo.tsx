@@ -19,9 +19,24 @@ export function LogoMark({ className }: { className?: string }) {
     <img
       src={logoUrl}
       alt="RS Pratas"
-      // `object-contain` mantém o círculo redondo em qualquer caixa: sem ele,
-      // uma barra estreita achataria a logo num oval.
-      className={cn("h-8 w-8 object-contain", className)}
+      /**
+       * O disco claro é da logo, não do tema.
+       *
+       * O arquivo do designer tem fundo rosa claro embutido. No tema claro ele
+       * se funde ao fundo da barra e ninguém nota. No escuro virava um quadrado
+       * aceso colado na tela — o desenho certo, com uma moldura que ninguém
+       * pediu.
+       *
+       * Recortado em círculo e assumido como disco, ele lê como distintivo nos
+       * dois temas: é a marca sobre o fundo dela, e não um erro de recorte.
+       *
+       * `object-contain` mantém o círculo redondo em qualquer caixa: sem ele,
+       * uma barra estreita achataria a logo num oval.
+       */
+      className={cn(
+        "h-8 w-8 rounded-full bg-[#FDF4F9] object-contain",
+        className,
+      )}
       draggable={false}
     />
   );
@@ -40,7 +55,19 @@ export function Logo({
   className?: string;
   size?: "sm" | "md" | "lg";
 }) {
-  const tamanhos = { sm: "h-10 w-10", md: "h-12 w-12", lg: "h-24 w-24" };
+  /**
+   * No tablet a logo cresce.
+   *
+   * A tela do balcão é de 1920 por 1200 a um braço de distância, e a marca
+   * ficava do tamanho de um ícone de celular — pequena a ponto de parecer
+   * desalinhada. Cresce só a partir de `lg`, que é onde a barra lateral
+   * aparece: no celular, a mesma medida ocuparia metade do cabeçalho.
+   */
+  const tamanhos = {
+    sm: "h-10 w-10",
+    md: "h-12 w-12 lg:h-16 lg:w-16",
+    lg: "h-24 w-24 lg:h-32 lg:w-32",
+  };
 
   return <LogoMark className={cn(tamanhos[size], className)} />;
 }

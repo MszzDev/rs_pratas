@@ -539,7 +539,7 @@ function Sidebar({
 }) {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border/70 bg-brand lg:sticky lg:top-0 lg:flex lg:h-screen">
-      <div className="flex h-[4.5rem] items-center justify-between gap-2 border-b border-border/70 px-5">
+      <div className="flex min-h-[4.5rem] items-center justify-between gap-2 border-b border-border/70 px-5 py-3">
         <button type="button" onClick={onLogoTap} aria-label="RS Pratas">
           <Logo size="md" />
         </button>
@@ -590,7 +590,7 @@ function MobileBar({
           </button>
 
           <button type="button" onClick={onLogoTap} aria-label="RS Pratas">
-            <LogoMark className="h-8 w-8 shrink-0" />
+            <LogoMark className="h-8 w-8 shrink-0 sm:h-11 sm:w-11" />
           </button>
 
           {/*

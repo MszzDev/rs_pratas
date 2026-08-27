@@ -103,6 +103,49 @@ public class MainActivity extends BridgeActivity {
   /** Chamado pelo plugin quando a saída foi autorizada pelo servidor. */
   void marcarSaidaAutorizada() {
     saiuEm = System.currentTimeMillis();
+    liberarTelaInicial();
+  }
+
+  /**
+   * Devolve a tela inicial ao aparelho.
+   *
+   * Faltava, e o efeito era uma armadilha: sair do quiosque parava o Lock Task,
+   * mas o aplicativo continuava sendo a HOME do tablet. O botão Home trazia de
+   * volta para cá, e quem "saiu" não conseguia ir a lugar nenhum — nem às
+   * configurações do Android, que é justamente aonde se vai depois de sair.
+   *
+   * Some junto a preferência de HOME; ela volta quando o quiosque reativa.
+   */
+  private void liberarTelaInicial() {
+    DevicePolicyManager policy =
+        (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+
+    if (policy == null || !policy.isDeviceOwnerApp(getPackageName())) return;
+
+    ComponentName admin = new ComponentName(this, KioskDeviceAdminReceiver.class);
+
+    try {
+      policy.clearPackagePersistentPreferredActivities(admin, getPackageName());
+      // A barra de status volta: sem ela o técnico fica sem relógio, sem
+      // bateria e sem o painel de ajustes no aparelho que acabou de liberar.
+      policy.setStatusBarDisabled(admin, false);
+      Log.i(TAG, "Tela inicial devolvida ao aparelho.");
+    } catch (Exception erro) {
+      Log.w(TAG, "Nao foi possivel devolver a tela inicial: " + erro.getMessage());
+    }
+  }
+
+  /**
+   * Volta ao confinamento agora, sem esperar a trégua acabar.
+   *
+   * A trégua existe para o técnico conseguir trabalhar depois de uma saída
+   * autorizada. Só que ela também obrigava a esperar — ou reiniciar o
+   * aplicativo — para o tablet voltar a ser um caixa. Quem terminou o serviço
+   * quer devolver o aparelho à loja no mesmo minuto.
+   */
+  void reentrarAgora() {
+    saiuEm = 0L;
+    entrarNoModoQuiosque();
   }
 
   /**
