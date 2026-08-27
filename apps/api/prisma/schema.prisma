@@ -2420,6 +2420,17 @@ model DeviceAnnouncement {
   @@map("device_announcements")
 }
 
+/// Qual credencial a pessoa perdeu.
+///
+/// A tabela nasceu só para PIN e manteve o nome, mas o caminho é o mesmo: a
+/// pessoa pede, o responsável confere que é ela e libera uma credencial
+/// temporária que já nasce vencida. Duplicar isso numa segunda tabela daria
+/// duas filas para o dono acompanhar, quando o que ele quer é uma.
+enum CredentialResetType {
+  PIN
+  SENHA
+}
+
 enum PinResetStatus {
   PENDENTE
   APROVADA
@@ -2445,6 +2456,8 @@ model PinResetRequest {
   user   User   @relation(fields: [userId], references: [id])
 
   status PinResetStatus @default(PENDENTE)
+  /// PIN por padrão: é o que a tabela fazia antes de a senha entrar.
+  type   CredentialResetType @default(PIN)
 
   requestedAt DateTime @default(now())
   /// Aparelho de onde o pedido partiu, quando houver.

@@ -219,6 +219,11 @@ export async function authRoutes(app: FastifyInstance) {
     const body = z
       .object({
         employeeCode: z.string().min(3).max(20),
+        /**
+         * O que a pessoa perdeu. PIN é o padrão porque foi o primeiro caminho
+         * e é o que as telas antigas continuam mandando.
+         */
+        type: z.enum(["PIN", "SENHA"]).optional(),
         deviceId: z.string().uuid().optional(),
       })
       .parse(request.body);

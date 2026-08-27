@@ -388,3 +388,97 @@ describe("PIN temporário", () => {
     expect((await listar(token)).statusCode).toBe(403);
   });
 });
+
+/**
+ * Pedir uma senha nova.
+ *
+ * Mesmo caminho do PIN: a pessoa pede da tela de entrada, o responsável
+ * confere que é ela e libera uma credencial temporária que já nasce vencida.
+ * Não vai por e-mail de propósito — quem confirma a identidade é gente, e uma
+ * caixa de entrada pode ter sido invadida junto com a senha.
+ */
+describe("pedido de senha nova", () => {
+  it("entra na mesma fila do PIN, marcado como senha", async () => {
+    const company = await createTestCompany();
+    const { user } = await createTestUser({ companyId: company.id, role: "VENDEDOR" });
+    const { user: dono, password: senhaDono } = await createTestUser({
+      companyId: company.id,
+      role: "DONO",
+    });
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/pin/reset-request",
+      payload: { employeeCode: user.employeeCode, type: "SENHA" },
+    });
+    expect(pedido.statusCode).toBe(200);
+    expect(pedido.json().mensagem).toContain("senha temporária");
+
+    const token = (await authenticate(dono.employeeCode, senhaDono)).json().accessToken as string;
+
+    const fila = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/pin/reset-requests",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(fila.json()).toHaveLength(1);
+    expect(fila.json()[0].type).toBe("SENHA");
+  });
+
+  it("liberado, o funcionário entra com a temporária e é obrigado a trocar", async () => {
+    const company = await createTestCompany();
+    const { user } = await createTestUser({ companyId: company.id, role: "VENDEDOR" });
+    const { user: dono, password: senhaDono } = await createTestUser({
+      companyId: company.id,
+      role: "DONO",
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/pin/reset-request",
+      payload: { employeeCode: user.employeeCode, type: "SENHA" },
+    });
+
+    const token = (await authenticate(dono.employeeCode, senhaDono)).json().accessToken as string;
+    const fila = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/pin/reset-requests",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    const liberacao = await app.inject({
+      method: "POST",
+      url: `/api/v1/auth/pin/reset-requests/${fila.json()[0].id}/approve`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(liberacao.statusCode).toBe(200);
+    expect(liberacao.json().type).toBe("SENHA");
+
+    const temporaria = liberacao.json().temporaryPin as string;
+    // Senha, não PIN: precisa ter o comprimento de uma senha de verdade.
+    expect(temporaria.length).toBeGreaterThanOrEqual(12);
+
+    // A temporária vale — e o sistema exige a troca na primeira entrada.
+    const entrada = await authenticate(user.employeeCode, temporaria);
+    expect(entrada.statusCode).toBe(400);
+    expect(entrada.json().error.code).toBe("FIRST_ACCESS_REQUIRED");
+
+    const atualizado = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(atualizado.mustChangePassword).toBe(true);
+    // O PIN dele não foi tocado: quem pediu senha não perdeu o PIN.
+    expect(atualizado.pinHash).toBe(user.pinHash);
+  });
+
+  it("não conta se a matrícula existe — a resposta é sempre a mesma", async () => {
+    const naoExiste = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/pin/reset-request",
+      payload: { employeeCode: "RS999999", type: "SENHA" },
+    });
+
+    expect(naoExiste.statusCode).toBe(200);
+    expect(naoExiste.json().registrado).toBe(true);
+  });
+});

@@ -12,12 +12,16 @@ interface Pedido {
   employeeCode: string;
   role: string;
   requestedAt: string;
+  /** O que a pessoa perdeu. Sem isto o dono não sabe o que vai liberar. */
+  type: "PIN" | "SENHA";
   esperandoHaMinutos: number;
 }
 
 interface Liberado {
   employeeCode: string;
   name: string;
+  type: "PIN" | "SENHA";
+  /** O nome do campo é antigo; hoje carrega o PIN ou a senha temporária. */
   temporaryPin: string;
   aviso: string;
 }
@@ -93,9 +97,23 @@ export function PinResetRequests() {
 
       {liberado && (
         <div className="mb-4">
-          <Alert tone="success" title={`PIN temporário de ${liberado.name}`}>
+          <Alert
+            tone="success"
+            title={`${liberado.type === "SENHA" ? "Senha temporária" : "PIN temporário"} de ${liberado.name}`}
+          >
             <p>{liberado.aviso}</p>
-            <p className="mt-3 font-mono text-3xl tracking-[0.3em] text-text-primary">
+            {/*
+              A senha é longa e a fonte monoespaçada com espaçamento largo
+              estouraria a linha; o PIN são seis dígitos e o espaçamento é o
+              que os torna legíveis a três metros, para serem ditos em voz alta.
+            */}
+            <p
+              className={
+                liberado.type === "SENHA"
+                  ? "mt-3 select-all break-all font-mono text-2xl text-text-primary"
+                  : "mt-3 font-mono text-3xl tracking-[0.3em] text-text-primary"
+              }
+            >
               {liberado.temporaryPin}
             </p>
             <Button
@@ -114,10 +132,11 @@ export function PinResetRequests() {
         <>
           <h2 className="mb-1 flex items-center gap-2 text-lg font-medium text-text-primary">
             <KeyRound className="h-5 w-5 text-gold-dark" aria-hidden />
-            {lista.length === 1 ? "Um pedido de PIN" : `${lista.length} pedidos de PIN`}
+            {lista.length === 1 ? "Um pedido de credencial" : `${lista.length} pedidos de credencial`}
           </h2>
           <p className="mb-3 text-sm text-text-secondary">
-            Confira que é a própria pessoa antes de liberar — o PIN entra no lugar do antigo.
+            Confira que é a própria pessoa antes de liberar — a credencial nova entra no lugar da
+            antiga.
           </p>
 
           <ul className="space-y-2">
@@ -130,6 +149,7 @@ export function PinResetRequests() {
                   <p className="font-medium text-text-primary">{pedido.name}</p>
                   <p className="text-sm text-text-muted">
                     Matrícula {pedido.employeeCode} · pediu{" "}
+                    {pedido.type === "SENHA" ? "senha nova" : "PIN novo"}{" "}
                     {esperaEmTexto(pedido.esperandoHaMinutos)}
                   </p>
                 </div>
@@ -140,7 +160,7 @@ export function PinResetRequests() {
                     disabled={aprovar.isPending}
                     onClick={() => aprovar.mutate(pedido.id)}
                   >
-                    Liberar PIN temporário
+                    {pedido.type === "SENHA" ? "Liberar senha temporária" : "Liberar PIN temporário"}
                   </Button>
                   <Button
                     type="button"

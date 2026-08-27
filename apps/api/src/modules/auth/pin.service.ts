@@ -1,9 +1,11 @@
 import { randomInt } from "node:crypto";
+import type { CredentialResetType } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
 import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
 import { badRequest, notFound, unauthorized } from "../../core/errors.js";
 import { hashSecret, verifySecret } from "../../core/security/password.service.js";
+import { generateTemporaryPassword } from "../users/credentials.js";
 import { isWeakPin } from "@rs-pratas/shared";
 
 /**
@@ -164,8 +166,11 @@ export async function verifyOwnPin(params: { pin: string; request: FastifyReques
  */
 export async function requestPinReset(params: {
   employeeCode: string;
+  /** PIN é o padrão — a senha entrou depois, pelo mesmo caminho. */
+  type?: CredentialResetType | undefined;
   deviceId?: string | undefined;
 }) {
+  const tipo = params.type ?? "PIN";
   const user = await prisma.user.findFirst({
     where: {
       employeeCode: { equals: params.employeeCode, mode: "insensitive" },
@@ -174,10 +179,18 @@ export async function requestPinReset(params: {
     select: { id: true, companyId: true, status: true },
   });
 
+  /**
+   * A resposta é a MESMA para matrícula que existe e para a que não existe.
+   *
+   * Dizer "não encontrei essa matrícula" transformaria esta tela, que não pede
+   * senha nenhuma, num jeito de descobrir quais matrículas existem.
+   */
   const resposta = {
     registrado: true,
     mensagem:
-      "Pedido enviado. Procure o responsável da loja — ele libera um PIN temporário para você.",
+      tipo === "SENHA"
+        ? "Pedido enviado. Procure o responsável da loja — ele libera uma senha temporária para você."
+        : "Pedido enviado. Procure o responsável da loja — ele libera um PIN temporário para você.",
   };
 
   if (!user || user.status === "BLOCKED" || user.status === "INACTIVE") {
@@ -185,7 +198,7 @@ export async function requestPinReset(params: {
   }
 
   const jaPendente = await prisma.pinResetRequest.findFirst({
-    where: { userId: user.id, status: "PENDENTE" },
+    where: { userId: user.id, status: "PENDENTE", type: tipo },
   });
 
   // Pedir de novo não cria fila: o responsável veria a mesma pessoa três vezes
@@ -196,6 +209,7 @@ export async function requestPinReset(params: {
     data: {
       companyId: user.companyId,
       userId: user.id,
+      type: tipo,
       ...(params.deviceId ? { deviceId: params.deviceId } : {}),
     },
   });
@@ -219,6 +233,8 @@ export async function listPinResets(request: FastifyRequest) {
     employeeCode: pedido.user.employeeCode,
     role: pedido.user.role,
     requestedAt: pedido.requestedAt,
+    /** O que a pessoa perdeu: sem isto o dono não sabe o que vai liberar. */
+    type: pedido.type,
     esperandoHaMinutos: Math.floor((Date.now() - pedido.requestedAt.getTime()) / 60_000),
   }));
 }
@@ -250,19 +266,42 @@ export async function approvePinReset(params: { requestId: string; request: Fast
     throw badRequest("ALREADY_DECIDED", "Este pedido já foi resolvido.");
   }
 
-  // randomInt do módulo crypto, e não Math.random: é uma credencial, ainda que
-  // de vida curta.
-  const temporario = String(randomInt(100_000, 1_000_000));
+  const senha = pedido.type === "SENHA";
 
+  /**
+   * A credencial temporária.
+   *
+   * PIN: seis dígitos sorteados com `randomInt` do módulo crypto, e não
+   * `Math.random` — é uma credencial, ainda que de vida curta.
+   *
+   * Senha: a mesma geradora do cadastro de funcionário, para o dono não ter
+   * duas coisas diferentes chamadas "senha temporária" na cabeça.
+   */
+  const temporario = senha ? generateTemporaryPassword() : String(randomInt(100_000, 1_000_000));
+
+  /**
+   * As duas nascem VENCIDAS, cada uma do seu jeito.
+   *
+   * O PIN zera `pinChangedAt`; a senha liga `mustChangePassword`. Nos dois
+   * casos o sistema exige a troca na primeira entrada, em vez de deixar uma
+   * credencial que passou pela boca de duas pessoas valendo por semanas.
+   */
   await prisma.$transaction([
     prisma.user.update({
       where: { id: pedido.user.id },
-      data: {
-        pinHash: await hashSecret(temporario),
-        pinChangedAt: null,
-        pinFailedAttempts: 0,
-        pinLockedUntil: null,
-      },
+      data: senha
+        ? {
+            passwordHash: await hashSecret(temporario),
+            mustChangePassword: true,
+            passwordFailedAttempts: 0,
+            passwordLockedUntil: null,
+          }
+        : {
+            pinHash: await hashSecret(temporario),
+            pinChangedAt: null,
+            pinFailedAttempts: 0,
+            pinLockedUntil: null,
+          },
     }),
     prisma.pinResetRequest.update({
       where: { id: pedido.id },
@@ -271,22 +310,28 @@ export async function approvePinReset(params: { requestId: string; request: Fast
   ]);
 
   await audit(request, {
-    action: "PIN_CHANGE",
+    action: senha ? "PASSWORD_CHANGE" : "PIN_CHANGE",
     result: "SUCCESS",
     userId: request.user.sub,
     companyId: request.user.companyId,
     userRoleSnapshot: request.user.role,
     entityType: "User",
     entityId: pedido.user.id,
-    reason: `PIN temporário liberado para ${pedido.user.employeeCode}`,
+    reason: senha
+      ? `senha temporária liberada para ${pedido.user.employeeCode}`
+      : `PIN temporário liberado para ${pedido.user.employeeCode}`,
     // O PIN NÃO entra na auditoria. O log é lido por mais gente que o banco.
   });
 
   return {
     employeeCode: pedido.user.employeeCode,
     name: pedido.user.name,
+    type: pedido.type,
+    /** O nome do campo não mudou para não quebrar telas antigas em uso. */
     temporaryPin: temporario,
-    aviso: "Diga este PIN à pessoa. Ele serve para uma entrada — na primeira, o sistema pede a troca.",
+    aviso: senha
+      ? "Entregue esta senha à pessoa. Ela serve para uma entrada — na primeira, o sistema pede a troca."
+      : "Diga este PIN à pessoa. Ele serve para uma entrada — na primeira, o sistema pede a troca.",
   };
 }
 

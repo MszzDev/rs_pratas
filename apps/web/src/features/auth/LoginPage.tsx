@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { LogoMark } from "@/components/ui/logo";
-import { ApiError } from "@/lib/api-client";
+import { apiFetch, ApiError } from "@/lib/api-client";
 import { readDeviceId } from "@/lib/secure-storage";
 import { useAuth } from "./auth-context";
 
@@ -24,6 +24,42 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [pedindoSenha, setPedindoSenha] = useState(false);
+  const [avisoPedido, setAvisoPedido] = useState<string | null>(null);
+
+  /**
+   * Pedir uma senha nova.
+   *
+   * Não existia caminho nenhum: quem esquecia dependia de lembrar de pedir ao
+   * dono por fora do sistema, e o dono de lembrar de gerar. O pedido entra na
+   * MESMA fila do PIN, que o responsável já acompanha em Funcionários.
+   *
+   * Não vai por e-mail de propósito. Quem confirma que o pedido é da própria
+   * pessoa é gente, olhando para ela — e não uma caixa de entrada que pode ter
+   * sido invadida junto com a senha.
+   */
+  async function pedirSenha() {
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      const resposta = await apiFetch<{ mensagem: string }>("/api/v1/auth/pin/reset-request", {
+        method: "POST",
+        body: { employeeCode: identifier.trim(), type: "SENHA" },
+        skipAuthRetry: true,
+      });
+
+      setAvisoPedido(resposta.mensagem);
+      setPedindoSenha(false);
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError ? caught.message : "Não foi possível registrar o pedido.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   /** Este aparelho é um tablet vinculado a uma loja? */
   const [temAparelho, setTemAparelho] = useState(false);
@@ -96,6 +132,12 @@ export function LoginPage() {
             <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
               {error && <Alert tone="error">{error}</Alert>}
 
+              {avisoPedido && (
+                <Alert tone="success" title="Pedido enviado">
+                  {avisoPedido}
+                </Alert>
+              )}
+
               <Field
                 label="Matrícula"
                 value={identifier}
@@ -118,6 +160,45 @@ export function LoginPage() {
               <Button type="submit" size="lg" disabled={submitting}>
                 {submitting ? "Entrando..." : "Entrar"}
               </Button>
+
+              {/*
+                Esqueci minha senha.
+                Não manda e-mail: quem confirma que o pedido é da própria
+                pessoa é gente, olhando para ela. Uma caixa de entrada pode ter
+                sido invadida junto com a senha — e, no caso desta loja, o
+                responsável está a três metros de distância.
+              */}
+              {pedindoSenha ? (
+                <div className="rounded-md border border-border bg-background-secondary p-4">
+                  <p className="text-sm text-text-secondary">
+                    O responsável da loja vai liberar uma senha temporária e entregá-la a você. Ela
+                    serve para uma entrada — na primeira, o sistema pede que você escolha a sua.
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      disabled={submitting || identifier.trim().length < 3}
+                      onClick={() => void pedirSenha()}
+                    >
+                      {submitting ? "Enviando..." : "Pedir senha nova"}
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => setPedindoSenha(false)}>
+                      Cancelar
+                    </Button>
+                  </div>
+
+                  {identifier.trim().length < 3 && (
+                    <p className="mt-2 text-sm text-text-muted">
+                      Escreva sua matrícula no campo acima antes de pedir.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <Button type="button" variant="ghost" onClick={() => setPedindoSenha(true)}>
+                  Esqueci minha senha
+                </Button>
+              )}
 
               {/*
                 A entrada por PIN só existe onde há um tablet vinculado.
