@@ -3,6 +3,12 @@ import type { FastifyInstance } from "fastify";
 import { passwordSchema } from "@rs-pratas/shared";
 import { badRequest } from "../../core/errors.js";
 import {
+  consumeUploadLink,
+  createUploadLink,
+  describeUploadLink,
+  getUploadLinkStatus,
+} from "./upload-link.service.js";
+import {
   changeOwnPassword,
   getProfile,
   readPhoto,
@@ -80,6 +86,71 @@ export async function profileRoutes(app: FastifyInstance) {
   app.delete("/me/photo", { preHandler: app.requireAuth }, async (request) =>
     removeOwnPhoto(request),
   );
+
+  /**
+   * O link de envio pelo celular.
+   *
+   * O tablet pede, desenha como QR Code, e fica perguntando se já chegou.
+   */
+  app.post("/me/upload-link", { preHandler: app.requireAuth }, async (request) => {
+    const input = z
+      .object({
+        purpose: z.enum(["DOCUMENTO", "FOTO"]),
+        deviceId: z.string().uuid().optional(),
+      })
+      .parse(request.body);
+
+    return createUploadLink({ request, ...input });
+  });
+
+  app.get("/me/upload-link/:id/status", { preHandler: app.requireAuth }, async (request) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    return getUploadLinkStatus({ request, id });
+  });
+
+  /**
+   * As duas rotas abertas, sem sessão.
+   *
+   * Quem chega aqui está no celular da pessoa, fora do sistema. O que autoriza
+   * é o token do endereço — sorteado, de uso único e válido por minutos.
+   *
+   * O limite por minuto é bem mais apertado que o global: é a única porta do
+   * sistema que aceita arquivo sem autenticação, e adivinhar token por
+   * tentativa é o ataque óbvio contra ela.
+   */
+  const limiteDeEnvio = {
+    rateLimit: { max: 10, timeWindow: "1 minute" },
+  };
+
+  app.get("/uploads/:token", { config: limiteDeEnvio }, async (request) => {
+    const { token } = z.object({ token: z.string().min(20).max(200) }).parse(request.params);
+    return describeUploadLink(token);
+  });
+
+  app.post("/uploads/:token", { config: limiteDeEnvio }, async (request) => {
+    const { token } = z.object({ token: z.string().min(20).max(200) }).parse(request.params);
+    const file = await request.file();
+
+    if (!file) {
+      throw badRequest("FILE_REQUIRED", "Escolha o arquivo para enviar.");
+    }
+
+    // Os campos vêm junto do multipart, e são opcionais: a foto não usa
+    // nenhum deles.
+    const campos = file.fields as Record<string, { value?: string } | undefined>;
+    const tipo = campos.documentType?.value;
+    const titulo = campos.title?.value;
+
+    return consumeUploadLink({
+      token,
+      request,
+      content: await file.toBuffer(),
+      fileName: file.filename,
+      mimeType: file.mimetype,
+      ...(tipo ? { documentType: tipo as never } : {}),
+      ...(titulo ? { title: titulo } : {}),
+    });
+  });
 
   /**
    * A foto de um funcionário.

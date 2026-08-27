@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
+import { SendFromPhone } from "@/features/uploads/SendFromPhone";
 import { apiFetch, ApiError, getAccessToken } from "@/lib/api-client";
 import {
   DOCUMENT_STATUS_LABELS,
@@ -98,6 +99,21 @@ export function MyDocumentsPage() {
           <Alert tone="error">{error}</Alert>
         </div>
       )}
+
+      {/*
+        Primeiro caminho, e no tablet o único.
+        O modo quiosque não deixa abrir o seletor de arquivos do Android — o
+        formulário abaixo existia e era inútil justamente no aparelho onde a
+        pessoa passa o dia. Com o celular ela fotografa o papel que está na
+        mão, que é como um atestado chega de verdade.
+      */}
+      <div className="mb-8">
+        <SendFromPhone
+          purpose="DOCUMENTO"
+          titulo="Enviar pelo celular"
+          descricao="Aponte a câmera do seu celular para o código e fotografe o documento por lá."
+        />
+      </div>
 
       <form
         className="mb-8 grid gap-5 rounded-lg border border-border bg-surface p-6 md:grid-cols-2"

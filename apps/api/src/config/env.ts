@@ -97,6 +97,19 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().default("RS Pratas <nao-responda@rspratas.com.br>"),
 
+  /**
+   * Endereço público da tela, para montar links que saem do servidor.
+   *
+   * O QR Code do envio pelo celular carrega uma URL, e ela precisa vir daqui —
+   * não do cabeçalho Host da requisição. Montar link a partir do que o cliente
+   * informou é como um link de uso único acaba apontando para o servidor de
+   * outra pessoa.
+   *
+   * Sem ela, o primeiro endereço de CORS serve de palpite: em produção é o
+   * site publicado, e em desenvolvimento é o Vite local.
+   */
+  PUBLIC_WEB_URL: z.string().url().optional(),
+
   CORS_ALLOWED_ORIGINS: z
     .string()
     .default("")

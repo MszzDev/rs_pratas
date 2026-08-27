@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError, API_BASE_URL, getAccessToken } from "@/lib/api-client";
 import { useAuth } from "../auth/auth-context";
+import { SendFromPhone } from "@/features/uploads/SendFromPhone";
 import { aplicarPreferencias, guardarPreferencias, type Preferencias } from "./apply-preferences";
 
 interface Perfil {
@@ -278,6 +279,18 @@ export function ProfilePage() {
               várias vezes por dia. Não é obrigatória.
             </p>
           </section>
+
+          {/*
+            No tablet este é o ÚNICO caminho: o modo quiosque não deixa abrir o
+            seletor de arquivos do Android. No computador ele continua sendo o
+            mais rápido — a foto costuma estar no celular, não no disco.
+          */}
+          <SendFromPhone
+            purpose="FOTO"
+            titulo="Enviar foto pelo celular"
+            descricao="Aponte a câmera do seu celular para o código e escolha a foto por lá."
+            onRecebido={() => setVersaoDaFoto(Date.now())}
+          />
 
           {/* --------------------------------------------------- como eu vejo */}
           <section className="rounded-lg border border-border bg-surface p-6">

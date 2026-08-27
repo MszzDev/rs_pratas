@@ -399,6 +399,7 @@ model User {
   deviceSettingsUpdated DeviceSetting[]
 
   documents         EmployeeDocument[] @relation("EmployeeDocumentOwner")
+  uploadLinks       UploadLink[]       @relation("UploadLinkOwner")
   documentsReviewed EmployeeDocument[] @relation("EmployeeDocumentReviewer")
 
   stockMovements StockMovement[]
@@ -2494,4 +2495,54 @@ model StoredFile {
 
   @@index([scope])
   @@map("stored_files")
+}
+
+/// Para que serve um link de envio pelo celular.
+enum UploadPurpose {
+  /// Atestado, comprovante de horas, justificativa de falta.
+  DOCUMENTO
+  /// Foto do perfil do próprio funcionário.
+  FOTO
+}
+
+/// Um link de uso único para enviar arquivo do próprio celular.
+///
+/// Existe porque o tablet do balcão está em modo quiosque: o seletor de
+/// arquivos do Android é outra tela, e o confinamento não deixa abri-la. Na
+/// prática, a tela de documentos existia e era inútil no aparelho onde o
+/// funcionário passa o dia.
+///
+/// A pessoa, já logada no tablet, gera um QR Code e o lê com o PRÓPRIO celular.
+/// O celular abre uma página mínima que já sabe quem ela é — sem login, porque
+/// o código diz — tira a foto do papel e envia. O quiosque continua lacrado, e
+/// ela usa a câmera que já tem na mão.
+///
+/// O que torna isso seguro não é a página, é o token: 256 bits sorteados,
+/// guardado só como hash, válido por minutos, de uso único e preso a UMA
+/// pessoa e a UMA finalidade. Quem o intercepta consegue, no pior caso, enviar
+/// um arquivo para a fila de revisão daquele funcionário — e não consegue ler
+/// nada.
+model UploadLink {
+  id        String @id @default(uuid())
+  companyId String
+
+  userId String
+  user   User   @relation("UploadLinkOwner", fields: [userId], references: [id])
+
+  purpose UploadPurpose
+
+  /// SHA-256 do token com pepper. O token em si só existe no QR Code.
+  tokenHash String @unique
+
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  /// Preenchido no envio. Uso único: depois disto o link não vale mais.
+  usedAt    DateTime?
+
+  /// De onde o link foi pedido, quando veio de um tablet.
+  deviceId String?
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("upload_links")
 }

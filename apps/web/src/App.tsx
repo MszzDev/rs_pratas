@@ -41,6 +41,7 @@ import { CustomerReturnedPage } from "@/features/aftersales/CustomerReturnedPage
 import { AfterSalesPage } from "./features/aftersales/AfterSalesPage";
 import { ServiceOrdersPage } from "@/features/aftersales/ServiceOrdersPage";
 import { IntegrationsPage } from "@/features/settings/IntegrationsPage";
+import { PhoneUploadPage } from "@/features/uploads/PhoneUploadPage";
 import { ProfilePage } from "@/features/profile/ProfilePage";
 import { MyDayPage } from "@/features/dashboard/MyDayPage";
 import { PainelPage } from "./features/dashboard/PainelPage";
@@ -111,6 +112,13 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/pin" element={<PinLoginPage />} />
       <Route path="/primeiro-acesso" element={<FirstAccessPage />} />
+
+      {/*
+        Fora do RequireAuth porque quem abre está no PRÓPRIO celular, fora do
+        sistema. O que autoriza é o token do endereço, que veio do QR Code na
+        tela do tablet — sorteado, de uso único e válido por minutos.
+      */}
+      <Route path="/enviar/:token" element={<PhoneUploadPage />} />
 
       {/* Fora do RequireAuth de propósito: é a única rota que o dono alcança
           enquanto o segundo fator não estiver confirmado. */}
