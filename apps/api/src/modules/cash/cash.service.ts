@@ -397,6 +397,8 @@ export async function listOverdueSessions(request: FastifyRequest) {
       companyId: request.user.companyId,
       status: "ABERTO",
       openedAt: { lt: inicioDeHoje },
+      // Turno de loja removida não é pendência de ninguém.
+      store: { deletedAt: null },
       ...(seesEverything ? {} : { storeId: { in: request.user.storeIds } }),
     },
     include: {
@@ -436,6 +438,14 @@ export async function listSessions(params: {
   const sessions = await prisma.cashSession.findMany({
     where: {
       companyId: request.user.companyId,
+      /**
+       * Loja removida não aparece mais.
+       *
+       * Faltava, e o efeito era o mesmo do estoque: turnos de caixa de lojas
+       * de demonstração, que já não existem no cadastro, continuavam na tela
+       * do dono — um deles em aberto, pedindo para ser fechado por alguém.
+       */
+      store: { deletedAt: null },
       ...(storeId ? { storeId } : {}),
       ...(status ? { status } : {}),
       ...(seesEverything ? {} : { storeId: { in: request.user.storeIds } }),

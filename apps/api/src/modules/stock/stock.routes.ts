@@ -8,6 +8,7 @@ import {
   listStock,
   registerEntry,
   setMinQuantity,
+  stockAcrossStores,
 } from "./stock.service.js";
 import {
   cancelTransfer,
@@ -97,6 +98,27 @@ export async function stockRoutes(app: FastifyInstance) {
    * explicação em findStockAcrossStores. Só leitura, e só quantidade e nome
    * de loja.
    */
+  /**
+   * O estoque da rede inteira, uma linha por peça, com a divisão por loja.
+   *
+   * Responde "quantos a rede tem, e onde estão?" — que antes exigia abrir a
+   * mesma tela cinco vezes e somar de cabeça.
+   */
+  app.get(
+    "/stock/summary",
+    { preHandler: [app.requireAuth, requirePermission("STOCK_VIEW")] },
+    async (request) => {
+      const query = z
+        .object({
+          search: z.string().max(120).optional(),
+          lowStockOnly: z.coerce.boolean().optional(),
+        })
+        .parse(request.query);
+
+      return stockAcrossStores({ request, ...query });
+    },
+  );
+
   app.get(
     "/stock/other-stores",
     { preHandler: [app.requireAuth, requirePermission("STOCK_VIEW")] },

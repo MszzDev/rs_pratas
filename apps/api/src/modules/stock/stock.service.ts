@@ -495,3 +495,118 @@ export async function findStockAcrossStores(params: {
     }))
     .filter((linha) => linha.disponivel > 0);
 }
+
+/**
+ * O estoque da rede inteira, uma linha por peça.
+ *
+ * A tela de Estoque sempre mostrou uma loja de cada vez, e isso responde "o
+ * que tem aqui?". Não responde a pergunta que o dono faz: "quantos anéis aro
+ * 18 a rede tem, e onde eles estão?" — que hoje exige abrir cinco vezes a
+ * mesma tela e somar de cabeça.
+ *
+ * Uma linha por peça, com o total e a divisão por loja ao lado. É a mesma
+ * informação que já existia, organizada pela pergunta em vez de pelo cadastro.
+ *
+ * Só o que ainda existe entra: peça fora de catálogo e loja removida ficam de
+ * fora, como no resto do sistema.
+ */
+export async function stockAcrossStores(params: {
+  request: FastifyRequest;
+  search?: string | undefined;
+  lowStockOnly?: boolean | undefined;
+}) {
+  const { request, search, lowStockOnly } = params;
+
+  const seesEverything = request.user.role === "DONO" || request.user.role === "DESENVOLVEDOR";
+
+  const items = await prisma.stockItem.findMany({
+    where: {
+      companyId: request.user.companyId,
+      ...(seesEverything ? {} : { storeId: { in: request.user.storeIds } }),
+      product: {
+        deletedAt: null,
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: "insensitive" } },
+                { sku: { contains: search, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      store: { deletedAt: null },
+    },
+    include: {
+      product: {
+        select: { id: true, sku: true, name: true, salePrice: true, imageChecksum: true },
+      },
+      variation: { select: { sku: true, size: true } },
+      store: { select: { id: true, name: true } },
+    },
+    orderBy: [{ product: { name: "asc" } }],
+  });
+
+  /** Uma linha por peça (com o tamanho, quando houver). */
+  const porPeca = new Map<
+    string,
+    {
+      productId: string;
+      sku: string;
+      name: string;
+      size: string | null;
+      salePrice: string;
+      imageChecksum: string | null;
+      total: number;
+      disponivel: number;
+      reservado: number;
+      abaixoDoMinimo: boolean;
+      lojas: { storeId: string; storeName: string; quantidade: number; disponivel: number }[];
+    }
+  >();
+
+  for (const item of items) {
+    const chave = `${item.productId}:${item.variationId ?? ""}`;
+
+    const linha = porPeca.get(chave) ?? {
+      productId: item.productId,
+      sku: item.variation?.sku ?? item.product.sku,
+      name: item.product.name,
+      size: item.variation?.size ?? null,
+      salePrice: item.product.salePrice.toString(),
+      imageChecksum: item.product.imageChecksum,
+      total: 0,
+      disponivel: 0,
+      reservado: 0,
+      abaixoDoMinimo: false,
+      lojas: [],
+    };
+
+    const disponivel = item.quantity - item.reservedQuantity;
+
+    linha.total += item.quantity;
+    linha.disponivel += disponivel;
+    linha.reservado += item.reservedQuantity;
+
+    // Basta uma loja abaixo do mínimo para a peça merecer atenção: o total da
+    // rede pode estar confortável e uma loja específica estar sem nada.
+    if (item.minQuantity > 0 && item.quantity <= item.minQuantity) {
+      linha.abaixoDoMinimo = true;
+    }
+
+    linha.lojas.push({
+      storeId: item.storeId,
+      storeName: item.store.name,
+      quantidade: item.quantity,
+      disponivel,
+    });
+
+    porPeca.set(chave, linha);
+  }
+
+  const linhas = [...porPeca.values()].map((linha) => ({
+    ...linha,
+    lojas: linha.lojas.sort((a, b) => a.storeName.localeCompare(b.storeName, "pt-BR")),
+  }));
+
+  return lowStockOnly ? linhas.filter((linha) => linha.abaixoDoMinimo) : linhas;
+}

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
+import { NetworkStock } from "./NetworkStock";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { ProductPhoto } from "@/components/ui/product-photo";
 import { useAuth } from "../auth/auth-context";
@@ -67,6 +68,15 @@ export function StockPage() {
   // visível de propósito: quem vende precisa saber por que a peça sumiu.
   const podeAjustar = can("STOCK_ADJUST");
 
+  /**
+   * Duas perguntas diferentes, duas visões.
+   *
+   * "Por loja" responde o que tem naquele balcão — é a visão de quem vai
+   * contar a gaveta. "Toda a rede" responde quantos existem ao todo e onde
+   * estão, que é a pergunta do dono e que antes exigia abrir a mesma tela
+   * cinco vezes e somar de cabeça.
+   */
+  const [visao, setVisao] = useState<"loja" | "rede">("loja");
   const [storeId, setStoreId] = useState("");
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
@@ -98,6 +108,9 @@ export function StockPage() {
       if (lowOnly) params.set("lowStockOnly", "true");
       return apiFetch<StockRow[]>(`/api/v1/stock?${params.toString()}`);
     },
+    // Na visão da rede a lista por loja nem é buscada: são milhares de linhas
+    // que ninguém vai ver.
+    enabled: visao === "loja",
   });
 
   const movements = useQuery({
@@ -158,7 +171,7 @@ export function StockPage() {
     <PageShell
       eyebrow="Operação"
       title="Estoque"
-      description="Saldo por loja. Cada mudança fica registrada com autor e motivo."
+      description="Saldo por loja ou da rede inteira. Cada mudança fica registrada com autor e motivo."
     >
       {error && (
         <div className="mb-5">
@@ -166,8 +179,29 @@ export function StockPage() {
         </div>
       )}
 
+      <div className="mb-5 flex flex-wrap gap-2">
+        {(
+          [
+            { valor: "loja", rotulo: "Por loja" },
+            { valor: "rede", rotulo: "Toda a rede" },
+          ] as const
+        ).map((opcao) => (
+          <Button
+            key={opcao.valor}
+            type="button"
+            variant={visao === opcao.valor ? "primary" : "outline"}
+            aria-pressed={visao === opcao.valor}
+            onClick={() => setVisao(opcao.valor)}
+          >
+            {opcao.rotulo}
+          </Button>
+        ))}
+      </div>
+
       <div className="mb-5 flex flex-wrap items-end gap-4">
-        <StorePicker storeId={storeId} onChange={setStoreId} todas className="min-w-[12rem]" />
+        {visao === "loja" && (
+          <StorePicker storeId={storeId} onChange={setStoreId} todas className="min-w-[12rem]" />
+        )}
 
         <div className="min-w-[14rem] flex-1">
           <Field
@@ -332,7 +366,9 @@ export function StockPage() {
         </div>
       )}
 
-      <ul className="space-y-3">
+      {visao === "rede" && <NetworkStock search={search} lowOnly={lowOnly} />}
+
+      <ul className={visao === "rede" ? "hidden" : "space-y-3"}>
         {stock.data?.map((row) => (
           <li
             key={row.id}
@@ -426,7 +462,7 @@ export function StockPage() {
         ))}
       </ul>
 
-      {stock.data?.length === 0 && (
+      {visao === "loja" && stock.data?.length === 0 && (
         <Alert tone="info">
           <span className="flex items-center gap-2">
             <ArrowDownToLine className="h-4 w-4" aria-hidden />

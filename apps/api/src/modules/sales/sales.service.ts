@@ -570,6 +570,9 @@ export async function listSales(params: {
   return prisma.sale.findMany({
     where: {
       companyId: request.user.companyId,
+      // Venda de loja removida sai da lista pelo mesmo motivo do caixa e do
+      // estoque: a loja não existe mais, e a linha só confunde quem procura.
+      store: { deletedAt: null },
       ...(storeId ? { storeId } : {}),
       ...(sessionId ? { sessionId } : {}),
       ...(customerId ? { customerId } : {}),
