@@ -482,3 +482,111 @@ describe("pedido de senha nova", () => {
     expect(naoExiste.json().registrado).toBe(true);
   });
 });
+
+/**
+ * O suporte técnico liberando credencial.
+ *
+ * É a ÚNICA escrita que o perfil somente-leitura pode fazer, e existe para
+ * fechar um beco sem saída: a fila só era vista por dono e gerente, e no dia
+ * em que o dono esquece a própria senha não sobrava ninguém para atendê-lo.
+ *
+ * A contrapartida é séria e estes testes a delimitam: o suporte alcança a fila
+ * e mais nada.
+ */
+describe("suporte técnico e a fila de credenciais", () => {
+  async function cenarioComSuporte() {
+    const company = await createTestCompany();
+    const { user: suporte, password } = await createTestUser({
+      companyId: company.id,
+      role: "DESENVOLVEDOR",
+    });
+    const { user: vendedora } = await createTestUser({
+      companyId: company.id,
+      role: "VENDEDOR",
+    });
+
+    const token = (await authenticate(suporte.employeeCode, password)).json()
+      .accessToken as string;
+
+    return { company, suporte, vendedora, token };
+  }
+
+  it("vê a fila e libera a senha de quem pediu", async () => {
+    const { vendedora, token } = await cenarioComSuporte();
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/pin/reset-request",
+      payload: { employeeCode: vendedora.employeeCode, type: "SENHA" },
+    });
+
+    const fila = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/pin/reset-requests",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(fila.statusCode).toBe(200);
+    expect(fila.json()).toHaveLength(1);
+
+    const liberacao = await app.inject({
+      method: "POST",
+      url: `/api/v1/auth/pin/reset-requests/${fila.json()[0].id}/approve`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(liberacao.statusCode).toBe(200);
+    expect(liberacao.json().type).toBe("SENHA");
+  });
+
+  it("continua sem poder alterar qualquer outra coisa", async () => {
+    const { company, token } = await cenarioComSuporte();
+
+    const tentativa = await app.inject({
+      method: "POST",
+      url: "/api/v1/users",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        name: "Alguém",
+        employeeCode: "RS777777",
+        role: "VENDEDOR",
+        storeIds: [],
+        companyId: company.id,
+      },
+    });
+
+    expect(tentativa.statusCode).toBe(403);
+    expect(tentativa.json().error.code).toBe("DEVELOPER_READ_ONLY");
+  });
+
+  it("a liberação fica na auditoria com o nome de quem liberou", async () => {
+    const { suporte, vendedora, token } = await cenarioComSuporte();
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/pin/reset-request",
+      payload: { employeeCode: vendedora.employeeCode, type: "SENHA" },
+    });
+
+    const fila = await app.inject({
+      method: "GET",
+      url: "/api/v1/auth/pin/reset-requests",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/auth/pin/reset-requests/${fila.json()[0].id}/approve`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    const registro = await prisma.auditLog.findFirst({
+      where: { action: "PASSWORD_CHANGE", entityId: vendedora.id },
+      orderBy: { createdAt: "desc" },
+    });
+
+    expect(registro?.userId).toBe(suporte.id);
+    expect(registro?.userRoleSnapshot).toBe("DESENVOLVEDOR");
+    // A senha NÃO entra na auditoria: o log é lido por mais gente que o banco.
+    expect(JSON.stringify(registro)).not.toContain("temporaryPin");
+  });
+});

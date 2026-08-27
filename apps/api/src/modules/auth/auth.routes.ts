@@ -231,15 +231,23 @@ export async function authRoutes(app: FastifyInstance) {
     return requestPinReset(body);
   });
 
+  /**
+   * A fila de credenciais perdidas.
+   *
+   * O suporte técnico entra aqui junto com o dono e o gerente — é a única
+   * coisa que ele pode alterar no sistema inteiro. Sem isso, o dia em que o
+   * DONO esquece a própria senha não tem saída: a fila só era vista por quem
+   * já está dentro.
+   */
   app.get(
     "/pin/reset-requests",
-    { preHandler: [app.requireAuth, requireRole("DONO", "GERENTE")] },
+    { preHandler: [app.requireAuth, requireRole("DONO", "GERENTE", "DESENVOLVEDOR")] },
     async (request) => listPinResets(request),
   );
 
   app.post(
     "/pin/reset-requests/:id/approve",
-    { preHandler: [app.requireAuth, requireRole("DONO", "GERENTE")] },
+    { preHandler: [app.requireAuth, requireRole("DONO", "GERENTE", "DESENVOLVEDOR")] },
     async (request) => {
       const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
       return approvePinReset({ requestId: id, request });
@@ -248,7 +256,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post(
     "/pin/reset-requests/:id/reject",
-    { preHandler: [app.requireAuth, requireRole("DONO", "GERENTE")] },
+    { preHandler: [app.requireAuth, requireRole("DONO", "GERENTE", "DESENVOLVEDOR")] },
     async (request) => {
       const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
       const { reason } = z

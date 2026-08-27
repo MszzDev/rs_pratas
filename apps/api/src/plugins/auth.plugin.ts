@@ -24,6 +24,23 @@ declare module "fastify" {
 }
 
 /**
+ * A ÚNICA escrita que o suporte técnico pode fazer.
+ *
+ * Liberar uma credencial temporária para quem perdeu a dela. Existe porque
+ * sem ela a empresa tem um beco sem saída: a fila de liberação só é vista por
+ * dono e gerente, e no dia em que o DONO esquece a própria senha não sobra
+ * ninguém para atendê-lo.
+ *
+ * A consequência é séria e precisa ser dita: quem libera a senha do dono pode
+ * entrar como o dono. Não há como dar recuperação de credencial a alguém sem
+ * lhe dar esse poder — a diferença entre um sistema com recuperação e um sem
+ * ela é exatamente essa. O que sobra é escolher em quem confiar, e registrar
+ * tudo: cada liberação vai para a auditoria com nome, hora e motivo, numa
+ * tabela que nem o dono consegue alterar.
+ */
+const ESCRITA_PERMITIDA_AO_SUPORTE = /^\/api\/v1\/auth\/pin\/reset-requests\/[^/]+\/(approve|reject)$/;
+
+/**
  * O perfil DESENVOLVEDOR existe para dar suporte técnico com visão total dos
  * dados — nunca para alterá-los. Redundante de propósito com o catálogo de
  * permissões (que só concede códigos de visualização a esse perfil): se alguém
@@ -32,12 +49,22 @@ declare module "fastify" {
 async function blockWriteForDeveloper(request: FastifyRequest): Promise<void> {
   const isWrite = ["POST", "PUT", "PATCH", "DELETE"].includes(request.method);
 
-  if (isWrite && request.user.role === "DESENVOLVEDOR") {
-    throw forbidden(
-      "DEVELOPER_READ_ONLY",
-      "O modo desenvolvedor é somente leitura — nenhuma alteração é permitida.",
-    );
+  if (!isWrite || request.user.role !== "DESENVOLVEDOR") {
+    return;
   }
+
+  // A exceção é uma rota nomeada, e não uma permissão que alguém possa
+  // conceder por engano: para o suporte ganhar outra escrita, é preciso mexer
+  // aqui, num arquivo cujo nome diz o que ele faz.
+  const caminho = request.url.split("?")[0] ?? "";
+  if (ESCRITA_PERMITIDA_AO_SUPORTE.test(caminho)) {
+    return;
+  }
+
+  throw forbidden(
+    "DEVELOPER_READ_ONLY",
+    "O modo desenvolvedor é somente leitura — só a liberação de credencial é permitida.",
+  );
 }
 
 /**
