@@ -3,6 +3,8 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import { installBackgroundPrivacy, installKioskGuards } from "./lib/kiosk";
+import { vigiarAtualizacoes } from "./lib/app-update";
+import { AvisoDeAtualizacao } from "./components/ui/update-notice";
 import { useDeviceRegistration } from "./features/devices/use-device-registration";
 import { WaitingForStore } from "./features/devices/WaitingForStore";
 import { ChangePinPage } from "./features/auth/ChangePinPage";
@@ -397,15 +399,28 @@ export function App() {
    */
   const registro = useDeviceRegistration();
 
+  /** Guardada quando há versão nova e a pessoa está no meio de algo. */
+  const [atualizacao, setAtualizacao] = useState<(() => void) | null>(null);
+
   useEffect(() => {
     // O brilho escolhido ontem vale hoje: quem ajustou não deve ter que
     // ajustar de novo a cada abertura do aplicativo.
     void restaurarBrilho();
 
+    /**
+     * A versão publicada chegando ao tablet.
+     *
+     * O WebView do Android guarda o documento no cache e não o revalida:
+     * publicar o site não mudava nada no aparelho, e reiniciar o aplicativo
+     * também não. Isto confere sozinho e troca quando não há nada a perder.
+     */
+    const pararDeVigiar = vigiarAtualizacoes((aplicar) => setAtualizacao(() => aplicar));
+
     const removeKioskGuards = installKioskGuards();
     const removePrivacy = installBackgroundPrivacy(setHidden);
 
     return () => {
+      pararDeVigiar();
       removeKioskGuards();
       removePrivacy();
     };
@@ -433,6 +448,12 @@ export function App() {
           rotas porque não pertence a tela nenhuma: vale para todas.
         */}
         <ScreenLock />
+
+        {/*
+          Só aparece quando a pessoa está no meio de algo — nas telas de
+          entrada a troca acontece sozinha, sem avisar ninguém.
+        */}
+        {atualizacao && <AvisoDeAtualizacao aplicar={atualizacao} />}
 
         {/*
           Cortina opaca enquanto o app está em segundo plano: o Android

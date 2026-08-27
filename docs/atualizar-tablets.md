@@ -30,6 +30,32 @@ cd android && ./gradlew assembleDebug
 Sem a variável `CAP_SERVER_URL`, o APK é gerado com as telas embutidas — que é
 o que se quer para testar uma versão local antes de publicar.
 
+### O tablet descobrindo sozinho que há versão nova
+
+Publicar o site não bastava. O WebView do Android guarda o documento principal
+no cache dele e **não o revalida** — nem reiniciar o aplicativo bastava. O
+tablet ficava numa versão antiga sem nada na tela dizendo isso, e a diferença
+só aparecia quando alguém procurava uma tela nova e não achava. Foi
+exatamente o que aconteceu com o envio por QR Code.
+
+O aplicativo agora confere por conta própria: busca o `index.html` publicado
+sem cache e compara o nome do pacote (`index-Dxi_Ixmc.js`) com o que está
+carregado. Diferente, há versão nova.
+
+Quando ele troca:
+
+- **Sozinho**, se a pessoa estiver na tela de entrada (`/pin`, `/login`) — ali
+  não há nada a perder.
+- **Perguntando**, se ela estiver no meio de alguma coisa. Recarregar durante
+  uma venda apagaria o carrinho, então o aviso espera num canto.
+
+A conferência acontece ao abrir, a cada volta do segundo plano, e de quinze em
+quinze minutos.
+
+A recarga usa um endereço com carimbo de tempo, e não `location.reload()`: o
+reload comum volta a pedir a mesma URL, e o WebView responde do mesmo cache
+que criou o problema.
+
 ### O que isso custa
 
 O tablet passa a precisar de internet para **abrir**, não só para trabalhar.
