@@ -17,9 +17,8 @@ import {
 } from "lucide-react";
 import {
   explicarFalha,
-  imprimirBytes,
+  imprimirComprovante,
   lerImpressoraEscolhida,
-  montarComprovante,
   temImpressora,
   type DadosDoComprovante,
 } from "@/features/printing/printer";
@@ -256,7 +255,7 @@ export function PosPage() {
   const imprimir = useMutation({
     mutationFn: async (saleId: string) => {
       const dados = await apiFetch<DadosDoComprovante>(`/api/v1/sales/${saleId}/print-data`);
-      await imprimirBytes(montarComprovante(dados));
+      await imprimirComprovante(dados);
     },
     onSuccess: () => setEnvio("Comprovante impresso."),
     onError: (caught) => setError(explicarFalha(caught)),

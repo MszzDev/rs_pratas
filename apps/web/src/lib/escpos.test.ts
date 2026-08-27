@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COLUNAS, Comprovante } from "./escpos";
+import { COLUNAS, COLUNAS_80MM, Comprovante } from "./escpos";
 
 /**
  * O comprovante é o único pedaço do sistema que ninguém consegue conferir
@@ -80,6 +80,48 @@ describe("Comprovante", () => {
 
     // Nenhuma palavra foi cortada no meio.
     expect(linhas.join(" ").split(/\s+/).filter(Boolean)).toEqual(nome.split(" "));
+  });
+
+  /**
+   * O rolo de 80 mm, que é o da Elgin L42.
+   *
+   * A largura vem do aparelho, não do sistema: duas lojas podem ter rolos
+   * diferentes, e o mesmo comprovante precisa sair certo nas duas. Errar aqui
+   * imprime o preço no meio da folha em vez de na margem.
+   */
+  it("respeita a largura do papel de 80 mm", () => {
+    const saida = texto(new Comprovante(COLUNAS_80MM).entreExtremos("TOTAL", "199,90").paraBase64());
+    const linha = saida.split("\n").find((l) => l.includes("TOTAL"));
+
+    expect(linha).toHaveLength(COLUNAS_80MM);
+    expect(linha?.endsWith("199,90")).toBe(true);
+  });
+
+  it("o separador acompanha a largura escolhida", () => {
+    const estreito = texto(new Comprovante().separador().paraBase64()).trim();
+    const largo = texto(new Comprovante(COLUNAS_80MM).separador().paraBase64()).trim();
+
+    expect(estreito).toHaveLength(COLUNAS);
+    expect(largo).toHaveLength(COLUNAS_80MM);
+  });
+
+  it("quebra o parágrafo na largura do rolo, e não numa fixa", () => {
+    const nome = "Pulseira Veneziana Prata 925 com Fecho Reforcado";
+
+    const linhasEstreitas = texto(new Comprovante().paragrafo(nome).paraBase64())
+      .split("\n")
+      .filter((l) => l.trim() !== "");
+    const linhasLargas = texto(new Comprovante(COLUNAS_80MM).paragrafo(nome).paraBase64())
+      .split("\n")
+      .filter((l) => l.trim() !== "");
+
+    // No papel largo o mesmo nome cabe em menos linhas — se não couber, a
+    // largura não está sendo respeitada.
+    expect(linhasLargas.length).toBeLessThan(linhasEstreitas.length);
+
+    for (const linha of linhasLargas) {
+      expect(linha.length).toBeLessThanOrEqual(COLUNAS_80MM);
+    }
   });
 
   it("avança o papel antes de cortar, para a lâmina não passar no texto", () => {

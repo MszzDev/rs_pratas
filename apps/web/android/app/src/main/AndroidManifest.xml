@@ -101,4 +101,15 @@
     <uses-permission
         android:name="android.permission.BLUETOOTH_CONNECT"
         android:usesPermissionFlags="neverForLocation" />
+
+    <!--
+      Impressora ligada no cabo.
+
+      `required=false` de proposito: nem todo tablet tem porta USB util, e a
+      loja que imprime por Bluetooth ou por rede nao deve ficar sem instalar o
+      aplicativo por causa de uma porta que ela nao usa.
+    -->
+    <uses-feature
+        android:name="android.hardware.usb.host"
+        android:required="false" />
 </manifest>

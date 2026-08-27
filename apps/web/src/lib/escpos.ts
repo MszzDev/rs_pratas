@@ -1,9 +1,11 @@
 /**
  * ESC/POS — a linguagem das impressoras térmicas de balcão.
  *
- * O papel de 58 mm cabe 32 caracteres na fonte normal. Tudo aqui parte disso:
- * as linhas quebram em 32, o alinhamento de preço é calculado em 32, e o traço
- * separador tem 32. Trocar de papel para 80 mm é trocar `COLUNAS`.
+ * A largura do papel vem no construtor: 32 colunas no rolo de 58 mm, 48 no de
+ * 80 mm. Tudo aqui parte desse número — a quebra de linha, o preço encostado na
+ * margem direita e o traço separador. Ele é do APARELHO, e não do sistema:
+ * duas lojas podem ter rolos diferentes, e o mesmo comprovante precisa sair
+ * certo nas duas.
  *
  * Por que montar os bytes aqui e não no Android: layout de comprovante muda —
  * o rodapé ganha um telefone, a garantia ganha uma linha, o dono quer o CNPJ.
@@ -12,8 +14,16 @@
  * publicação.
  */
 
-/** Colunas de uma linha na fonte normal, no papel de 58 mm. */
+/**
+ * Colunas de uma linha na fonte normal.
+ *
+ * 32 no rolo de 58 mm, 48 no de 80 mm — que é o da Elgin L42. Todo alinhamento
+ * daqui parte deste número: a quebra de linha, o preço encostado na margem
+ * direita e o traço separador. Trocar o rolo sem trocar isto faz o comprovante
+ * sair quebrando no meio das palavras ou desperdiçando metade do papel.
+ */
 export const COLUNAS = 32;
+export const COLUNAS_80MM = 48;
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -101,7 +111,12 @@ function paraCp850(texto: string): number[] {
 export class Comprovante {
   private bytes: number[] = [];
 
-  constructor() {
+  /** A largura do papel desta impressora, em colunas. */
+  private readonly colunas: number;
+
+  constructor(colunas: number = COLUNAS) {
+    this.colunas = colunas;
+
     // ESC @ zera a impressora: negrito, alinhamento e tamanho voltam ao padrão.
     // Sem isso, um comprovante que terminou em negrito começa o próximo assim.
     this.bytes.push(ESC, 0x40);
@@ -127,7 +142,7 @@ export class Comprovante {
    * justamente na parte que o cliente vai conferir.
    */
   paragrafo(texto: string, recuo = 0): this {
-    const largura = COLUNAS - recuo;
+    const largura = this.colunas - recuo;
     const espacos = " ".repeat(recuo);
     let atual = "";
 
@@ -153,13 +168,13 @@ export class Comprovante {
    * procurando o total, e valores desalinhados obrigam a ler tudo.
    */
   entreExtremos(esquerda: string, direita: string): this {
-    const sobra = COLUNAS - esquerda.length - direita.length;
+    const sobra = this.colunas - esquerda.length - direita.length;
 
     if (sobra < 1) {
       // Não coube na mesma linha: o valor desce e encosta na direita, que é
       // melhor que espremer os dois e deixar ambos ilegíveis.
       this.linha(esquerda);
-      return this.linha(direita.padStart(COLUNAS));
+      return this.linha(direita.padStart(this.colunas));
     }
 
     return this.linha(esquerda + " ".repeat(sobra) + direita);
@@ -180,7 +195,7 @@ export class Comprovante {
   }
 
   separador(caractere = "-"): this {
-    return this.linha(caractere.repeat(COLUNAS));
+    return this.linha(caractere.repeat(this.colunas));
   }
 
   /**

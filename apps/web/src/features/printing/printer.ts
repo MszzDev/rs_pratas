@@ -14,8 +14,23 @@ import { Comprovante } from "@/lib/escpos";
 interface ImpressoraPlugin {
   situacao(): Promise<{ temBluetooth: boolean; ligado: boolean; permitido: boolean }>;
   listar(): Promise<{ impressoras: { nome: string; endereco: string }[] }>;
+  listarUsb(): Promise<{ impressoras: { nome: string; endereco: string }[] }>;
   imprimir(options: { endereco: string; conteudo: string }): Promise<{ impresso: boolean }>;
+  imprimirNaRede(options: {
+    ip: string;
+    porta?: number;
+    conteudo: string;
+  }): Promise<{ impresso: boolean }>;
+  imprimirNoUsb(options: { endereco: string; conteudo: string }): Promise<{ impresso: boolean }>;
 }
+
+/**
+ * Por onde os bytes chegam à impressora.
+ *
+ * A linguagem é a mesma nas três — ESC/POS —, e é por isso que o comprovante
+ * montado uma vez serve para qualquer uma. O que muda é a porta.
+ */
+export type Ligacao = "BLUETOOTH" | "REDE" | "USB";
 
 const Impressora = registerPlugin<ImpressoraPlugin>("Impressora");
 
@@ -23,7 +38,19 @@ const CHAVE = "rs.impressora";
 
 export interface ImpressoraEscolhida {
   nome: string;
+  /** Endereço Bluetooth, caminho do aparelho USB, ou IP na rede. */
   endereco: string;
+  ligacao: Ligacao;
+  /** Só para rede. 9100 é o padrão de fato das impressoras térmicas. */
+  porta?: number;
+  /**
+   * Largura do papel em colunas de texto.
+   *
+   * 32 no rolo de 58 mm, 48 no de 80 mm. Fica guardado com a impressora porque
+   * é dela: trocar o modelo do balcão sem trocar isto faria o comprovante sair
+   * quebrando linha no meio ou desperdiçando metade do papel.
+   */
+  colunas: number;
 }
 
 export function temImpressora(): boolean {
@@ -37,7 +64,23 @@ export async function lerImpressoraEscolhida(): Promise<ImpressoraEscolhida | nu
   if (!value) return null;
 
   try {
-    return JSON.parse(value) as ImpressoraEscolhida;
+    const guardada = JSON.parse(value) as Partial<ImpressoraEscolhida>;
+
+    if (!guardada.endereco) return null;
+
+    /**
+     * O que foi escolhido antes de existirem rede e USB não tem esses campos.
+     * Bluetooth em 32 colunas é o que aquelas escolhas eram — assumir isso é
+     * melhor que devolver nulo e fazer o balcão parar de imprimir depois de
+     * uma atualização.
+     */
+    return {
+      nome: guardada.nome ?? "Impressora",
+      endereco: guardada.endereco,
+      ligacao: guardada.ligacao ?? "BLUETOOTH",
+      colunas: guardada.colunas ?? 32,
+      ...(guardada.porta ? { porta: guardada.porta } : {}),
+    };
   } catch {
     return null;
   }
@@ -58,10 +101,20 @@ export async function situacaoDaImpressao() {
   return Impressora.situacao();
 }
 
+/** As impressoras pareadas por Bluetooth. */
 export async function listarImpressoras(): Promise<ImpressoraEscolhida[]> {
   if (!temImpressora()) return [];
+
   const { impressoras } = await Impressora.listar();
-  return impressoras;
+  return impressoras.map((p) => ({ ...p, ligacao: "BLUETOOTH" as const, colunas: 32 }));
+}
+
+/** As impressoras ligadas no cabo. */
+export async function listarImpressorasUsb(): Promise<ImpressoraEscolhida[]> {
+  if (!temImpressora()) return [];
+
+  const { impressoras } = await Impressora.listarUsb();
+  return impressoras.map((p) => ({ ...p, ligacao: "USB" as const, colunas: 48 }));
 }
 
 /**
@@ -88,6 +141,25 @@ export function explicarFalha(erro: unknown): string {
     return "Nenhuma impressora escolhida para este tablet. Escolha em Ajustes.";
   }
 
+  // --- rede
+  if (texto.includes("REDE_FALHOU")) {
+    return "A impressora não respondeu na rede. Confira se está ligada, se o cabo está conectado e se o endereço IP é o que aparece no autoteste dela.";
+  }
+
+  // --- cabo
+  if (texto.includes("USB_AUSENTE")) {
+    return "A impressora não está mais no cabo. Reconecte e escolha de novo.";
+  }
+  if (texto.includes("USB_SEM_PERMISSAO")) {
+    return "O Android não deixou o sistema usar a impressora. Ao conectar, marque a permissão — e, se quiser, 'sempre permitir'.";
+  }
+  if (texto.includes("USB_NAO_E_IMPRESSORA") || texto.includes("USB_SEM_CANAL")) {
+    return "Este aparelho USB não se apresenta como impressora. Confira se é o cabo da impressora e não outro acessório.";
+  }
+  if (texto.includes("USB_FALHOU")) {
+    return "A impressora parou de responder no cabo. Confira se está ligada e com papel.";
+  }
+
   return "A impressora não respondeu. Confira se está ligada e com papel.";
 }
 
@@ -98,7 +170,40 @@ export async function imprimirBytes(conteudo: string): Promise<void> {
     throw new Error("FALTAM_DADOS");
   }
 
+  // A escolha da porta é a ÚNICA diferença entre os três caminhos. Os bytes
+  // são os mesmos, porque a linguagem da impressora é a mesma.
+  if (escolhida.ligacao === "REDE") {
+    await Impressora.imprimirNaRede({
+      ip: escolhida.endereco,
+      conteudo,
+      ...(escolhida.porta ? { porta: escolhida.porta } : {}),
+    });
+    return;
+  }
+
+  if (escolhida.ligacao === "USB") {
+    await Impressora.imprimirNoUsb({ endereco: escolhida.endereco, conteudo });
+    return;
+  }
+
   await Impressora.imprimir({ endereco: escolhida.endereco, conteudo });
+}
+
+/**
+ * Monta o comprovante na largura DESTA impressora e manda imprimir.
+ *
+ * Existe para a tela de venda não precisar saber quantas colunas o rolo tem.
+ * Ela conhece a venda; a largura é assunto do aparelho, e mudá-la não deveria
+ * obrigar a mexer no PDV.
+ */
+export async function imprimirComprovante(dados: DadosDoComprovante): Promise<void> {
+  const escolhida = await lerImpressoraEscolhida();
+
+  if (!escolhida) {
+    throw new Error("FALTAM_DADOS");
+  }
+
+  await imprimirBytes(montarComprovante(dados, escolhida.colunas));
 }
 
 // ------------------------------------------------------------------ layout
@@ -149,8 +254,8 @@ function data(iso: string): string {
  * levou, depois quanto pagou. O total vem em corpo dobrado porque é o número
  * que ela procura primeiro.
  */
-export function montarComprovante(dados: DadosDoComprovante): string {
-  const papel = new Comprovante();
+export function montarComprovante(dados: DadosDoComprovante, colunas = 32): string {
+  const papel = new Comprovante(colunas);
 
   papel.alinhamento(1).grande(true).negrito(true).linha(dados.empresa.nome);
   papel.grande(false).linha(dados.loja.nome).negrito(false);
