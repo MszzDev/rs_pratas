@@ -1835,6 +1835,17 @@ model LabelTemplate {
 
   fontScale Decimal @default(1) @db.Decimal(4, 2)
 
+  /// O desenho da etiqueta, quando o dono montou um.
+  ///
+  /// Lista de elementos com posição e tamanho em MILÍMETROS — a mesma unidade
+  /// da impressora, para o que se vê na tela ser o que sai no papel sem
+  /// conversão no meio do caminho.
+  ///
+  /// Nulo significa "use o desenho padrão", que empilha nome, código, preço e
+  /// barras. As etiquetas criadas antes do editor continuam com ele, e é o que
+  /// aparece na tela do editor quando alguém abre uma delas pela primeira vez.
+  elements Json?
+
   isDefault Boolean @default(false)
   isActive  Boolean @default(true)
 

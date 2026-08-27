@@ -52,8 +52,21 @@ export default tseslint.config(
   },
 
   {
-    // O seed e os scripts de teste imprimem no console de propósito.
-    files: ["apps/api/prisma/seed.ts", "apps/api/prisma/demo-seed.ts", "apps/api/test/**/*.ts"],
+    /**
+     * O seed, os testes e os scripts de manutenção imprimem no console de
+     * propósito.
+     *
+     * A regra existe porque um `console.log` esquecido no meio de uma rotina
+     * de auditoria vira ruído no log de produção. Num script que alguém roda à
+     * mão no terminal, o que ele imprime É o resultado — não há outro lugar
+     * para o relatório aparecer.
+     */
+    files: [
+      "apps/api/prisma/seed.ts",
+      "apps/api/prisma/demo-seed.ts",
+      "apps/api/test/**/*.ts",
+      "**/scripts/**/*.{mjs,js,ts}",
+    ],
     rules: { "no-console": "off" },
   },
 );

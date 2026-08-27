@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
+import { labelElementsSchema } from "@rs-pratas/shared";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
 import {
   buildBatchFromStock,
@@ -12,6 +13,7 @@ import {
   queueProductLabels,
   queueReceipt,
   reportPrintResult,
+  saveTemplateElements,
 } from "./labels.service.js";
 
 const idParamSchema = z.object({ id: z.string().uuid() });
@@ -45,6 +47,26 @@ export async function labelRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const input = createTemplateSchema.parse(request.body);
       return reply.status(201).send(await createTemplate({ input, request }));
+    },
+  );
+
+  /**
+   * O desenho montado no editor.
+   *
+   * Vive no servidor porque a etiqueta é da EMPRESA: o dono monta uma vez e as
+   * cinco lojas imprimem igual. Guardado no aparelho, a mesma peça sairia
+   * diferente em cada quiosque.
+   */
+  app.put(
+    "/label-templates/:id/elements",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_TEMPLATE_MANAGE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      const { elements } = z
+        .object({ elements: labelElementsSchema })
+        .parse(request.body);
+
+      return saveTemplateElements({ templateId: id, elements, request });
     },
   );
 

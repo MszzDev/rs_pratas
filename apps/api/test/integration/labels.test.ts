@@ -162,6 +162,146 @@ describe("modelos de etiqueta", () => {
   });
 });
 
+/**
+ * O desenho da etiqueta.
+ *
+ * O que importa provar aqui é que o desenho fica guardado, que quem não manda
+ * no modelo não mexe nele, e — o principal — que uma etiqueta já enfileirada
+ * não muda de forma porque alguém abriu o editor no meio do expediente.
+ */
+describe("desenho da etiqueta", () => {
+  const desenho = [
+    {
+      id: "preco",
+      campo: "PRECO" as const,
+      xMm: 2,
+      yMm: 6,
+      larguraMm: 20,
+      tamanhoMm: 3,
+      negrito: true,
+      alinhamento: "right" as const,
+    },
+  ];
+
+  it("guarda o desenho e registra quem mexeu", async () => {
+    const { company, token, template } = await scenario();
+
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/v1/label-templates/${template.id}/elements`,
+      headers: auth(token),
+      payload: { elements: desenho },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().elements).toEqual(desenho);
+
+    const entry = await prisma.auditLog.findFirst({
+      where: { companyId: company.id, action: "SETTING_UPDATE", entityId: template.id },
+    });
+    expect(entry).not.toBeNull();
+  });
+
+  it("substitui a lista inteira em vez de mesclar", async () => {
+    const { token, template } = await scenario();
+
+    await app.inject({
+      method: "PUT",
+      url: `/api/v1/label-templates/${template.id}/elements`,
+      headers: auth(token),
+      payload: { elements: [...desenho, { ...desenho[0], id: "sobra" }] },
+    });
+
+    // O dono apagou um elemento no editor. Se a gravação mesclasse, ele
+    // voltaria sozinho na próxima vez que alguém salvasse.
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/v1/label-templates/${template.id}/elements`,
+      headers: auth(token),
+      payload: { elements: desenho },
+    });
+
+    expect(response.json().elements).toHaveLength(1);
+  });
+
+  it("recusa um desenho maior do que cabe numa etiqueta", async () => {
+    const { token, template } = await scenario();
+
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/v1/label-templates/${template.id}/elements`,
+      headers: auth(token),
+      payload: {
+        elements: Array.from({ length: 31 }, (_, indice) => ({
+          ...desenho[0],
+          id: `e${indice}`,
+        })),
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("o vendedor não redesenha a etiqueta da empresa", async () => {
+    const { company, template } = await scenario();
+    const { user: seller, password } = await createTestUser({
+      companyId: company.id,
+      role: "VENDEDOR",
+    });
+    const token = await authenticate(seller.employeeCode, password);
+
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/v1/label-templates/${template.id}/elements`,
+      headers: auth(token),
+      payload: { elements: desenho },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it("o trabalho já na fila leva o desenho de quando foi criado", async () => {
+    const { store, token, template, product } = await scenario();
+
+    await app.inject({
+      method: "PUT",
+      url: `/api/v1/label-templates/${template.id}/elements`,
+      headers: auth(token),
+      payload: { elements: desenho },
+    });
+
+    const job = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/print-jobs/labels",
+        headers: auth(token),
+        payload: { storeId: store.id, productId: product.id, copies: 1 },
+      })
+    ).json();
+
+    expect(job.payload.layout.elements).toEqual(desenho);
+
+    // O dono muda o desenho enquanto a fila anda. A etiqueta que já esperava
+    // não pode sair diferente do que foi pedida.
+    await app.inject({
+      method: "PUT",
+      url: `/api/v1/label-templates/${template.id}/elements`,
+      headers: auth(token),
+      payload: { elements: [{ ...desenho[0], id: "outro", campo: "SKU" as const }] },
+    });
+
+    const fila = (
+      await app.inject({
+        method: "GET",
+        url: `/api/v1/print-jobs/queue?storeId=${store.id}`,
+        headers: auth(token),
+      })
+    ).json();
+
+    expect(fila[0].payload.layout.elements).toEqual(desenho);
+  });
+});
+
 describe("fila de impressão", () => {
   it("congela o preço no momento do pedido", async () => {
     const { store, token, product } = await scenario();

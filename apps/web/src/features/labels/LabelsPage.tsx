@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Crosshair, Layers, Printer, Tag, Trash2 } from "lucide-react";
+import { AlertTriangle, Crosshair, Layers, PenLine, Printer, Tag, Trash2 } from "lucide-react";
+import type { LabelElement } from "@rs-pratas/shared";
 import { LabelSheet } from "./LabelSheet";
+import { LabelEditor } from "./LabelEditor";
+import { LabelQuickPrint } from "./LabelQuickPrint";
 import type { LabelPayload, LabelToPrint } from "./LabelSheet";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -30,6 +33,8 @@ interface Template {
   showSize: boolean;
   showBarcode: boolean;
   isDefault: boolean;
+  /** O desenho montado no editor. Nulo = ainda usa o formato empilhado. */
+  elements: LabelElement[] | null;
 }
 
 interface PrintJob {
@@ -78,6 +83,8 @@ export function LabelsPage() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [calibrating, setCalibrating] = useState<Template | null>(null);
+  const [desenhando, setDesenhando] = useState<Template | null>(null);
+  const [avulsa, setAvulsa] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batch, setBatch] = useState<Record<string, number>>({});
   const [aviso, setAviso] = useState<string | null>(null);
@@ -269,7 +276,21 @@ export function LabelsPage() {
             type="button"
             variant="outline"
             onClick={() => {
+              setAvulsa((current) => !current);
+              setBatchOpen(false);
+              setCreating(false);
+            }}
+          >
+            <Printer className="h-5 w-5" aria-hidden />
+            Imprimir uma peça
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
               setBatchOpen((current) => !current);
+              setAvulsa(false);
               setCreating(false);
             }}
           >
@@ -296,6 +317,37 @@ export function LabelsPage() {
         <div className="mb-5">
           <Alert tone="success">{aviso}</Alert>
         </div>
+      )}
+
+      {avulsa && (
+        <LabelQuickPrint
+          storeId={storeId}
+          templateId={templates.data?.find((modelo) => modelo.isDefault)?.id}
+          onClose={() => setAvulsa(false)}
+        />
+      )}
+
+      {/*
+        O editor cobre a tela inteira. Desenhar uma etiqueta de 50 mm dentro de
+        uma coluna, com a fila de impressão rolando ao lado, seria trabalhar
+        pelo buraco da fechadura.
+
+        As medidas chegam como texto porque o banco guarda Decimal e o JSON não
+        tem esse tipo — o editor trabalha em número, então a conversão acontece
+        aqui, num lugar só.
+      */}
+      {desenhando && (
+        <LabelEditor
+          modelo={{
+            id: desenhando.id,
+            name: desenhando.name,
+            widthMm: Number(desenhando.widthMm),
+            heightMm: Number(desenhando.heightMm),
+            isDoubleSided: desenhando.isDoubleSided,
+            elements: desenhando.elements,
+          }}
+          onClose={() => setDesenhando(null)}
+        />
       )}
 
       {creating && (
@@ -549,6 +601,19 @@ export function LabelsPage() {
             </div>
 
             <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDesenhando(template);
+                  setCalibrating(null);
+                  setCreating(false);
+                }}
+              >
+                <PenLine className="h-5 w-5" aria-hidden />
+                Desenhar
+              </Button>
+
               <Button
                 type="button"
                 variant="outline"

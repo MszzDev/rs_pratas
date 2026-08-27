@@ -1,0 +1,12 @@
+-- O desenho da etiqueta, montado pelo dono.
+--
+-- Até aqui a etiqueta tinha um formato fixo — nome em cima, barras no meio,
+-- preço embaixo — e o que se podia mudar eram interruptores de "mostra ou não
+-- mostra". Isso resolve a etiqueta comum e não resolve nenhuma outra.
+--
+-- Agora a etiqueta guarda a POSIÇÃO de cada coisa, em milímetros: a mesma
+-- unidade da impressora, para o que se vê na tela ser o que sai no papel.
+--
+-- Nulo continua valendo e significa "use o desenho padrão". Nenhuma etiqueta
+-- existente muda.
+ALTER TABLE "label_templates" ADD COLUMN "elements" JSONB;

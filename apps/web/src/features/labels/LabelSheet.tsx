@@ -1,4 +1,6 @@
+import type { LabelElement } from "@rs-pratas/shared";
 import { barcodeModules, encodeCode128 } from "@/lib/barcode";
+import { EtiquetaDesenhada } from "./LabelDrawing";
 
 export interface LabelPayload {
   productName: string | null;
@@ -14,6 +16,8 @@ export interface LabelPayload {
     offsetYMm: number;
     fontScale: number;
     isDoubleSided: boolean;
+    /** O desenho montado no editor. Nulo usa o formato empilhado de sempre. */
+    elements?: LabelElement[] | null;
   };
 }
 
@@ -67,6 +71,42 @@ function Label({ payload }: { payload: LabelPayload }) {
     marginTop: `${layout.offsetYMm}mm`,
     fontSize: `${2.1 * layout.fontScale}mm`,
   };
+
+  /**
+   * Desenho montado pelo dono, quando existe.
+   *
+   * O mesmo componente que o editor mostra na tela — se fossem dois, eles
+   * divergiriam na primeira mudança, e a promessa do editor é justamente que o
+   * que se vê é o que sai.
+   */
+  if (layout.elements && layout.elements.length > 0) {
+    const desenho = (
+      <EtiquetaDesenhada
+        elementos={layout.elements}
+        dados={payload}
+        larguraMm={layout.widthMm}
+        alturaMm={layout.heightMm}
+      />
+    );
+
+    return (
+      <div
+        className="print-label"
+        style={{
+          marginLeft: `${layout.offsetXMm}mm`,
+          marginTop: `${layout.offsetYMm}mm`,
+        }}
+      >
+        {desenho}
+        {layout.isDoubleSided && (
+          <>
+            <span className="print-label-fold" />
+            {desenho}
+          </>
+        )}
+      </div>
+    );
+  }
 
   const conteudo = (
     <>

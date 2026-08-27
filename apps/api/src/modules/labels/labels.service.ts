@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
+import type { LabelElement } from "@rs-pratas/shared";
 import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
 import { badRequest, conflict, notFound } from "../../core/errors.js";
@@ -32,6 +33,50 @@ export async function listTemplates(request: FastifyRequest) {
     where: { companyId: request.user.companyId, deletedAt: null },
     orderBy: [{ isDefault: "desc" }, { name: "asc" }],
   });
+}
+
+/**
+ * Guarda o desenho que o dono montou.
+ *
+ * Substitui a lista inteira, e não mescla: o editor manda o que está na tela,
+ * e mesclar faria um elemento apagado voltar sozinho na próxima gravação.
+ *
+ * Só o tamanho do papel e a calibração ficam fora daqui — são do rolo e da
+ * impressora, não do desenho.
+ */
+export async function saveTemplateElements(params: {
+  templateId: string;
+  elements: LabelElement[];
+  request: FastifyRequest;
+}) {
+  const { templateId, elements, request } = params;
+
+  const template = await prisma.labelTemplate.findFirst({
+    where: { id: templateId, companyId: request.user.companyId, deletedAt: null },
+  });
+
+  if (!template) {
+    throw notFound("TEMPLATE_NOT_FOUND", "Modelo de etiqueta não encontrado.");
+  }
+
+  const salvo = await prisma.labelTemplate.update({
+    where: { id: template.id },
+    data: { elements: elements as unknown as Prisma.InputJsonValue },
+  });
+
+  await audit(request, {
+    action: "SETTING_UPDATE",
+    result: "SUCCESS",
+    userId: request.user.sub,
+    companyId: request.user.companyId,
+    userRoleSnapshot: request.user.role,
+    entityType: "LabelTemplate",
+    entityId: template.id,
+    reason: `desenho da etiqueta "${template.name}" alterado`,
+    newData: { elementos: elements.length },
+  });
+
+  return salvo;
 }
 
 export async function createTemplate(params: {
@@ -272,6 +317,8 @@ function buildLabelPayload(params: {
     offsetXMm: Prisma.Decimal;
     offsetYMm: Prisma.Decimal;
     fontScale: Prisma.Decimal;
+    /** O desenho montado no editor, ou nulo para o formato empilhado. */
+    elements: Prisma.JsonValue | null;
   };
   productName: string;
   sku: string;
@@ -297,6 +344,15 @@ function buildLabelPayload(params: {
       offsetYMm: Number(template.offsetYMm),
       fontScale: Number(template.fontScale),
       isDoubleSided: template.isDoubleSided,
+      /**
+       * O desenho que o dono montou, quando existe.
+       *
+       * Vai junto do trabalho, e não é buscado na hora de imprimir: o
+       * trabalho na fila precisa sair como era quando foi criado. Se alguém
+       * mexer no desenho enquanto a fila anda, as etiquetas já enfileiradas
+       * não podem mudar de forma no meio do caminho.
+       */
+      elements: (template.elements as LabelElement[] | null) ?? null,
     },
   };
 }

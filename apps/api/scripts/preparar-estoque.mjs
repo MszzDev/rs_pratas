@@ -48,7 +48,7 @@ function conexaoGuardada() {
 
   const bruto = readFileSync(caminho);
   const utf16 = bruto[0] === 0xff && bruto[1] === 0xfe;
-  const texto = bruto.toString(utf16 ? "utf16le" : "utf8").replace(/^﻿/, "");
+  const texto = bruto.toString(utf16 ? "utf16le" : "utf8").replace(/^\uFEFF/, "");
 
   for (const linha of texto.split(/\r?\n/)) {
     const achou = /^\s*(?:export\s+)?DATABASE_URL\s*=\s*(.+)$/.exec(linha);
