@@ -1,3 +1,4 @@
+import { useVersaoDaFoto } from "@/features/profile/photo-version";
 import { useArquivoProtegido } from "@/lib/protected-file";
 import { cn } from "@/lib/utils";
 
@@ -25,8 +26,15 @@ export function Avatar({
   temFoto?: boolean;
   className?: string;
 }) {
+  /**
+   * O `?v=` não é enfeite de cache: é o que faz este retrato descobrir que a
+   * foto mudou. O endereço da imagem é fixo, então sem ele quem já tinha a
+   * foto na tela continuaria mostrando a antiga depois de trocada ou apagada.
+   */
+  const versao = useVersaoDaFoto();
+
   const { url, erro } = useArquivoProtegido(
-    userId && temFoto ? `/api/v1/users/${userId}/photo` : null,
+    userId && temFoto ? `/api/v1/users/${userId}/photo?v=${versao}` : null,
   );
 
   if (!url || erro) {

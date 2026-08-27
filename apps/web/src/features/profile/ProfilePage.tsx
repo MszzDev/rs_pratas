@@ -10,6 +10,7 @@ import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError, API_BASE_URL, getAccessToken } from "@/lib/api-client";
 import { useAuth } from "../auth/auth-context";
 import { useArquivoProtegido } from "@/lib/protected-file";
+import { fotoMudou, useVersaoDaFoto } from "./photo-version";
 import { SendFromPhone } from "@/features/uploads/SendFromPhone";
 import { aplicarPreferencias, guardarPreferencias, type Preferencias } from "./apply-preferences";
 
@@ -69,8 +70,14 @@ export function ProfilePage() {
   const [senhaNova, setSenhaNova] = useState("");
   const [senhaConfirma, setSenhaConfirma] = useState("");
 
-  /** Muda a cada troca de foto para o navegador não servir a antiga do cache. */
-  const [versaoDaFoto, setVersaoDaFoto] = useState(() => Date.now());
+  /**
+   * A versão da foto é COMPARTILHADA com o resto da tela.
+   *
+   * Era local, e por isso apagar a foto sumia com ela aqui e deixava o retrato
+   * da barra lateral mostrando uma foto que já não existia. Agora quem troca
+   * avisa, e todo retrato aberto refaz a busca.
+   */
+  const versaoDaFoto = useVersaoDaFoto();
 
   const perfil = useQuery({
     queryKey: ["meu-perfil"],
@@ -177,7 +184,7 @@ export function ProfilePage() {
     onSuccess: () => {
       setErro(null);
       setAviso("Foto atualizada.");
-      setVersaoDaFoto(Date.now());
+      fotoMudou();
       void queryClient.invalidateQueries({ queryKey: ["meu-perfil"] });
     },
     onError: (caught) => falhou(caught, "Não foi possível enviar a foto."),
@@ -188,7 +195,7 @@ export function ProfilePage() {
     onSuccess: () => {
       setErro(null);
       setAviso("Foto removida.");
-      setVersaoDaFoto(Date.now());
+      fotoMudou();
       void queryClient.invalidateQueries({ queryKey: ["meu-perfil"] });
     },
     onError: (caught) => falhou(caught, "Não foi possível remover a foto."),
@@ -323,7 +330,7 @@ export function ProfilePage() {
             purpose="FOTO"
             titulo="Enviar foto pelo celular"
             descricao="Aponte a câmera do seu celular para o código e escolha a foto por lá."
-            onRecebido={() => setVersaoDaFoto(Date.now())}
+            onRecebido={() => fotoMudou()}
           />
 
           {/* --------------------------------------------------- como eu vejo */}
