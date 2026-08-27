@@ -266,9 +266,26 @@ export async function listStock(params: {
       companyId: request.user.companyId,
       ...(storeId ? { storeId } : {}),
       ...(seesEverything ? {} : { storeId: { in: request.user.storeIds } }),
+      /**
+       * Peça removida do catálogo não aparece no estoque. Loja removida
+       * também não.
+       *
+       * Faltava. O saldo continuava listado depois de a peça sair do
+       * catálogo, e o que a tela mostrava era um estoque que não existe: o
+       * dono removia a peça, ia conferir, e ela estava lá. Pior ainda com as
+       * lojas de demonstração, que sumiram do cadastro e continuavam
+       * ocupando a tela de Estoque com saldo inventado.
+       *
+       * O saldo em si não é apagado de propósito: a movimentação que o gerou
+       * é histórico, e é ela que explica para onde as peças foram. O que
+       * muda é a tela parar de oferecer como estoque o que já não é.
+       */
+      product: { deletedAt: null },
+      store: { deletedAt: null },
       ...(search
         ? {
             product: {
+              deletedAt: null,
               OR: [
                 { name: { contains: search, mode: "insensitive" } },
                 { sku: { contains: search, mode: "insensitive" } },

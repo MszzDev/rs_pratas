@@ -816,33 +816,131 @@ export async function removeUser(params: {
     );
   }
 
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: user.id },
-      data: { status: "INACTIVE", deletedAt: new Date() },
-    }),
-    // O acesso acaba agora, não quando o token vencer.
-    prisma.refreshToken.updateMany({
-      where: { session: { userId: user.id }, revokedAt: null },
-      data: { revokedAt: new Date(), revokedReason: "funcionário desligado" },
-    }),
-    prisma.deviceSession.updateMany({
-      where: { userId: user.id, revokedAt: null },
-      data: { revokedAt: new Date(), revokedReason: "funcionário desligado" },
-    }),
+  /**
+   * O que impede apagar de verdade.
+   *
+   * A regra é a mesma do resto do sistema: quem já foi usado por algo que
+   * virou histórico é desativado; quem nunca encostou em nada some de vez.
+   *
+   * Aqui a lista não é escolha de projeto, é o que a lei e a contabilidade
+   * exigem que continue existindo: o ponto tem valor legal por anos depois do
+   * desligamento; a venda continua sendo dela no faturamento e na comissão; o
+   * caixa que ela conferiu explica o dinheiro daquele dia; e a auditoria
+   * responde quem fez o quê — apagar a pessoa faria a resposta apontar para o
+   * nada.
+   *
+   * A auditoria entra na conta por um motivo a mais: o banco não deixa apagar
+   * quem ela menciona, e é ela quem existe justamente para não deixar.
+   */
+  const [ponto, vendas, caixasAbertos, caixasFechados, movimentos, auditoria] = await Promise.all([
+    prisma.timeClockEntry.count({ where: { userId: user.id } }),
+    prisma.sale.count({ where: { sellerId: user.id } }),
+    prisma.cashSession.count({ where: { openedById: user.id } }),
+    prisma.cashSession.count({ where: { closedById: user.id } }),
+    prisma.stockMovement.count({ where: { userId: user.id } }),
+    prisma.auditLog.count({ where: { userId: user.id } }),
   ]);
 
-  return finish({
-    request,
+  const historico =
+    ponto + vendas + caixasAbertos + caixasFechados + movimentos + auditoria > 0;
+
+  if (historico) {
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { status: "INACTIVE", deletedAt: new Date() },
+      }),
+      // O acesso acaba agora, não quando o token vencer.
+      prisma.refreshToken.updateMany({
+        where: { session: { userId: user.id }, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: "funcionário desligado" },
+      }),
+      prisma.deviceSession.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: "funcionário desligado" },
+      }),
+    ]);
+
+    return finish({
+      request,
+      action: "USER_BLOCK",
+      entityType: "User",
+      entityId: user.id,
+      reason,
+      previousData: { name: user.name, employeeCode: user.employeeCode, role: user.role },
+      outcome: {
+        removido: "desativado",
+        mensagem: descreverHistorico({ ponto, vendas, caixas: caixasAbertos + caixasFechados }),
+      },
+    });
+  }
+
+  /**
+   * Ninguém encostou em nada: some de vez.
+   *
+   * É o caso das contas criadas por engano, das de demonstração e das que
+   * nunca foram ativadas — que, enquanto existem, são acessos ao sistema real
+   * sem dono. Deixá-las apenas "inativas" na lista seria guardar para sempre
+   * um cadastro que não conta história nenhuma.
+   *
+   * A AUDITORIA do ato fica, e é ela que passa a contar: o registro de que
+   * esta matrícula existiu e foi apagada, por quem e por quê, sobrevive à
+   * pessoa. Por isso ela é gravada DEPOIS — antes, o próprio registro criaria
+   * a menção que impede apagar.
+   */
+  await prisma.$transaction([
+    prisma.refreshToken.deleteMany({ where: { session: { userId: user.id } } }),
+    prisma.stepUpToken.deleteMany({ where: { userId: user.id } }),
+    prisma.deviceSession.deleteMany({ where: { userId: user.id } }),
+    prisma.userPermission.deleteMany({ where: { userId: user.id } }),
+    prisma.userPermission.deleteMany({ where: { grantedById: user.id } }),
+    prisma.workSchedule.deleteMany({ where: { userId: user.id } }),
+    prisma.workSchedule.deleteMany({ where: { createdById: user.id } }),
+    prisma.pinResetRequest.deleteMany({ where: { userId: user.id } }),
+    prisma.employeeDocument.deleteMany({ where: { userId: user.id } }),
+    prisma.twoFactorCredential.deleteMany({ where: { userId: user.id } }),
+    prisma.userStore.deleteMany({ where: { userId: user.id } }),
+    prisma.user.delete({ where: { id: user.id } }),
+  ]);
+
+  await audit(request, {
     action: "USER_BLOCK",
+    result: "SUCCESS",
+    userId: request.user.sub,
+    companyId: request.user.companyId,
+    userRoleSnapshot: request.user.role,
     entityType: "User",
     entityId: user.id,
-    reason,
     previousData: { name: user.name, employeeCode: user.employeeCode, role: user.role },
-    outcome: {
-      removido: "desativado",
-      mensagem:
-        "Funcionário desligado. O acesso acabou agora e as sessões abertas foram encerradas. O ponto, as vendas e a auditoria dele continuam guardados — a lei exige, e é o que protege os dois lados.",
-    },
+    newData: { removido: "apagado" },
+    reason,
   });
+
+  return {
+    removido: "apagado",
+    mensagem: `${user.name} foi apagado. A matrícula ${user.employeeCode} nunca registrou ponto, venda nem caixa, então não havia histórico a preservar — só o registro de que ela existiu e foi removida.`,
+  };
+}
+
+/** Diz em português o que impediu de apagar. */
+function descreverHistorico(params: { ponto: number; vendas: number; caixas: number }): string {
+  const partes: string[] = [];
+
+  if (params.ponto > 0) {
+    partes.push(params.ponto === 1 ? "1 marcação de ponto" : `${params.ponto} marcações de ponto`);
+  }
+  if (params.vendas > 0) {
+    partes.push(params.vendas === 1 ? "1 venda" : `${params.vendas} vendas`);
+  }
+  if (params.caixas > 0) {
+    partes.push(params.caixas === 1 ? "1 turno de caixa" : `${params.caixas} turnos de caixa`);
+  }
+
+  const historico = partes.length > 0 ? partes.join(", ") : "registros de auditoria";
+
+  return (
+    `Funcionário desligado — o acesso acabou agora e as sessões abertas foram encerradas. ` +
+    `Não foi apagado de vez porque tem ${historico} no histórico: o ponto tem valor legal por ` +
+    `anos depois da saída, e é ele que protege os dois lados numa discussão trabalhista.`
+  );
 }

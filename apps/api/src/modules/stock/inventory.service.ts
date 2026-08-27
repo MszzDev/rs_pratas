@@ -91,7 +91,10 @@ export async function getCountSheet(params: { inventoryId: string; request: Fast
   await assertStoreAccess(params.request, inventory.storeId);
 
   const items = await prisma.stockItem.findMany({
-    where: { storeId: inventory.storeId },
+    // Peça fora do catálogo não entra na contagem: mandar alguém procurar na
+    // gaveta um produto que a loja não vende mais é fazer a conferência
+    // fechar errada por um item que não deveria estar na lista.
+    where: { storeId: inventory.storeId, product: { deletedAt: null } },
     include: {
       product: { select: { sku: true, name: true } },
       variation: { select: { sku: true, size: true } },

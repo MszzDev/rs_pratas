@@ -214,12 +214,18 @@ export function UsersPage() {
   });
 
   /**
-   * Desligar.
+   * Remover.
    *
-   * Não existe apagar funcionário: o ponto tem valor legal e precisa ser
-   * guardado depois da saída, e a venda que a pessoa fez continua sendo dela
-   * no relatório. O que acaba é o acesso — na hora, junto com as sessões
-   * abertas no tablet.
+   * A mesma regra do resto do sistema: quem já foi usado por algo que virou
+   * histórico é desativado; quem nunca encostou em nada some de vez.
+   *
+   * Para funcionário, "histórico" não é escolha de projeto — é ponto, venda e
+   * caixa, que a lei e a contabilidade mandam guardar depois da saída. Uma
+   * conta criada por engano, ou de demonstração, não tem nada disso e não
+   * deveria ficar para sempre numa lista de inativos.
+   *
+   * Quem decide é o servidor, que é quem sabe o que existe. A resposta diz
+   * qual dos dois caminhos foi tomado, e por quê.
    */
   const desligar = useMutation({
     mutationFn: (params: { id: string; reason: string }) =>
@@ -731,10 +737,10 @@ export function UsersPage() {
                           disabled={desligar.isPending}
                           onClick={async () => {
                             const motivo = await confirmar({
-                              titulo: `Desligar ${entry.name}?`,
+                              titulo: `Remover ${entry.name}?`,
                               descricao:
-                                "O acesso acaba agora e a pessoa sai da lista de funcionários. O ponto, as vendas e a auditoria dela continuam guardados — a lei exige, e é o que protege os dois lados.",
-                              acao: "Desligar",
+                                "O acesso acaba agora e a pessoa sai da lista. Quem nunca registrou ponto, venda nem caixa é APAGADO de vez; quem já trabalhou fica guardado no histórico, porque o ponto tem valor legal depois da saída. O sistema decide pelo que encontrar e diz o que fez.",
+                              acao: "Remover",
                               destrutivo: true,
                               pedirMotivo: true,
                             });
@@ -745,7 +751,7 @@ export function UsersPage() {
                           }}
                         >
                           <UserMinus className="h-4 w-4" aria-hidden />
-                          Desligar
+                          Remover
                         </Button>
                       )}
                     </div>

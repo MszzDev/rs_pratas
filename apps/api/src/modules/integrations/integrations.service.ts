@@ -266,7 +266,14 @@ export async function syncStockToNuvemshop(params: { request: FastifyRequest }) 
   const conta = { storeId: credentials.storeId!, accessToken: credentials.accessToken! };
 
   const estoque = await prisma.stockItem.findMany({
-    where: { storeId: integration.storeId },
+    /**
+     * Peça removida do catálogo não vai para o site.
+     *
+     * Faltava, e este era o pior lugar para faltar: o saldo de uma peça que a
+     * loja tirou de linha seria publicado como disponível, e alguém poderia
+     * comprar pela internet um produto que não existe mais para vender.
+     */
+    where: { storeId: integration.storeId, product: { deletedAt: null } },
     include: {
       product: { select: { sku: true, name: true } },
       variation: { select: { sku: true } },
