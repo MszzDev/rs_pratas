@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { LogoMark } from "@/components/ui/logo";
 import { ApiError } from "@/lib/api-client";
+import { readDeviceId } from "@/lib/secure-storage";
 import { useAuth } from "./auth-context";
 
 /**
@@ -23,6 +24,13 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  /** Este aparelho é um tablet vinculado a uma loja? */
+  const [temAparelho, setTemAparelho] = useState(false);
+
+  useEffect(() => {
+    void readDeviceId().then((id) => setTemAparelho(id !== null));
+  }, []);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -111,9 +119,21 @@ export function LoginPage() {
                 {submitting ? "Entrando..." : "Entrar"}
               </Button>
 
-              <Button type="button" variant="ghost" onClick={() => navigate("/pin")}>
-                Entrar com PIN no tablet
-              </Button>
+              {/*
+                A entrada por PIN só existe onde há um tablet vinculado.
+                Ela não é "uma senha mais curta": o que a torna segura é o
+                aparelho. O PIN sozinho tem quatro ou seis dígitos e é digitado
+                à vista de todo mundo no balcão — o que o protege é ele só
+                valer NAQUELE tablet, que é da loja e fica na loja.
+                No celular não há aparelho vinculado, então o botão levava a
+                uma tela que só sabia dizer "tablet não vinculado". Oferecer um
+                caminho que não vai a lugar nenhum é pior que não oferecer.
+              */}
+              {temAparelho && (
+                <Button type="button" variant="ghost" onClick={() => navigate("/pin")}>
+                  Entrar com PIN no tablet
+                </Button>
+              )}
             </form>
           </div>
 
