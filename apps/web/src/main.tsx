@@ -8,6 +8,7 @@ import {
   aplicarPreferencias,
   lerPreferenciasGuardadas,
 } from "./features/profile/apply-preferences";
+import { VERSAO_DO_PACOTE } from "./lib/app-update";
 import { App } from "./App";
 import "./index.css";
 
@@ -20,6 +21,10 @@ capturarCodigoDeAutorizacao();
 // é a cópia local, e existe só para quem escolheu a tela escura não levar um
 // lampejo branco a cada abertura do aplicativo.
 aplicarPreferencias(lerPreferenciasGuardadas());
+
+// A versão fica pendurada na janela: é assim que se confere, de fora e sem
+// cabo, se o tablet já trocou sozinho.
+(window as unknown as { rsVersao?: string }).rsVersao = VERSAO_DO_PACOTE;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

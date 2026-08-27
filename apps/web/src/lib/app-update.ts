@@ -83,6 +83,15 @@ async function pacotePublicado(): Promise<string | null> {
   }
 }
 
+/**
+ * Marca desta versão, para conferir de fora se o tablet trocou.
+ *
+ * Existe porque "a atualização é automática" é uma afirmação que precisa ser
+ * demonstrada, não prometida: com isto dá para publicar, esperar, e ler no
+ * aparelho qual versão ele está rodando — sem cabo e sem forçar nada.
+ */
+export const VERSAO_DO_PACOTE = "2026-08-27-a";
+
 function recarregar(): void {
   const destino = `${window.location.pathname}?v=${Date.now()}`;
   window.location.replace(destino);
