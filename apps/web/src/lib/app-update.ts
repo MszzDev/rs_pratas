@@ -23,8 +23,44 @@ import { Capacitor } from "@capacitor/core";
  * cache que criou o problema.
  */
 
-/** De quanto em quanto tempo conferir. */
-const INTERVALO_MS = 15 * 60_000;
+/**
+ * De quanto em quanto tempo conferir.
+ *
+ * Três minutos. A conferência é um pedido de alguns kilobytes, e o custo de
+ * demorar é alto: enquanto o tablet não troca, ele mostra uma versão em que o
+ * defeito recém-corrigido continua lá.
+ */
+const INTERVALO_MS = 3 * 60_000;
+
+/**
+ * Quantas telas dizem "não recarregue agora".
+ *
+ * A regra antiga era pela rota: só trocava sozinho no PIN e no login. Timida
+ * demais — um tablet parado em qualquer outra tela ficava esperando alguém
+ * apertar um botão que ninguém via, e a atualização virava manual de novo.
+ *
+ * Invertido: recarregar é o padrão, e quem tem algo a perder AVISA. Hoje é só
+ * o PDV, enquanto há carrinho montado ou pagamento em andamento — que é, de
+ * fato, a única coisa na tela que uma recarga destrói.
+ */
+let travas = 0;
+
+/**
+ * Segura a atualização enquanto existe algo que a recarga apagaria.
+ *
+ * Devolve a função que solta. Contador, e não booleano: duas telas podem
+ * segurar ao mesmo tempo, e a primeira a soltar não pode liberar pela outra.
+ */
+export function segurarAtualizacao(): () => void {
+  travas += 1;
+  let soltou = false;
+
+  return () => {
+    if (soltou) return;
+    soltou = true;
+    travas -= 1;
+  };
+}
 
 /** O nome do pacote que ESTA página carregou. */
 function pacoteCarregado(): string | null {
@@ -52,16 +88,9 @@ function recarregar(): void {
   window.location.replace(destino);
 }
 
-/**
- * Onde é seguro recarregar sem estragar o que alguém está fazendo.
- *
- * Uma recarga no meio de uma venda apaga o carrinho, e a vendedora perde o
- * cliente de vista para remontá-lo. Nas telas de entrada não há nada a perder
- * — é ali que a troca acontece sozinha.
- */
+/** Ninguém segurando: dá para trocar sem estragar nada. */
 function momentoSeguro(): boolean {
-  const tela = window.location.pathname;
-  return tela === "/pin" || tela === "/login" || tela === "/";
+  return travas === 0;
 }
 
 /**

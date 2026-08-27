@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -23,6 +23,7 @@ import {
   temImpressora,
   type DadosDoComprovante,
 } from "@/features/printing/printer";
+import { segurarAtualizacao } from "@/lib/app-update";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -80,6 +81,20 @@ export function PosPage() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [paying, setPaying] = useState(false);
+
+  /**
+   * Enquanto há carrinho montado, o sistema não se atualiza sozinho.
+   *
+   * A troca de versão recarrega a tela, e a recarga apaga o carrinho — a
+   * vendedora perderia o cliente de vista para remontá-lo peça por peça. Em
+   * todas as outras telas a troca acontece sem avisar; aqui ela espera a venda
+   * fechar, e enquanto isso o aviso fica num canto para quem quiser antecipar.
+   */
+  useEffect(() => {
+    if (cart.length === 0 && !paying) return;
+
+    return segurarAtualizacao();
+  }, [cart.length, paying]);
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<{ id: string; code: string; total: string } | null>(
     null,
