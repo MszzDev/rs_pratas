@@ -113,11 +113,21 @@ export function StatusStrip({ className }: { className?: string }) {
       // virada de minuto no meio do que a pessoa estivesse fazendo.
       aria-live="off"
     >
-      <span className="flex items-baseline gap-1.5">
-        <time className="font-medium tabular-nums text-text-primary" dateTime={agora.toISOString()}>
+      {/*
+        A data embaixo da hora, e não ao lado.
+        Lado a lado, "00:32 27/08" vira um número comprido em que os olhos não
+        separam o que é hora e o que é dia. Empilhados, a hora fica sozinha na
+        primeira linha — que é a informação consultada dezenas de vezes por
+        dia, antes de cada batida de ponto.
+      */}
+      <span className="flex flex-col items-start leading-tight">
+        <time
+          className="text-base font-medium tabular-nums text-text-primary"
+          dateTime={agora.toISOString()}
+        >
           {hora}
         </time>
-        <span className="text-xs text-text-muted">{dia}</span>
+        <span className="text-xs tabular-nums text-text-muted">{dia}</span>
       </span>
 
       {bateria && (

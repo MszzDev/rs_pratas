@@ -20,21 +20,24 @@ export function LogoMark({ className }: { className?: string }) {
       src={logoUrl}
       alt="RS Pratas"
       /**
-       * O disco claro é da logo, não do tema.
+       * O disco é UMA MOLDURA, não um recorte.
        *
-       * O arquivo do designer tem fundo rosa claro embutido. No tema claro ele
-       * se funde ao fundo da barra e ninguém nota. No escuro virava um quadrado
-       * aceso colado na tela — o desenho certo, com uma moldura que ninguém
-       * pediu.
+       * O arquivo do designer é quadrado, com fundo rosa claro embutido, e
+       * dentro dele o desenho já é um círculo — com o ramo de oliveira
+       * ESCAPANDO dele pela esquerda. Recortar a imagem em círculo decepava
+       * justamente esse ramo e mordia o traço fino do contorno: sobrava uma
+       * forma torta, que não é a marca de ninguém.
        *
-       * Recortado em círculo e assumido como disco, ele lê como distintivo nos
-       * dois temas: é a marca sobre o fundo dela, e não um erro de recorte.
+       * Então nada é cortado. A imagem inteira entra, e o disco cresce por
+       * fora dela com uma folga. No tema claro esse disco tem a cor da barra
+       * lateral e desaparece; no escuro, vira o distintivo que impede o
+       * quadrado rosa de brigar com o fundo.
        *
-       * `object-contain` mantém o círculo redondo em qualquer caixa: sem ele,
-       * uma barra estreita achataria a logo num oval.
+       * `object-contain` mantém a proporção em qualquer caixa: sem ele, uma
+       * barra estreita achataria a logo num oval.
        */
       className={cn(
-        "h-8 w-8 rounded-full bg-[#FDF4F9] object-contain",
+        "h-8 w-8 rounded-full bg-[#FDF4F9] p-[6%] object-contain",
         className,
       )}
       draggable={false}
@@ -64,9 +67,9 @@ export function Logo({
    * aparece: no celular, a mesma medida ocuparia metade do cabeçalho.
    */
   const tamanhos = {
-    sm: "h-10 w-10",
-    md: "h-12 w-12 lg:h-16 lg:w-16",
-    lg: "h-24 w-24 lg:h-32 lg:w-32",
+    sm: "h-12 w-12",
+    md: "h-14 w-14 lg:h-20 lg:w-20",
+    lg: "h-28 w-28 lg:h-36 lg:w-36",
   };
 
   return <LogoMark className={cn(tamanhos[size], className)} />;

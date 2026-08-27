@@ -590,7 +590,7 @@ function MobileBar({
           </button>
 
           <button type="button" onClick={onLogoTap} aria-label="RS Pratas">
-            <LogoMark className="h-8 w-8 shrink-0 sm:h-11 sm:w-11" />
+            <LogoMark className="h-11 w-11 shrink-0 sm:h-14 sm:w-14" />
           </button>
 
           {/*

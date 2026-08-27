@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Camera, CheckCircle2 } from "lucide-react";
+import { Camera, CheckCircle2, Images } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -34,7 +34,8 @@ const TIPOS = [
  */
 export function PhoneUploadPage() {
   const { token = "" } = useParams();
-  const arquivo = useRef<HTMLInputElement>(null);
+  const camera = useRef<HTMLInputElement>(null);
+  const galeria = useRef<HTMLInputElement>(null);
 
   const [escolhido, setEscolhido] = useState<File | null>(null);
   const [tipo, setTipo] = useState<string>("MEDICAL_CERTIFICATE");
@@ -157,32 +158,60 @@ export function PhoneUploadPage() {
             </>
           )}
 
+          {/*
+            Dois campos, e não um.
+            `capture` abre a câmera direto — é o caminho de quem está com o
+            papel na mão. Só que ele também ESCONDE a galeria: quem já tinha a
+            foto no celular ficava sem jeito de escolhê-la, obrigado a
+            fotografar o papel de novo. O segundo campo, sem `capture`, abre o
+            que o aparelho tiver: galeria, arquivos, nuvem.
+          */}
           <input
-            ref={arquivo}
+            ref={camera}
             type="file"
-            /*
-              `capture` abre a câmera direto no celular, que é o caminho de quem
-              está com o papel na mão. No computador o navegador ignora e mostra
-              o seletor de arquivos normal.
-            */
             accept={foto ? "image/*" : "image/*,application/pdf"}
             capture="environment"
             className="hidden"
             onChange={(event) => {
               const arquivoEscolhido = event.target.files?.[0];
               if (arquivoEscolhido) setEscolhido(arquivoEscolhido);
+              event.target.value = "";
             }}
           />
 
-          <Button
-            type="button"
-            size="lg"
-            variant="outline"
-            onClick={() => arquivo.current?.click()}
-          >
-            <Camera className="h-6 w-6" aria-hidden />
-            {escolhido ? "Trocar" : foto ? "Escolher a foto" : "Fotografar o documento"}
-          </Button>
+          <input
+            ref={galeria}
+            type="file"
+            accept={foto ? "image/*" : "image/*,application/pdf"}
+            className="hidden"
+            onChange={(event) => {
+              const arquivoEscolhido = event.target.files?.[0];
+              if (arquivoEscolhido) setEscolhido(arquivoEscolhido);
+              event.target.value = "";
+            }}
+          />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              onClick={() => camera.current?.click()}
+            >
+              <Camera className="h-6 w-6" aria-hidden />
+              {foto ? "Tirar agora" : "Fotografar"}
+            </Button>
+
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              onClick={() => galeria.current?.click()}
+            >
+              <Images className="h-6 w-6" aria-hidden />
+              {foto ? "Escolher da galeria" : "Escolher arquivo"}
+            </Button>
+          </div>
 
           {escolhido && (
             <p className="-mt-3 truncate text-sm text-text-muted">
