@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import type { AuthenticatedUser, LoginResponse } from "@rs-pratas/shared";
 import { apiFetch, clearSession, setAccessToken } from "@/lib/api-client";
+import { queryClient } from "@/lib/query-client";
 import { readRefreshToken, saveRefreshToken } from "@/lib/secure-storage";
 import {
   aplicarPreferencias,
@@ -48,6 +49,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const applySession = useCallback(async (session: LoginResponse) => {
+    /**
+     * Nada da pessoa anterior sobrevive à troca.
+     *
+     * O tablet do balcão troca de gente várias vezes por dia, e o cache de
+     * consultas fica na memória da página — ele não sabe que trocou de
+     * usuário. Sem esta limpeza, Carlos entrava com o PIN dele e via, por um
+     * instante, "Meus documentos" e "Meu perfil" da Juliana: as chaves são as
+     * mesmas para todo mundo, e o dado velho aparece antes de a resposta nova
+     * chegar.
+     *
+     * O servidor nunca entregaria o documento dela a ele — a autorização é por
+     * registro e é checada a cada requisição. O vazamento era só na tela, e na
+     * tela é onde a pessoa está olhando.
+     *
+     * Limpa na ENTRADA e na saída: só na saída não bastaria, porque a troca
+     * mais comum no balcão é a tela travar e outra pessoa destravar com o PIN
+     * dela, sem logout no meio.
+     */
+    queryClient.clear();
+
     setAccessToken(session.accessToken);
     await saveRefreshToken(session.refreshToken);
     setUser(session.user);
@@ -145,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearSession();
     setUser(null);
     limparPreferencias();
+    queryClient.clear();
   }, [limparPreferencias]);
 
   const can = useCallback(
