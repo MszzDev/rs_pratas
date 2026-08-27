@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
+import { DocumentViewer } from "./DocumentViewer";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { DocumentAnalysisNotice } from "./DocumentAnalysisNotice";
 import {
@@ -13,13 +14,15 @@ import {
   type EmployeeDocument,
 } from "./types";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
 const formatDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
 
 export function ReviewDocumentsPage() {
   const queryClient = useQueryClient();
+
+  /** O documento aberto por cima da tela, ou nulo. */
+  const [abrindo, setAbrindo] = useState<EmployeeDocument | null>(null);
 
   const [status, setStatus] = useState("PENDING_REVIEW");
   const [comments, setComments] = useState<Record<string, string>>({});
@@ -115,15 +118,18 @@ export function ReviewDocumentsPage() {
               </span>
             </div>
 
-            <a
-              href={`${API_BASE_URL}/api/v1/documents/${document.id}/file`}
-              target="_blank"
-              rel="noreferrer"
+            {/*
+              Botão e não link, pelo mesmo motivo da tela do funcionário: o
+              arquivo só sai da API com o token, e um link não o carrega.
+            */}
+            <button
+              type="button"
+              onClick={() => setAbrindo(document)}
               className="mt-4 inline-flex min-h-[48px] items-center gap-2 rounded-md border border-border px-4 text-sm font-medium text-rose-primary hover:bg-background-secondary"
             >
               <Paperclip className="h-4 w-4" aria-hidden />
               Abrir {document.fileName}
-            </a>
+            </button>
 
             <div className="mt-4">
               <DocumentAnalysisNotice document={document} />
@@ -170,6 +176,14 @@ export function ReviewDocumentsPage() {
           </li>
         ))}
       </ul>
+      {abrindo && (
+        <DocumentViewer
+          documentId={abrindo.id}
+          titulo={abrindo.title}
+          mimeType={abrindo.fileMimeType}
+          onClose={() => setAbrindo(null)}
+        />
+      )}
     </PageShell>
   );
 }

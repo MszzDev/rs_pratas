@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
+import { EmployeeDocumentType } from "@prisma/client";
 import { passwordSchema } from "@rs-pratas/shared";
 import { badRequest } from "../../core/errors.js";
 import {
@@ -135,11 +136,28 @@ export async function profileRoutes(app: FastifyInstance) {
       throw badRequest("FILE_REQUIRED", "Escolha o arquivo para enviar.");
     }
 
-    // Os campos vêm junto do multipart, e são opcionais: a foto não usa
-    // nenhum deles.
+    /**
+     * Os campos vêm junto do multipart. São os MESMOS do formulário do
+     * computador — tipo, descrição e o período que o documento cobre —, para
+     * que um atestado enviado pelo celular chegue ao gerente com o mesmo
+     * contexto de um enviado pela outra porta. A foto não usa nenhum deles.
+     */
     const campos = file.fields as Record<string, { value?: string } | undefined>;
-    const tipo = campos.documentType?.value;
-    const titulo = campos.title?.value;
+    const ler = (nome: string) => campos[nome]?.value?.trim() || undefined;
+
+    const dados = z
+      .object({
+        documentType: z.nativeEnum(EmployeeDocumentType).optional(),
+        title: z.string().min(3, "Descreva o documento.").max(160).optional(),
+        referenceStart: z.string().date().optional(),
+        referenceEnd: z.string().date().optional(),
+      })
+      .parse({
+        documentType: ler("documentType"),
+        title: ler("title"),
+        referenceStart: ler("referenceStart"),
+        referenceEnd: ler("referenceEnd"),
+      });
 
     return consumeUploadLink({
       token,
@@ -147,8 +165,10 @@ export async function profileRoutes(app: FastifyInstance) {
       content: await file.toBuffer(),
       fileName: file.filename,
       mimeType: file.mimetype,
-      ...(tipo ? { documentType: tipo as never } : {}),
-      ...(titulo ? { title: titulo } : {}),
+      ...(dados.documentType ? { documentType: dados.documentType } : {}),
+      ...(dados.title ? { title: dados.title } : {}),
+      ...(dados.referenceStart ? { referenceStart: dados.referenceStart } : {}),
+      ...(dados.referenceEnd ? { referenceEnd: dados.referenceEnd } : {}),
     });
   });
 

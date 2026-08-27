@@ -9,6 +9,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError, API_BASE_URL, getAccessToken } from "@/lib/api-client";
 import { useAuth } from "../auth/auth-context";
+import { useArquivoProtegido } from "@/lib/protected-file";
 import { SendFromPhone } from "@/features/uploads/SendFromPhone";
 import { aplicarPreferencias, guardarPreferencias, type Preferencias } from "./apply-preferences";
 
@@ -75,6 +76,17 @@ export function ProfilePage() {
     queryKey: ["meu-perfil"],
     queryFn: () => apiFetch<Perfil>("/api/v1/me/profile"),
   });
+
+  /**
+   * A foto é buscada COM o token, e não pelo `src` da imagem.
+   *
+   * O endereço só entrega o arquivo a quem está autenticado, e um `<img src>`
+   * vai sem cabeçalho nenhum — a foto nunca aparecia, e as iniciais entravam
+   * no lugar como se ninguém tivesse posto uma.
+   */
+  const { url: fotoUrl } = useArquivoProtegido(
+    perfil.data?.temFoto ? `/api/v1/users/${perfil.data.id}/photo?v=${versaoDaFoto}` : null,
+  );
 
   function falhou(caught: unknown, padrao: string) {
     setAviso(null);
@@ -211,9 +223,9 @@ export function ProfilePage() {
           {/* ------------------------------------------------ identificação */}
           <section className="rounded-lg border border-border bg-surface p-6">
             <div className="flex flex-wrap items-center gap-5">
-              {dados.temFoto ? (
+              {dados.temFoto && fotoUrl ? (
                 <img
-                  src={`${API_BASE_URL}/api/v1/users/${dados.id}/photo?v=${versaoDaFoto}`}
+                  src={fotoUrl}
                   alt={`Foto de ${dados.nome}`}
                   className="h-24 w-24 rounded-full border border-border object-cover"
                 />

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, CheckCircle2, Copy, KeyRound, Pencil, UserMinus, UserPlus } from "lucide-react";
 import type { UserRole, UserSummary } from "@rs-pratas/shared";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
@@ -616,7 +617,23 @@ export function UsersPage() {
 
             {users.data?.map((entry) => (
               <tr key={entry.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3 font-medium">{entry.name}</td>
+                <td className="px-4 py-3 font-medium">
+                  {/*
+                    O rosto ao lado do nome.
+                    Numa lista de matrículas parecidas, a foto é o que faz o
+                    dono reconhecer a pessoa sem ler — e é ela que dá sentido a
+                    pedir foto no perfil.
+                  */}
+                  <span className="flex items-center gap-3">
+                    <Avatar
+                      userId={entry.id}
+                      nome={entry.name}
+                      temFoto={entry.temFoto ?? false}
+                      className="h-9 w-9 text-xs"
+                    />
+                    {entry.name}
+                  </span>
+                </td>
                 <td className="px-4 py-3 font-mono">{entry.employeeCode}</td>
                 <td className="px-4 py-3">{ROLE_LABELS[entry.role]}</td>
                 <td className="px-4 py-3">

@@ -161,9 +161,11 @@ export async function consumeUploadLink(params: {
   content: Buffer;
   fileName: string;
   mimeType: string;
-  /** Só para documento. */
+  /** Só para documento — os mesmos campos do formulário do computador. */
   documentType?: EmployeeDocumentType | undefined;
   title?: string | undefined;
+  referenceStart?: string | undefined;
+  referenceEnd?: string | undefined;
 }) {
   const { token, request, content, fileName, mimeType } = params;
 
@@ -238,6 +240,16 @@ export async function consumeUploadLink(params: {
         fileSizeBytes: guardado.sizeBytes,
         fileStorageKey: guardado.storageKey,
         fileChecksum: guardado.checksum,
+        /**
+         * O período que o documento cobre.
+         *
+         * Num atestado é o que mais importa: são os dias de afastamento, e é
+         * por eles que o gerente confere a falta no espelho de ponto. Sem
+         * isso o documento chega como uma foto sem contexto, e alguém precisa
+         * abrir o arquivo e ler à mão para descobrir de quando é.
+         */
+        ...(params.referenceStart ? { referenceStart: new Date(params.referenceStart) } : {}),
+        ...(params.referenceEnd ? { referenceEnd: new Date(params.referenceEnd) } : {}),
       },
     });
   });

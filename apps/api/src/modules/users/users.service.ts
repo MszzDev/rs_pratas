@@ -342,6 +342,14 @@ export async function listUsers(request: FastifyRequest) {
     storeIds: user.userStores.map((link) => link.storeId),
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
+    /**
+     * Se tem foto — não a foto em si.
+     *
+     * A imagem sai por uma rota própria, que confere permissão e é cacheada
+     * pelo navegador. Embutir o arquivo aqui faria a lista de funcionários
+     * carregar megabytes que a maioria das telas nem mostra.
+     */
+    temFoto: user.avatarStorageKey !== null,
     /** Perfis com alcance global não dependem de liberação nominal. */
     offDeviceAllowed:
       user.role === "DONO" || user.role === "DESENVOLVEDOR" || grantByUser.has(user.id),

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
+import { DocumentViewer } from "./DocumentViewer";
 import { SendFromPhone } from "@/features/uploads/SendFromPhone";
 import { apiFetch, ApiError, getAccessToken } from "@/lib/api-client";
 import {
@@ -24,6 +25,9 @@ function formatDate(iso: string | null): string {
 
 export function MyDocumentsPage() {
   const queryClient = useQueryClient();
+
+  /** O documento aberto por cima da tela, ou nulo. */
+  const [abrindo, setAbrindo] = useState<EmployeeDocument | null>(null);
 
   const [type, setType] = useState<DocumentType>("MEDICAL_CERTIFICATE");
   const [title, setTitle] = useState("");
@@ -248,18 +252,31 @@ export function MyDocumentsPage() {
               </p>
             )}
 
-            <a
-              href={`${API_BASE_URL}/api/v1/documents/${document.id}/file`}
-              target="_blank"
-              rel="noreferrer"
+            {/*
+              Botão e não link: o endereço da API só entrega o arquivo com o
+              token, que vive na memória da página. Um link abriria o endereço
+              sem cabeçalho nenhum e mostraria o erro cru do servidor — que foi
+              exatamente o que acontecia.
+            */}
+            <button
+              type="button"
+              onClick={() => setAbrindo(document)}
               className="mt-3 inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-rose-primary hover:underline"
             >
               <Paperclip className="h-4 w-4" aria-hidden />
               {document.fileName}
-            </a>
+            </button>
           </li>
         ))}
       </ul>
+      {abrindo && (
+        <DocumentViewer
+          documentId={abrindo.id}
+          titulo={abrindo.title}
+          mimeType={abrindo.fileMimeType}
+          onClose={() => setAbrindo(null)}
+        />
+      )}
     </PageShell>
   );
 }

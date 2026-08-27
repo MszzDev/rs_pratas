@@ -70,6 +70,8 @@ export const userSummarySchema = z.object({
   storeIds: z.array(z.string().uuid()),
   lastLoginAt: z.string().nullable(),
   createdAt: z.string(),
+  /** Se há foto — a imagem em si sai por rota própria, com permissão. */
+  temFoto: z.boolean().optional(),
 });
 
 export const grantPermissionSchema = z.object({

@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { API_BASE_URL } from "@/lib/api-client";
+import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/features/auth/auth-context";
 import { Logo, LogoMark } from "@/components/ui/logo";
 import { StatusStrip } from "@/components/ui/status-strip";
@@ -397,51 +397,12 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
       : "text-text-secondary hover:bg-background-secondary hover:text-text-primary",
   );
 
-function initialsOf(name: string | undefined): string {
-  if (!name) return "RS";
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((part) => part[0] ?? "")
-    .join("")
-    .toUpperCase();
-}
-
 /**
  * Rodapé com quem está logado.
  *
  * Num tablet compartilhado, saber de cara em qual conta se está evita a venda
  * lançada no nome de quem saiu para o almoço.
  */
-/**
- * O retrato de quem está logado.
- *
- * Mostra a foto quando existe e as iniciais quando não existe — e cai para as
- * iniciais também quando a foto falha em carregar, que é o caso de um tablet
- * momentaneamente sem rede. Um quadrado quebrado no canto do menu ficaria ali
- * o expediente inteiro.
- */
-function Retrato({ id, nome }: { id?: string | undefined; nome?: string | undefined }) {
-  const [semFoto, setSemFoto] = useState(false);
-
-  if (!id || semFoto) {
-    return (
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-soft text-xs font-semibold text-rose-dark">
-        {initialsOf(nome)}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={`${API_BASE_URL}/api/v1/users/${id}/photo`}
-      alt=""
-      aria-hidden
-      className="h-9 w-9 shrink-0 rounded-full border border-border object-cover"
-      onError={() => setSemFoto(true)}
-    />
-  );
-}
 
 function UserFooter({
   user,
@@ -466,7 +427,7 @@ function UserFooter({
           )
         }
       >
-        <Retrato id={user?.id} nome={user?.name} />
+        <Avatar userId={user?.id} nome={user?.name} className="h-9 w-9 text-xs" />
 
         <div className="min-w-0 leading-tight">
           <p className="truncate text-sm font-semibold text-text-primary">

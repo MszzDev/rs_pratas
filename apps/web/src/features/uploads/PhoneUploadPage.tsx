@@ -40,6 +40,8 @@ export function PhoneUploadPage() {
   const [escolhido, setEscolhido] = useState<File | null>(null);
   const [tipo, setTipo] = useState<string>("MEDICAL_CERTIFICATE");
   const [titulo, setTitulo] = useState("");
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [pronto, setPronto] = useState<string | null>(null);
 
@@ -59,7 +61,9 @@ export function PhoneUploadPage() {
       // em ordem, e um campo depois do arquivo não chega junto dele.
       if (convite.data?.finalidade === "DOCUMENTO") {
         corpo.append("documentType", tipo);
-        if (titulo.trim()) corpo.append("title", titulo.trim());
+        corpo.append("title", titulo.trim());
+        if (de) corpo.append("referenceStart", de);
+        if (ate) corpo.append("referenceEnd", ate);
       }
       corpo.append("file", escolhido);
 
@@ -150,11 +154,39 @@ export function PhoneUploadPage() {
               </div>
 
               <Field
-                label="Observação (opcional)"
+                label="Descrição"
                 value={titulo}
                 onChange={(event) => setTitulo(event.target.value)}
-                placeholder="Ex.: dois dias de afastamento"
+                placeholder="Ex.: Atestado de 2 dias"
+                required
+                minLength={3}
               />
+
+              {/*
+                O período que o documento cobre — os mesmos campos do
+                formulário do computador.
+                Num atestado é o que mais importa: são os dias de afastamento,
+                e é por eles que o gerente confere a falta no espelho de ponto.
+                Sem isso o documento chega como uma foto sem contexto, e alguém
+                precisa abrir o arquivo e ler à mão para saber de quando é.
+              */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  label="Válido de"
+                  type="date"
+                  value={de}
+                  onChange={(event) => setDe(event.target.value)}
+                  hint={
+                    tipo === "MEDICAL_CERTIFICATE" ? "Primeiro dia de afastamento." : undefined
+                  }
+                />
+                <Field
+                  label="Válido até"
+                  type="date"
+                  value={ate}
+                  onChange={(event) => setAte(event.target.value)}
+                />
+              </div>
             </>
           )}
 
@@ -222,7 +254,7 @@ export function PhoneUploadPage() {
           <Button
             type="button"
             size="lg"
-            disabled={!escolhido || enviar.isPending}
+            disabled={!escolhido || enviar.isPending || (!foto && titulo.trim().length < 3)}
             onClick={() => enviar.mutate()}
           >
             {enviar.isPending ? "Enviando..." : "Enviar"}
