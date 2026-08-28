@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
+  ArrowRightLeft,
   Boxes,
   Building2,
   Calculator,
   CalendarClock,
   Check,
+  ClipboardCheck,
   Clock,
   CreditCard,
   FileCheck,
@@ -193,7 +195,27 @@ const SUBPAGINAS: Record<string, Atalho[]> = {
   ],
   "/estoque": [
     { to: "/produtos", label: "Produtos", icon: Package },
+    { to: "/contagem", label: "Contagem", icon: ClipboardCheck, permission: "STOCK_INVENTORY" },
+    {
+      to: "/transferencias",
+      label: "Transferências",
+      icon: ArrowRightLeft,
+      permission: "STOCK_TRANSFER",
+    },
     { to: "/etiquetas", label: "Etiquetas", icon: Tag, permission: "LABEL_PRINT" },
+  ],
+  "/contagem": [
+    { to: "/estoque", label: "Estoque", icon: Boxes },
+    {
+      to: "/transferencias",
+      label: "Transferências",
+      icon: ArrowRightLeft,
+      permission: "STOCK_TRANSFER",
+    },
+  ],
+  "/transferencias": [
+    { to: "/estoque", label: "Estoque", icon: Boxes },
+    { to: "/contagem", label: "Contagem", icon: ClipboardCheck, permission: "STOCK_INVENTORY" },
   ],
   "/etiquetas": [
     { to: "/produtos", label: "Produtos", icon: Package },

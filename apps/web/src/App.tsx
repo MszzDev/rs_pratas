@@ -31,6 +31,8 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { TerminalsPage } from "./features/terminals/TerminalsPage";
 import { ProductsPage } from "./features/catalog/ProductsPage";
 import { StockPage } from "./features/stock/StockPage";
+import { InventoryPage } from "./features/stock/InventoryPage";
+import { TransfersPage } from "./features/stock/TransfersPage";
 import { PosPage } from "./features/pos/PosPage";
 import { QuotesPage } from "./features/pos/QuotesPage";
 import { PieceRequestsPage } from "./features/pos/PieceRequestsPage";
@@ -245,6 +247,28 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <StockPage />
+          </RequireAuth>
+        }
+      />
+      {/*
+        Contagem e transferência são assunto de estoque, e por isso entram como
+        telas-filhas em vez de itens de menu: a navegação já carrega catorze
+        entradas, e duas a mais fariam o vendedor procurar o que hoje ele
+        decora.
+      */}
+      <Route
+        path="/contagem"
+        element={
+          <RequireAuth>
+            <InventoryPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/transferencias"
+        element={
+          <RequireAuth>
+            <TransfersPage />
           </RequireAuth>
         }
       />

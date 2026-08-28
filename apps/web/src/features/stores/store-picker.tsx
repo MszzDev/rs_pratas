@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 
@@ -61,15 +61,25 @@ export function StorePicker({
 }) {
   const { lojas, precisaEscolher } = useLoja(storeId, onChange);
 
+  /**
+   * Id próprio de cada seletor.
+   *
+   * Uma tela pode mostrar dois ao mesmo tempo — o filtro da listagem e o da
+   * loja de origem, por exemplo. Com id fixo os dois teriam o MESMO, e o
+   * rótulo de um passaria a apontar para o campo do outro: quem usa leitor de
+   * tela ouviria "Loja" ao focar o campo errado.
+   */
+  const campoId = useId();
+
   if (!precisaEscolher) return null;
 
   return (
     <div className={className}>
-      <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor="loja">
+      <label className="mb-1 block text-sm font-medium text-text-primary" htmlFor={campoId}>
         {label}
       </label>
       <select
-        id="loja"
+        id={campoId}
         value={storeId}
         onChange={(event) => onChange(event.target.value)}
         className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
