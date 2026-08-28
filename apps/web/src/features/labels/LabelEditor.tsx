@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlignCenter,
   AlignLeft,
   AlignRight,
   Bold,
+  Maximize2,
+  Minus,
   Plus,
   Ruler,
   Save,
@@ -41,11 +43,25 @@ import { EtiquetaDesenhada, type DadosDaEtiqueta } from "./LabelDrawing";
  *    implementações divergiriam na primeira mudança, e a promessa do editor é
  *    justamente que o que se vê é o que sai.
  *
- * 3. **A régua.** Na impressão o navegador usa milímetro de verdade; na tela
- *    ele usa a ideia que tem de milímetro, que erra conforme o monitor. Dizer
- *    "escala real" sem conferir seria uma promessa que a tela não cumpre — a
- *    régua deixa o dono medir com uma régua de verdade e acertar.
+ * 3. **A régua fica de lado.** Na impressão o navegador usa milímetro de
+ *    verdade; na tela ele usa a ideia que tem de milímetro, que erra conforme
+ *    o monitor. Dizer "escala real" sem conferir seria uma promessa que a tela
+ *    não cumpre — mas pedir a régua ANTES de deixar a pessoa desenhar inverte
+ *    a ordem do trabalho. O padrão é caber na tela, que é o que se quer para
+ *    arrastar; o tamanho real é um botão, e acertar a régua é um link para
+ *    quem reparar que não confere.
  */
+
+/**
+ * Quanto vale um milímetro de CSS.
+ *
+ * O navegador trata `1mm` como 96/25.4 pixels, sempre — é uma constante da
+ * especificação, não uma medida do monitor. O desenho é escrito em milímetros
+ * porque é assim que ele vai para o papel, então ampliar na tela é dividir o
+ * zoom desejado por essa constante. Aplicar o zoom direto multiplicaria duas
+ * vezes, e a etiqueta saía quase quatro vezes maior que o pedido.
+ */
+const PX_POR_MM_CSS = 96 / 25.4;
 
 interface Modelo {
   id: string;
@@ -102,7 +118,15 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
 
-  const [escala, setEscala] = useState(4);
+  /**
+   * Quantos pixels de tela vale um milímetro da etiqueta.
+   *
+   * Começa em zero e é calculado quando a área aparece: o padrão é a etiqueta
+   * CABER, que é o que se quer para arrastar. Chutar um zoom fixo daria uma
+   * etiqueta de 100 mm estourando a tela e uma de 12 mm do tamanho de uma
+   * unha — e as duas existem no mesmo sistema.
+   */
+  const [pixelPorMm, setPixelPorMm] = useState(0);
   const [ajusteDaTela, setAjusteDaTela] = useState(1);
   const [medindo, setMedindo] = useState(false);
   const [medida, setMedida] = useState("");
@@ -110,6 +134,47 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
   useEffect(() => {
     setAjusteDaTela(lerRegua());
   }, []);
+
+  /**
+   * Faz a etiqueta caber na largura disponível.
+   *
+   * O respiro de 32 px é a borda e o preenchimento da moldura; sem ele a
+   * etiqueta encostaria na linha. O teto de 12 px por milímetro impede que uma
+   * etiqueta pequena vire um cartaz numa tela larga.
+   */
+  const caberNaTela = useCallback(() => {
+    const largura = area.current?.clientWidth ?? 0;
+    if (largura <= 0) return;
+
+    setPixelPorMm(Math.max(1, Math.min(12, (largura - 32) / modelo.widthMm)));
+  }, [modelo.widthMm]);
+
+  /**
+   * Começa cabendo, e refaz quando o espaço muda — girar o tablet, abrir o
+   * teclado, encolher a janela.
+   *
+   * Só reage à LARGURA. Observar a altura faria um laço: etiqueta mais alta
+   * encolhe o zoom, o zoom menor encolhe a altura da área, e a conta recomeça.
+   */
+  useEffect(() => {
+    const alvo = area.current;
+    if (!alvo) return;
+
+    caberNaTela();
+
+    let ultimaLargura = alvo.clientWidth;
+
+    const observador = new ResizeObserver((entradas) => {
+      const largura = entradas[0]?.contentRect.width ?? 0;
+      if (largura > 0 && Math.abs(largura - ultimaLargura) > 1) {
+        ultimaLargura = largura;
+        caberNaTela();
+      }
+    });
+
+    observador.observe(alvo);
+    return () => observador.disconnect();
+  }, [caberNaTela]);
 
   const atual = elementos.find((e) => e.id === selecionado) ?? null;
 
@@ -154,7 +219,6 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
     const alvo = evento.currentTarget as HTMLElement;
     alvo.setPointerCapture(evento.pointerId);
 
-    const pixelPorMm = escala * ajusteDaTela;
     const inicioX = evento.clientX;
     const inicioY = evento.clientY;
     const origemX = elemento.xMm;
@@ -197,8 +261,6 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
       setErro(caught instanceof ApiError ? caught.message : "Não foi possível salvar o desenho."),
   });
 
-  const pixelPorMm = escala * ajusteDaTela;
-
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-text-primary/80 p-3">
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col overflow-hidden rounded-lg bg-surface">
@@ -230,37 +292,152 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
 
         <div className="flex flex-1 flex-col gap-4 overflow-auto p-4 lg:flex-row">
           {/* ------------------------------------------------------ a etiqueta */}
-          <div className="flex-1">
-            <div className="mb-3 flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-text-secondary">
-                Zoom
-                <input
-                  type="range"
-                  min={2}
-                  max={12}
-                  step={0.5}
-                  value={escala}
-                  onChange={(evento) => setEscala(Number(evento.target.value))}
-                />
-              </label>
+          <div className="flex-1" ref={area}>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="diminuir"
+                  onClick={() => setPixelPorMm((atual) => Math.max(1, atual / 1.25))}
+                >
+                  <Minus className="h-5 w-5" aria-hidden />
+                </Button>
 
-              <Button type="button" variant="ghost" onClick={() => setMedindo(!medindo)}>
-                <Ruler className="h-5 w-5" aria-hidden />
-                Ajustar ao tamanho real
+                <span
+                  className="min-w-[4.5rem] text-center text-sm text-text-secondary"
+                  aria-live="polite"
+                >
+                  {Math.round((pixelPorMm / (PX_POR_MM_CSS * ajusteDaTela)) * 100)}%
+                </span>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="aumentar"
+                  onClick={() => setPixelPorMm((atual) => Math.min(24, atual * 1.25))}
+                >
+                  <Plus className="h-5 w-5" aria-hidden />
+                </Button>
+              </div>
+
+              <Button type="button" variant="ghost" onClick={caberNaTela}>
+                <Maximize2 className="h-5 w-5" aria-hidden />
+                Caber na tela
+              </Button>
+
+              {/*
+                Cem por cento é a etiqueta do tamanho em que ela vai sair. Fica
+                como botão, e não como padrão: numa etiqueta de 12 mm de altura
+                o tamanho real é pequeno demais para arrastar com o dedo.
+              */}
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setPixelPorMm(PX_POR_MM_CSS * ajusteDaTela)}
+              >
+                Tamanho real
               </Button>
             </div>
 
+            {/*
+              Duas camadas de propósito.
+
+              A de fora tem o tamanho JÁ ampliado, em pixels, e é ela que ocupa
+              espaço na página. A de dentro é escrita em milímetros — a mesma
+              unidade do papel — e só recebe a lente do `scale`. Sem a de fora,
+              o navegador reserva o espaço do tamanho ORIGINAL: a etiqueta
+              ampliada vaza por cima do que vem depois, a caixa ganha barras de
+              rolagem e mostra um pedaço da peça.
+            */}
+            <div
+              className="rounded border border-border bg-white p-2"
+              style={{ width: "fit-content", maxWidth: "100%" }}
+            >
+              <div
+                style={{
+                  position: "relative",
+                  width: `${modelo.widthMm * pixelPorMm}px`,
+                  height: `${modelo.heightMm * pixelPorMm}px`,
+                }}
+              >
+                <div
+                  onPointerDown={(evento) => {
+                    if (evento.target === evento.currentTarget) setSelecionado(null);
+                  }}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: `${modelo.widthMm}mm`,
+                    height: `${modelo.heightMm}mm`,
+                    transform: `scale(${pixelPorMm / PX_POR_MM_CSS})`,
+                    transformOrigin: "top left",
+                    outline: "1px dashed #999",
+                    color: "#000",
+                    background: "#fff",
+                  }}
+                >
+                  <EtiquetaDesenhada
+                    elementos={elementos}
+                    dados={EXEMPLO}
+                    larguraMm={modelo.widthMm}
+                    alturaMm={modelo.heightMm}
+                  />
+
+                  {/* As alças de arrasto ficam por cima do desenho. */}
+                  {elementos.map((elemento) => (
+                    <div
+                      key={elemento.id}
+                      onPointerDown={(evento) => comecarArrasto(evento, elemento)}
+                      style={{
+                        position: "absolute",
+                        left: `${elemento.xMm}mm`,
+                        top: `${elemento.yMm}mm`,
+                        width: `${elemento.larguraMm}mm`,
+                        height: `${elemento.alturaMm ?? elemento.tamanhoMm * 1.2}mm`,
+                        cursor: "move",
+                        touchAction: "none",
+                        outline:
+                          selecionado === elemento.id
+                            ? "0.3mm solid #9B4F53"
+                            : "0.15mm dotted #bbb",
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/*
+              A régua vive aqui embaixo, como link.
+
+              Ela responde a uma pergunta que a pessoa só faz DEPOIS de reparar
+              que a etiqueta na tela não bate com a da mão. Pedir a medição
+              antes de deixar desenhar inverteria a ordem do trabalho.
+            */}
+            <button
+              type="button"
+              className="mt-3 text-sm text-text-secondary underline"
+              onClick={() => setMedindo(!medindo)}
+            >
+              <Ruler className="mr-1 inline h-4 w-4" aria-hidden />
+              Em tamanho real, a etiqueta na tela não bate com a de verdade?
+            </button>
+
             {medindo && (
-              <div className="mb-4 rounded-md border border-border bg-background-secondary p-4">
+              <div className="mt-3 rounded-md border border-border bg-background-secondary p-4">
                 <p className="text-sm text-text-secondary">
-                  A tela não sabe o tamanho dela mesma. Meça a barra abaixo com uma régua de verdade
-                  e escreva quantos milímetros ela tem — a partir daí o desenho aparece no tamanho
-                  em que vai sair.
+                  A tela não sabe o próprio tamanho. Encoste uma régua na barra abaixo e escreva
+                  quantos milímetros ela tem de ponta a ponta — o desenho passa a aparecer no
+                  tamanho certo neste aparelho.
                 </p>
 
                 <div
                   className="my-3 rounded bg-rose-primary"
-                  style={{ width: `${50 * pixelPorMm}px`, height: "10px" }}
+                  style={{ width: `${50 * PX_POR_MM_CSS * ajusteDaTela}px`, height: "10px" }}
                   aria-hidden
                 />
 
@@ -279,79 +456,21 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
                       const medido = Number(medida);
                       if (!Number.isFinite(medido) || medido <= 0) return;
 
-                      // A barra foi desenhada com 50 mm. Se a régua diz outro
-                      // número, a proporção entre os dois é o erro da tela.
+                      // A barra foi desenhada com 50 mm segundo a conta atual.
+                      // Se a régua diz outro número, a proporção entre os dois
+                      // é o erro deste monitor.
                       const fator = (50 / medido) * ajusteDaTela;
                       setAjusteDaTela(fator);
                       localStorage.setItem(CHAVE_REGUA, String(fator));
                       setMedindo(false);
+                      setMedida("");
                     }}
                   >
-                    Ajustar
+                    Acertar
                   </Button>
                 </div>
               </div>
             )}
-
-            {/*
-              A etiqueta em si. O `transform: scale` amplia sem mexer nas
-              medidas: o desenho continua em milímetros, e o zoom é só uma
-              lente. Escalar as medidas em vez da visualização faria o dono
-              salvar um desenho do tamanho do zoom.
-            */}
-            <div
-              className="inline-block rounded border border-border bg-white p-4"
-              style={{ overflow: "auto" }}
-            >
-              <div
-                ref={area}
-                onPointerDown={(evento) => {
-                  if (evento.target === evento.currentTarget) setSelecionado(null);
-                }}
-                style={{
-                  position: "relative",
-                  width: `${modelo.widthMm}mm`,
-                  height: `${modelo.heightMm}mm`,
-                  transform: `scale(${pixelPorMm})`,
-                  transformOrigin: "top left",
-                  outline: "1px dashed #999",
-                  color: "#000",
-                  background: "#fff",
-                }}
-              >
-                <EtiquetaDesenhada
-                  elementos={elementos}
-                  dados={EXEMPLO}
-                  larguraMm={modelo.widthMm}
-                  alturaMm={modelo.heightMm}
-                />
-
-                {/* As alças de arrasto ficam por cima do desenho. */}
-                {elementos.map((elemento) => (
-                  <div
-                    key={elemento.id}
-                    onPointerDown={(evento) => comecarArrasto(evento, elemento)}
-                    style={{
-                      position: "absolute",
-                      left: `${elemento.xMm}mm`,
-                      top: `${elemento.yMm}mm`,
-                      width: `${elemento.larguraMm}mm`,
-                      height: `${elemento.alturaMm ?? elemento.tamanhoMm * 1.2}mm`,
-                      cursor: "move",
-                      touchAction: "none",
-                      outline:
-                        selecionado === elemento.id ? "0.3mm solid #9B4F53" : "0.15mm dotted #bbb",
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/*
-              O espaço que o `scale` ocupa não é contado pelo navegador — sem
-              este vão, a lista de baixo subiria por cima da etiqueta ampliada.
-            */}
-            <div style={{ height: `${modelo.heightMm * pixelPorMm * 0.28}px` }} aria-hidden />
           </div>
 
           {/* ----------------------------------------------------- as escolhas */}

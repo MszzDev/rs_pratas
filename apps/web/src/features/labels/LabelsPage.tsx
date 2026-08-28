@@ -60,6 +60,26 @@ interface BatchRow {
   imageExternalUrl: string | null;
 }
 
+/**
+ * Os rolos que a loja usa.
+ *
+ * Existem porque quase toda etiqueta nova é uma destas três, e digitar
+ * "90" e "12" nos campos certos é onde se erra: sai um rolo inteiro no
+ * tamanho errado antes de alguém reparar. Os campos continuam abertos —
+ * o atalho preenche, não decide.
+ */
+const TAMANHOS_PRONTOS: Array<{
+  larguraMm: number;
+  alturaMm: number;
+  para: string;
+  dupla: boolean;
+}> = [
+  // Comprida e estreita: dobra na argola e o preço fica dos dois lados.
+  { larguraMm: 90, alturaMm: 12, para: "joia, dobrada na argola", dupla: true },
+  { larguraMm: 30, alturaMm: 20, para: "peça na caixa ou no mostruário", dupla: false },
+  { larguraMm: 100, alturaMm: 125, para: "pacote de envio", dupla: false },
+];
+
 /** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
 const keyOf = (row: { productId: string; variationId: string | null }) =>
   `${row.productId}:${row.variationId ?? ""}`;
@@ -358,6 +378,47 @@ export function LabelsPage() {
             create.mutate();
           }}
         >
+          <fieldset className="mb-5">
+            <legend className="mb-2 text-sm font-medium text-text-primary">
+              Tamanho do rolo
+            </legend>
+
+            <div className="flex flex-wrap gap-2">
+              {TAMANHOS_PRONTOS.map((tamanho) => {
+                const escolhido =
+                  form.widthMm === String(tamanho.larguraMm) &&
+                  form.heightMm === String(tamanho.alturaMm);
+
+                return (
+                  <Button
+                    key={`${tamanho.larguraMm}x${tamanho.alturaMm}`}
+                    type="button"
+                    variant={escolhido ? "primary" : "outline"}
+                    aria-pressed={escolhido}
+                    className="flex-col items-start gap-0 py-2 text-left"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        widthMm: String(tamanho.larguraMm),
+                        heightMm: String(tamanho.alturaMm),
+                        isDoubleSided: tamanho.dupla,
+                      })
+                    }
+                  >
+                    <span className="font-semibold">
+                      {tamanho.larguraMm} × {tamanho.alturaMm} mm
+                    </span>
+                    <span className="text-sm font-normal opacity-80">{tamanho.para}</span>
+                  </Button>
+                );
+              })}
+            </div>
+
+            <p className="mt-2 text-sm text-text-muted">
+              Não é nenhum destes? Escreva a medida nos campos abaixo.
+            </p>
+          </fieldset>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Código"

@@ -90,7 +90,7 @@ async function pacotePublicado(): Promise<string | null> {
  * demonstrada, não prometida: com isto dá para publicar, esperar, e ler no
  * aparelho qual versão ele está rodando — sem cabo e sem forçar nada.
  */
-export const VERSAO_DO_PACOTE = "2026-08-27-b";
+export const VERSAO_DO_PACOTE = "2026-08-27-c";
 
 function recarregar(): void {
   const destino = `${window.location.pathname}?v=${Date.now()}`;
