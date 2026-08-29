@@ -43,6 +43,27 @@ interface MeuDia {
     /** Explica o zero quando existe piso e ele não foi atingido. */
     observacao: string | null;
   } | null;
+
+  /**
+   * A semana da vendedora.
+   *
+   * O dia sozinho responde mal: uma terça fraca depois de uma segunda cheia
+   * parece fracasso, e não é. A semana é o menor período em que o esforço de
+   * quem está no balcão aparece como tendência — e ainda dá tempo de mudar
+   * antes que ela acabe.
+   */
+  semana: {
+    faturamento: string;
+    vendas: number;
+    pecas: number;
+    ticketMedio: string;
+    /** Em quantos dias da semana ela já vendeu. */
+    diasComVenda: number;
+    /** O melhor dia até agora, para ela saber o que dá para repetir. */
+    melhorDia: { dia: string; valor: string } | null;
+    /** O MESMO trecho da semana passada, para comparar sem enganar. */
+    semanaPassada: string;
+  };
 }
 
 function emReal(valor: Prisma.Decimal): string {
@@ -119,6 +140,90 @@ export async function getMyDay(params: {
 
   const ticket =
     vendas.length > 0 ? faturamento.div(vendas.length) : new Prisma.Decimal(0);
+
+  // ------------------------------------------------------------- a semana
+  //
+  // Começa no domingo, como o calendário — e não sete dias para trás. "Minha
+  // semana" tem que ser a mesma semana que ela vê no celular, senão o número
+  // não bate com nada que ela conheça.
+  const inicioDaSemana = new Date(inicio);
+  inicioDaSemana.setDate(inicio.getDate() - inicio.getDay());
+
+  const daSemana = await prisma.sale.findMany({
+    where: {
+      companyId: request.user.companyId,
+      sellerId: request.user.sub,
+      storeId,
+      status: "CONCLUIDA",
+      completedAt: { gte: inicioDaSemana, lte: agora },
+    },
+    select: {
+      totalAmount: true,
+      completedAt: true,
+      items: { select: { quantity: true } },
+    },
+  });
+
+  /**
+   * A comparação usa o MESMO TRECHO da semana passada.
+   *
+   * Comparar uma quarta-feira com a semana passada inteira diria sempre que
+   * ela está pior — e número que sempre desanima acaba ignorado. Numa quarta,
+   * compara-se com domingo a quarta da semana anterior.
+   */
+  const inicioAnterior = new Date(inicioDaSemana);
+  inicioAnterior.setDate(inicioDaSemana.getDate() - 7);
+
+  const mesmoPontoAnterior = new Date(agora);
+  mesmoPontoAnterior.setDate(agora.getDate() - 7);
+
+  const anteriores = await prisma.sale.aggregate({
+    where: {
+      companyId: request.user.companyId,
+      sellerId: request.user.sub,
+      storeId,
+      status: "CONCLUIDA",
+      completedAt: { gte: inicioAnterior, lte: mesmoPontoAnterior },
+    },
+    _sum: { totalAmount: true },
+  });
+
+  let faturamentoSemana = new Prisma.Decimal(0);
+  let pecasSemana = 0;
+  const porDia = new Map<string, { dia: Date; valor: Prisma.Decimal }>();
+
+  for (const venda of daSemana) {
+    faturamentoSemana = faturamentoSemana.plus(venda.totalAmount);
+    for (const item of venda.items) pecasSemana += item.quantity;
+
+    const quando = venda.completedAt ?? agora;
+    const chave = `${quando.getFullYear()}-${quando.getMonth()}-${quando.getDate()}`;
+    const acumulado = porDia.get(chave);
+
+    porDia.set(chave, {
+      dia: acumulado?.dia ?? quando,
+      valor: (acumulado?.valor ?? new Prisma.Decimal(0)).plus(venda.totalAmount),
+    });
+  }
+
+  const melhor = [...porDia.values()].sort((a, b) => b.valor.comparedTo(a.valor))[0];
+
+  const semana: MeuDia["semana"] = {
+    faturamento: emReal(faturamentoSemana),
+    vendas: daSemana.length,
+    pecas: pecasSemana,
+    ticketMedio: emReal(
+      daSemana.length > 0 ? faturamentoSemana.div(daSemana.length) : new Prisma.Decimal(0),
+    ),
+    diasComVenda: porDia.size,
+    melhorDia: melhor
+      ? {
+          dia: melhor.dia.toLocaleDateString("pt-BR", { weekday: "long" }),
+          valor: emReal(melhor.valor),
+        }
+      : null,
+    semanaPassada: emReal(anteriores._sum.totalAmount ?? new Prisma.Decimal(0)),
+  };
 
   // --------------------------------------------------------------- a meta
 
@@ -200,5 +305,6 @@ export async function getMyDay(params: {
     ticketMedio: emReal(ticket),
     meta: metaResposta,
     comissao: comissaoResposta,
+    semana,
   };
 }

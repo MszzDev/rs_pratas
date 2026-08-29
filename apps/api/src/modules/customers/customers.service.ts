@@ -47,7 +47,11 @@ export async function listCustomers(params: {
       ...(search
         ? {
             OR: [
-              { name: { contains: search, mode: "insensitive" } },
+              { name: { contains: search, mode: "insensitive" as const } },
+              // O e-mail entrou na busca porque virou o caminho do comprovante
+              // e da garantia: quando a cliente liga dizendo que não recebeu, o
+              // que o balcão tem na mão é o endereço, não o nome completo.
+              { email: { contains: search, mode: "insensitive" as const } },
               // Busca por telefone só quando o que foi digitado tem dígitos,
               // senão `contains: ""` casaria com todo mundo.
               ...(digits ? [{ phone: { contains: digits } }] : []),

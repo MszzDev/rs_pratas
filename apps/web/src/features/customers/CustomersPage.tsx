@@ -202,7 +202,7 @@ export function CustomersPage() {
           label="Buscar"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Nome, telefone ou CPF"
+          placeholder="Nome, telefone ou e-mail"
         />
       </div>
 

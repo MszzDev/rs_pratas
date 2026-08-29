@@ -178,16 +178,28 @@ export async function salesByStore(params: {
     _count: true,
   });
 
+  /**
+   * Só as lojas que ainda existem.
+   *
+   * Loja removida continua tendo vendas no histórico — elas não somem, e não
+   * devem sumir. Mas listá-la no painel de hoje faz o dono comparar a rede
+   * atual com uma unidade que fechou, e o "—" que aparecia no lugar do nome
+   * removido era pior ainda: uma barra sem dono, que ninguém sabe o que é.
+   *
+   * O faturamento dela sai do gráfico junto. Quem precisa do histórico de uma
+   * loja fechada procura pelo período, não pela comparação do dia.
+   */
   const names = await prisma.store.findMany({
-    where: { id: { in: grouped.map((row) => row.storeId) } },
+    where: { id: { in: grouped.map((row) => row.storeId) }, deletedAt: null },
     select: { id: true, name: true },
   });
   const byId = new Map(names.map((store) => [store.id, store.name]));
 
   return grouped
+    .filter((row) => byId.has(row.storeId))
     .map((row) => ({
       storeId: row.storeId,
-      nome: byId.get(row.storeId) ?? "—",
+      nome: byId.get(row.storeId) as string,
       vendas: row._count,
       faturamento: (row._sum.totalAmount ?? new Prisma.Decimal(0)).toFixed(2),
     }))

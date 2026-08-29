@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Target, TrendingUp, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarRange, Minus, Target, TrendingUp } from "lucide-react";
 import { PageShell } from "@/components/ui/page-shell";
 import { Alert } from "@/components/ui/alert";
 import { apiFetch } from "@/lib/api-client";
@@ -20,12 +20,15 @@ interface MeuDia {
     percentual: number;
     ateQuando: string;
   } | null;
-  comissao: {
-    valor: string;
-    percentual: string;
-    base: "FATURAMENTO" | "MARGEM";
-    observacao: string | null;
-  } | null;
+  semana: {
+    faturamento: string;
+    vendas: number;
+    pecas: number;
+    ticketMedio: string;
+    diasComVenda: number;
+    melhorDia: { dia: string; valor: string } | null;
+    semanaPassada: string;
+  };
 }
 
 /**
@@ -114,35 +117,81 @@ export function MyDayPage() {
               </p>
             </div>
 
-            {dia.data.comissao ? (
-              <div className="rounded-lg border border-border bg-surface p-5">
-                <p className="flex items-center gap-2 text-sm text-text-secondary">
-                  <Wallet className="h-4 w-4 text-gold-dark" aria-hidden />
-                  Sua comissão hoje
-                </p>
-                <p className="mt-2 text-3xl font-semibold text-text-primary">
-                  {formatMoney(dia.data.comissao.valor)}
-                </p>
-                <p className="mt-1 text-sm text-text-muted">
-                  {dia.data.comissao.percentual}% sobre{" "}
-                  {dia.data.comissao.base === "MARGEM" ? "a margem" : "o que vendeu"}
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-border bg-surface p-5">
-                <p className="text-sm text-text-secondary">Comissão</p>
-                <p className="mt-2 text-sm text-text-muted">
-                  Ainda não há regra de comissão cadastrada para você. Fale com a gerência.
-                </p>
-              </div>
-            )}
+            {/*
+              No lugar da comissão: a semana.
+
+              A comissão respondia "quanto eu ganho", que é uma pergunta de
+              fim de mês e que ninguém muda olhando. A semana responde "como
+              estou indo" — e ainda dá tempo de fazer diferente antes que ela
+              acabe.
+            */}
+            <div className="rounded-lg border border-border bg-surface p-5">
+              <p className="flex items-center gap-2 text-sm text-text-secondary">
+                <CalendarRange className="h-4 w-4 text-gold-dark" aria-hidden />
+                Sua semana
+              </p>
+              <p className="mt-2 text-3xl font-semibold text-text-primary">
+                {formatMoney(dia.data.semana.faturamento)}
+              </p>
+              <p className="mt-1 text-sm text-text-muted">
+                {dia.data.semana.vendas === 1
+                  ? "1 venda"
+                  : `${dia.data.semana.vendas} vendas`}{" "}
+                em{" "}
+                {dia.data.semana.diasComVenda === 1
+                  ? "1 dia"
+                  : `${dia.data.semana.diasComVenda} dias`}
+              </p>
+            </div>
           </div>
 
-          {dia.data.comissao?.observacao && (
-            <div className="mt-4">
-              <Alert tone="info">{dia.data.comissao.observacao}</Alert>
+          <section className="mt-6 rounded-lg border border-border bg-surface p-6">
+            <h2 className="font-semibold text-text-primary">Como a semana está indo</h2>
+
+            <div className="mt-4 grid gap-5 sm:grid-cols-3">
+              <div>
+                <p className="text-sm text-text-secondary">Comparado à semana passada</p>
+                {/*
+                  A comparação é com o MESMO TRECHO da semana anterior — numa
+                  quarta, com domingo a quarta. Comparar a semana pela metade
+                  com a semana passada inteira diria sempre que ela está pior,
+                  e número que só desanima acaba ignorado.
+                */}
+                <ComparacaoDaSemana
+                  agora={dia.data.semana.faturamento}
+                  antes={dia.data.semana.semanaPassada}
+                />
+              </div>
+
+              <div>
+                <p className="text-sm text-text-secondary">Venda média da semana</p>
+                <p className="mt-1 text-xl font-semibold text-text-primary">
+                  {formatMoney(dia.data.semana.ticketMedio)}
+                </p>
+                <p className="mt-0.5 text-sm text-text-muted">
+                  {dia.data.semana.pecas === 1
+                    ? "1 peça no total"
+                    : `${dia.data.semana.pecas} peças no total`}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-text-secondary">Melhor dia</p>
+                {dia.data.semana.melhorDia ? (
+                  <>
+                    <p className="mt-1 text-xl font-semibold capitalize text-text-primary">
+                      {dia.data.semana.melhorDia.dia}
+                    </p>
+                    <p className="mt-0.5 text-sm text-text-muted">
+                      {formatMoney(dia.data.semana.melhorDia.valor)}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-text-muted">Nenhuma venda ainda esta semana.</p>
+                )}
+              </div>
             </div>
-          )}
+          </section>
 
           {dia.data.meta && (
             <section className="mt-6 rounded-lg border border-border bg-surface p-6">
@@ -184,5 +233,44 @@ export function MyDayPage() {
         </>
       )}
     </PageShell>
+  );
+}
+
+/**
+ * A seta da semana.
+ *
+ * Sem base de comparação — primeira semana dela na loja — não inventa
+ * porcentagem: "primeira semana" é a resposta honesta, e uma seta verde de
+ * "+100%" contra zero não significaria nada.
+ */
+function ComparacaoDaSemana({ agora, antes }: { agora: string; antes: string }) {
+  const atual = Number(agora);
+  const anterior = Number(antes);
+
+  if (anterior <= 0) {
+    return (
+      <p className="mt-1 text-sm text-text-muted">
+        {atual > 0 ? "Sem semana anterior para comparar." : "Nenhuma venda ainda."}
+      </p>
+    );
+  }
+
+  const variacao = Math.round(((atual - anterior) / anterior) * 100);
+  const subiu = variacao > 0;
+  const igual = variacao === 0;
+
+  const Icone = igual ? Minus : subiu ? ArrowUpRight : ArrowDownRight;
+  const cor = igual ? "text-text-secondary" : subiu ? "text-success" : "text-danger";
+
+  return (
+    <>
+      <p className={`mt-1 flex items-center gap-1 text-xl font-semibold ${cor}`}>
+        <Icone className="h-5 w-5" aria-hidden />
+        {igual ? "igual" : `${subiu ? "+" : ""}${variacao}%`}
+      </p>
+      <p className="mt-0.5 text-sm text-text-muted">
+        até aqui, na semana passada: {formatMoney(antes)}
+      </p>
+    </>
   );
 }

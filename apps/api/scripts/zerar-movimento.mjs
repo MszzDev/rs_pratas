@@ -104,6 +104,15 @@ const ORDEM = [
   ["Contagens", () => prisma.inventory.deleteMany({})],
   ["Movimentos de estoque", () => prisma.stockMovement.deleteMany({})],
   ["Marcações de ponto", () => prisma.timeClockEntry.deleteMany({})],
+  /**
+   * Os clientes saem por último, e só depois de tudo que aponta para eles.
+   *
+   * Eles são cadastro, não movimento — mas os que existem hoje foram criados
+   * nos testes, com nome e telefone inventados. Entrar em operação com sete
+   * cadastros falsos faz a vendedora achar que já conhece a cliente do balcão
+   * e vincular a venda à pessoa errada.
+   */
+  ["Clientes", () => prisma.customer.deleteMany({})],
 ];
 
 if (modo === "--conferir") {
@@ -125,6 +134,7 @@ if (modo === "--conferir") {
     Contagens: await prisma.inventory.count(),
     "Movimentos de estoque": await prisma.stockMovement.count(),
     "Marcações de ponto": await prisma.timeClockEntry.count(),
+    Clientes: await prisma.customer.count(),
   };
 
   let total = 0;
