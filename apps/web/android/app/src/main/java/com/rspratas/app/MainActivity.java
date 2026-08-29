@@ -6,7 +6,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 
@@ -38,6 +41,34 @@ public class MainActivity extends BridgeActivity {
    * acabou de ser autorizado a fazer. A janela abaixo é a trégua.
    */
   private long saiuEm = 0L;
+
+  /**
+   * Quanto tempo parado antes de deixar a tela apagar.
+   *
+   * Trinta minutos: mais que qualquer pausa entre uma cliente e outra, e menos
+   * que o tempo em que o tablet fica sozinho no balcão vazio. Abaixo disso a
+   * tela apagaria no meio de um atendimento demorado; acima, o aparelho passa a
+   * tarde inteira aceso à toa.
+   */
+  private static final long OCIOSIDADE_MS = 30 * 60 * 1000L;
+
+  private final Handler relogioDeOciosidade = new Handler(Looper.getMainLooper());
+
+  /**
+   * Solta a tela depois do tempo parado.
+   *
+   * Soltar não apaga a tela: devolve a decisão ao Android, que apaga conforme
+   * o tempo configurado no próprio aparelho. É a diferença entre "apague em 30
+   * minutos" e "pare de impedir que apague" — a segunda respeita o que o dono
+   * configurou no tablet.
+   */
+  private final Runnable soltarATela = new Runnable() {
+    @Override
+    public void run() {
+      getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+      Log.i(TAG, "Parado ha 30 minutos — a tela pode apagar.");
+    }
+  };
 
   /** Tempo de trégua depois de uma saída autorizada. */
   private static final long TREGUA_MS = 5 * 60 * 1000;
@@ -74,11 +105,43 @@ public class MainActivity extends BridgeActivity {
     // quem pegar o tablet.
     getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
 
-    // A tela não apaga durante o expediente. Num caixa, a tela apagando entre
-    // um cliente e outro obriga a desbloquear a cada venda.
-    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    // A tela não apaga ENQUANTO houver gente mexendo. Num caixa, a tela
+    // apagando entre uma cliente e outra obriga a desbloquear a cada venda.
+    //
+    // Mas ficar acesa a noite inteira é outro problema: gasta a tela do
+    // aparelho, que é a peça que primeiro marca com imagem parada, e deixa o
+    // balcão iluminado com o resumo do caixa à mostra.
+    manterTelaAcesa();
 
     entrarNoModoQuiosque();
+  }
+
+  /**
+   * Segura a tela acesa e recomeça a contagem dos trinta minutos.
+   *
+   * Chamado a cada toque. Reagendar é barato — trocar um agendamento no
+   * Handler não custa nada perto de um toque de dedo — e é o que garante que a
+   * conta só termine quando o tablet estiver de fato parado.
+   */
+  private void manterTelaAcesa() {
+    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+    relogioDeOciosidade.removeCallbacks(soltarATela);
+    relogioDeOciosidade.postDelayed(soltarATela, OCIOSIDADE_MS);
+  }
+
+  /**
+   * Todo toque na tela conta como uso.
+   *
+   * `dispatchTouchEvent` pega o toque ANTES de ele chegar à WebView, e é por
+   * isso que serve: o conteúdo do sistema é uma página, e um toque num botão
+   * dela não passaria por nenhum outro método desta Activity. Sem isto, a
+   * vendedora usaria o tablet por uma hora e a tela apagaria assim mesmo.
+   */
+  @Override
+  public boolean dispatchTouchEvent(MotionEvent evento) {
+    manterTelaAcesa();
+    return super.dispatchTouchEvent(evento);
   }
 
   /**
@@ -91,6 +154,10 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onResume() {
     super.onResume();
+
+    // Voltar do descanso conta como uso: quem acordou o tablet vai mexer nele,
+    // e a tela apagando de novo em seguida seria absurdo.
+    manterTelaAcesa();
 
     if (System.currentTimeMillis() - saiuEm < TREGUA_MS) {
       Log.i(TAG, "Saida autorizada recente — nao reentrando no confinamento.");
