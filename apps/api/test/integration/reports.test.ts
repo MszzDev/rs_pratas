@@ -505,6 +505,47 @@ describe("metas", () => {
     expect(await prisma.goal.findUnique({ where: { id: criada.id } })).toBeNull();
   });
 
+  /**
+   * Uma meta de loja fechada não pode ser batida — a loja não vende mais nada.
+   * Ela ficaria em 0% para sempre, somando um alvo inatingível ao painel, ao
+   * resultado e à tela de comissões, que leem a mesma lista.
+   *
+   * Foi o que aconteceu: duas lojas removidas, R$ 36.000,00 de meta pendurados
+   * em três telas.
+   */
+  it("meta de loja removida some da lista", async () => {
+    const { store, token } = await scenario();
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/goals",
+      headers: auth(token),
+      payload: {
+        storeId: store.id,
+        scope: "LOJA",
+        period: "MENSAL",
+        periodStart: new Date(Date.now() - 86_400_000).toISOString(),
+        periodEnd: new Date(Date.now() + 86_400_000).toISOString(),
+        targetAmount: 18000,
+      },
+    });
+
+    const antes = (
+      await app.inject({ method: "GET", url: "/api/v1/goals", headers: auth(token) })
+    ).json();
+    expect(antes).toHaveLength(1);
+
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { deletedAt: new Date() },
+    });
+
+    const depois = (
+      await app.inject({ method: "GET", url: "/api/v1/goals", headers: auth(token) })
+    ).json();
+    expect(depois).toHaveLength(0);
+  });
+
   it("meta batida não mostra falta negativa", async () => {
     const { store, session, token, product } = await scenario();
 

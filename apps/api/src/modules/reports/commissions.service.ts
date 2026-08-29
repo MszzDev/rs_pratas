@@ -377,6 +377,19 @@ export async function listGoalsWithProgress(params: {
       ...(storeId ? { storeId } : {}),
       ...(seesEverything ? {} : { storeId: { in: request.user.storeIds } }),
       ...(activeOnly ? { periodStart: { lte: now }, periodEnd: { gte: now } } : {}),
+      /**
+       * Meta de loja removida não aparece mais.
+       *
+       * Ela não pode ser batida — a loja não vende mais nada — então fica para
+       * sempre em 0%, somando um alvo que ninguém vai atingir a todas as telas
+       * que mostram metas. O dono removeu duas lojas e passou a ver
+       * R$ 36.000,00 de meta pendurados em três lugares diferentes.
+       *
+       * A linha continua no banco e continua podendo ser apagada pela rota de
+       * remoção; o que ela deixa de fazer é poluir a tela de quem não tem nada
+       * a ver com uma loja que fechou.
+       */
+      store: { deletedAt: null },
     },
     include: {
       store: { select: { name: true } },

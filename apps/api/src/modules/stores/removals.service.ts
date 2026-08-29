@@ -611,6 +611,27 @@ export async function removeStore(params: {
   const temHistorico =
     vendas > 0 || turnos > 0 || store._count.timeClockEntries > 0 || store._count.stockItems > 0;
 
+  /**
+   * As metas da loja vão junto, nos dois caminhos.
+   *
+   * Meta é sempre de alguma loja, e sem a loja ela não pode ser batida nem
+   * medida: fica em 0% para sempre, somando um alvo inatingível a todas as
+   * telas que mostram metas. Não é histórico que valha guardar — o realizado
+   * vem das vendas, que continuam onde estão.
+   *
+   * Vem ANTES da remoção, e não depois, por dois motivos: no caminho que apaga
+   * de vez, a meta aponta para a loja e a chave estrangeira recusaria; no
+   * caminho que só desativa, deixar para depois seria deixar para nunca.
+   */
+  const metasApagadas = await prisma.goal.deleteMany({ where: { storeId: store.id } });
+
+  if (metasApagadas.count > 0) {
+    request.log.info(
+      { storeId: store.id, metas: metasApagadas.count },
+      "metas da loja removida apagadas junto",
+    );
+  }
+
   if (temHistorico) {
     await prisma.store.update({
       where: { id: store.id },
