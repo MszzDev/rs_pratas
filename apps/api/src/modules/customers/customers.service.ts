@@ -224,18 +224,40 @@ export async function updateCustomer(params: {
 export async function findOrCreateByPhone(params: {
   name: string;
   phone: string;
+  email?: string | undefined;
   request: FastifyRequest;
 }) {
   const phone = normalizePhone(params.phone);
+  const email = params.email?.trim() || null;
 
   const existing = await prisma.customer.findFirst({
     where: { companyId: params.request.user.companyId, phone },
   });
 
-  if (existing) return existing;
+  if (existing) {
+    /**
+     * Cliente conhecido que informou e-mail agora.
+     *
+     * Preenche o que faltava, e NÃO sobrescreve o que já existe: a vendedora
+     * digita no balcão, com pressa, e um endereço errado apagando o certo
+     * tiraria da cliente o comprovante e a garantia das próximas compras — sem
+     * ninguém perceber, porque o envio falha em silêncio.
+     *
+     * Trocar um e-mail que já existe é edição de cadastro, na tela de
+     * clientes, onde se vê o que está lá antes de mudar.
+     */
+    if (email && !existing.email) {
+      return prisma.customer.update({
+        where: { id: existing.id },
+        data: { email },
+      });
+    }
+
+    return existing;
+  }
 
   return createCustomer({
-    input: { name: params.name, phone },
+    input: { name: params.name, phone, ...(email ? { email } : {}) },
     request: params.request,
   });
 }

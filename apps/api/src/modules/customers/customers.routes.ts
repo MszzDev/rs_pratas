@@ -72,6 +72,15 @@ export async function customerRoutes(app: FastifyInstance) {
         .object({
           name: z.string().min(2).max(120),
           phone: z.string().min(10).max(20),
+          /**
+           * Opcional aqui, embora a tela peça.
+           *
+           * Sem e-mail o comprovante e a garantia não saem — mas travar a
+           * venda por causa disso seria pior: o balcão tem fila, e nem toda
+           * cliente tem e-mail na ponta da língua. A tela insiste; o servidor
+           * não impede.
+           */
+          email: z.union([z.string().email("Informe um e-mail válido.").max(160), z.literal("")]).optional(),
         })
         .parse(request.body);
 

@@ -79,6 +79,7 @@ export function PosPage() {
   const [customer, setCustomer] = useState<{ id: string; name: string } | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [paying, setPaying] = useState(false);
 
   /**
@@ -203,7 +204,11 @@ export function PosPage() {
     mutationFn: () =>
       apiFetch<{ id: string; name: string }>("/api/v1/customers/quick", {
         method: "POST",
-        body: { name: customerName.trim(), phone: customerPhone.replace(/\D/g, "") },
+        body: {
+          name: customerName.trim(),
+          phone: customerPhone.replace(/\D/g, ""),
+          ...(customerEmail.trim() ? { email: customerEmail.trim() } : {}),
+        },
       }),
     onSuccess: (result) => {
       setCustomer(result);
@@ -721,6 +726,23 @@ export function PosPage() {
                     value={customerPhone}
                     onChange={(event) => setCustomerPhone(event.target.value)}
                     hint="Com DDD. Se já for cliente, o cadastro é reaproveitado."
+                  />
+                  {/*
+                    É por aqui que o comprovante e a garantia saem.
+
+                    Sem e-mail a venda fecha do mesmo jeito — o balcão tem fila,
+                    e travar por causa disso seria pior. Mas a cliente fica sem
+                    o comprovante que ela vai procurar na hora da troca, e sem a
+                    garantia que ela vai precisar meses depois. Por isso o campo
+                    diz para que serve, em vez de só pedir o dado.
+                  */}
+                  <Field
+                    label="E-mail"
+                    type="email"
+                    inputMode="email"
+                    value={customerEmail}
+                    onChange={(event) => setCustomerEmail(event.target.value)}
+                    hint="Para o comprovante e a garantia chegarem sozinhos. Sem ele, a cliente sai sem os dois."
                   />
                   <Button
                     type="button"

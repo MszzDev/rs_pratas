@@ -798,6 +798,76 @@ describe("clientes", () => {
     expect(response.json().id).toBe(customer.id);
   });
 
+  /**
+   * O e-mail no balcão é o que faz o comprovante e a garantia saírem sozinhos.
+   * Sem ele a venda fecha igual — o balcão tem fila — e a cliente sai sem os
+   * dois documentos que vai procurar depois.
+   */
+  it("guarda o e-mail informado no cadastro rápido", async () => {
+    const { token } = await scenario();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/customers/quick",
+      headers: auth(token),
+      payload: { name: "Cliente Nova", phone: "11955554444", email: "nova@exemplo.com" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().email).toBe("nova@exemplo.com");
+  });
+
+  it("completa o e-mail de quem já era cliente e não tinha", async () => {
+    const { token, customer } = await scenario();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/customers/quick",
+      headers: auth(token),
+      payload: { name: "Maria S.", phone: "11988887777", email: "maria@exemplo.com" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().id).toBe(customer.id);
+    expect(response.json().email).toBe("maria@exemplo.com");
+  });
+
+  it("NÃO sobrescreve um e-mail que já estava cadastrado", async () => {
+    const { token } = await scenario();
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/customers/quick",
+      headers: auth(token),
+      payload: { name: "Cliente", phone: "11944443333", email: "certo@exemplo.com" },
+    });
+
+    // A vendedora digita com pressa, no balcão. Um endereço errado apagando o
+    // certo tiraria da cliente o comprovante das próximas compras — e o envio
+    // falha em silêncio, então ninguém perceberia.
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/customers/quick",
+      headers: auth(token),
+      payload: { name: "Cliente", phone: "11944443333", email: "errado@exemplo.com" },
+    });
+
+    expect(response.json().email).toBe("certo@exemplo.com");
+  });
+
+  it("recusa e-mail malformado em vez de guardar endereço que nunca entrega", async () => {
+    const { token } = await scenario();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/customers/quick",
+      headers: auth(token),
+      payload: { name: "Cliente", phone: "11933332222", email: "nao-e-email" },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
   it("recusa CPF inválido em vez de guardar número errado", async () => {
     const { token } = await scenario();
 
