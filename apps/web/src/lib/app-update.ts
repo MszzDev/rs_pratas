@@ -90,7 +90,7 @@ async function pacotePublicado(): Promise<string | null> {
  * demonstrada, não prometida: com isto dá para publicar, esperar, e ler no
  * aparelho qual versão ele está rodando — sem cabo e sem forçar nada.
  */
-export const VERSAO_DO_PACOTE = "2026-08-29-b";
+export const VERSAO_DO_PACOTE = "2026-08-29-c";
 
 function recarregar(): void {
   const destino = `${window.location.pathname}?v=${Date.now()}`;
@@ -109,10 +109,17 @@ function momentoSeguro(): boolean {
  * poder oferecer "Atualizar agora" a quem estiver no meio de algo.
  */
 export function vigiarAtualizacoes(aoEncontrar: (aplicar: () => void) => void): () => void {
-  // Só no aplicativo: no navegador do computador, recarregar a página já busca
-  // a versão nova, e ninguém precisa de aviso para isso.
-  if (!Capacitor.isNativePlatform()) return () => undefined;
-
+  /**
+   * Vale no navegador também — e era aqui que estava o F5 sem fim.
+   *
+   * A regra antiga dizia "no navegador, recarregar já busca a versão nova".
+   * Verdade, e irrelevante: só recarrega quem SABE que precisa, e ninguém sabe.
+   * O dono ficava apertando F5 no celular por desconfiança, e a gerente
+   * continuava numa versão antiga sem nada dizendo isso.
+   *
+   * A conferência é a mesma dos tablets: comparar o nome do pacote publicado
+   * com o carregado. Custa alguns kilobytes a cada três minutos.
+   */
   const atual = pacoteCarregado();
   let parado = false;
   let temporizador: ReturnType<typeof setTimeout> | undefined;
@@ -138,13 +145,33 @@ export function vigiarAtualizacoes(aoEncontrar: (aplicar: () => void) => void): 
   // tablet passa mais tempo parado, e quando trocar de versão custa menos.
   void conferir();
 
-  const inscricao = App.addListener("appStateChange", ({ isActive }) => {
-    if (isActive) void conferir();
-  });
+  /**
+   * Voltar do segundo plano é o melhor momento para trocar de versão, e cada
+   * plataforma avisa isso de um jeito: o aplicativo pelo Capacitor, o
+   * navegador pela visibilidade da aba. As duas respondem a mesma pergunta —
+   * "a pessoa acabou de voltar?" — e é quando trocar custa menos.
+   */
+  if (Capacitor.isNativePlatform()) {
+    const inscricao = App.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) void conferir();
+    });
+
+    return () => {
+      parado = true;
+      if (temporizador) clearTimeout(temporizador);
+      void inscricao.then((ouvinte) => ouvinte.remove());
+    };
+  }
+
+  const aoVoltar = () => {
+    if (document.visibilityState === "visible") void conferir();
+  };
+
+  document.addEventListener("visibilitychange", aoVoltar);
 
   return () => {
     parado = true;
     if (temporizador) clearTimeout(temporizador);
-    void inscricao.then((ouvinte) => ouvinte.remove());
+    document.removeEventListener("visibilitychange", aoVoltar);
   };
 }

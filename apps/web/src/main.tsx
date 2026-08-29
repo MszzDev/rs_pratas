@@ -9,6 +9,7 @@ import {
   lerPreferenciasGuardadas,
 } from "./features/profile/apply-preferences";
 import { VERSAO_DO_PACOTE } from "./lib/app-update";
+import { ouvirConviteDeInstalacao, registrarServiceWorker } from "./lib/instalar";
 import { App } from "./App";
 import "./index.css";
 
@@ -25,6 +26,12 @@ aplicarPreferencias(lerPreferenciasGuardadas());
 // A versão fica pendurada na janela: é assim que se confere, de fora e sem
 // cabo, se o tablet já trocou sozinho.
 (window as unknown as { rsVersao?: string }).rsVersao = VERSAO_DO_PACOTE;
+
+// O convite de instalação dispara UMA vez e cedo, antes de qualquer tela
+// existir. Ouvir aqui é o que permite oferecer o botão depois; ouvir dentro de
+// um componente perderia a única chance.
+ouvirConviteDeInstalacao();
+registrarServiceWorker();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

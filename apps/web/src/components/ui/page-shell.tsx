@@ -38,6 +38,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/features/auth/auth-context";
 import { Logo, LogoMark } from "@/components/ui/logo";
 import { StatusStrip } from "@/components/ui/status-strip";
+import { InstallButton } from "@/components/ui/install-button";
 import { PinExpiryNotice } from "@/features/auth/PinExpiryNotice";
 import { KioskExitDialog, useKioskExitGesture } from "@/features/kiosk/KioskExit";
 import { LeaveWithoutClockOut } from "@/features/timeclock/LeaveWithoutClockOut";
@@ -460,6 +461,8 @@ function UserFooter({
           </p>
         </div>
       </NavLink>
+
+      <InstallButton />
 
       <button
         type="button"
