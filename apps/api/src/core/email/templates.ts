@@ -1,4 +1,5 @@
 import type { EmailMessage } from "./email.provider.js";
+import { moldarEmail } from "./layout.js";
 
 /**
  * E-mail de credencial do primeiro acesso.
@@ -40,6 +41,23 @@ export function credentialsEmail(params: {
       "Ninguém da empresa vai te pedir sua senha ou seu PIN por mensagem ou",
       "telefone. Se pedirem, não é a empresa.",
     ].join("\n"),
+    html: moldarEmail({
+      titulo: "Seu acesso ao sistema",
+      saudacao: `Olá, ${firstName}.`,
+      paragrafos: [
+        "Seu cadastro foi criado. No tablet da loja, que é por onde você vai trabalhar, a entrada é com a matrícula e o PIN abaixo.",
+        "Este PIN serve para a primeira entrada. Assim que você entrar, o sistema pede que você escolha o seu — seis números que só você sabe. Ele vale por 30 dias, e o aviso de troca aparece cinco dias antes.",
+        "Se você também for usar o sistema pelo computador, a senha temporária está aí embaixo, e ela também é trocada no primeiro uso.",
+      ],
+      destaques: [
+        { rotulo: "Matrícula", valor: params.employeeCode },
+        { rotulo: "PIN de entrada (tablet)", valor: params.temporaryPin },
+        { rotulo: "Senha (computador)", valor: params.temporaryPassword },
+      ],
+      rodape:
+        "Ninguém da empresa vai pedir sua senha ou seu PIN por mensagem ou telefone. Se pedirem, não é a empresa.",
+      empresa: params.companyName,
+    }),
   };
 }
 
@@ -71,6 +89,21 @@ export function credentialsResetEmail(params: {
       "",
       "Se não foi você quem pediu, avise o responsável pela loja.",
     ].join("\n"),
+    html: moldarEmail({
+      titulo: "Novo PIN de entrada",
+      saudacao: `Olá, ${firstName}.`,
+      paragrafos: [
+        "Foram geradas novas credenciais de primeira entrada. As anteriores deixaram de funcionar neste momento.",
+        "Na primeira entrada o sistema pede que você escolha o seu próprio PIN.",
+      ],
+      destaques: [
+        { rotulo: "Matrícula", valor: params.employeeCode },
+        { rotulo: "PIN de entrada (tablet)", valor: params.temporaryPin },
+        { rotulo: "Senha (computador)", valor: params.temporaryPassword },
+      ],
+      rodape: "Se não foi você quem pediu, avise o responsável pela loja.",
+      empresa: params.companyName,
+    }),
   };
 }
 
@@ -99,5 +132,21 @@ export function documentReviewedEmail(params: {
       "",
       "Você pode acompanhar tudo pela aba Meus documentos.",
     ].join("\n"),
+    html: moldarEmail({
+      titulo: params.approved
+        ? `${params.documentLabel} aprovado`
+        : `${params.documentLabel} não aceito`,
+      saudacao: `Olá, ${firstName}.`,
+      paragrafos: [
+        params.approved
+          ? `Seu ${params.documentLabel.toLowerCase()} foi conferido e aceito.`
+          : `Seu ${params.documentLabel.toLowerCase()} não foi aceito.`,
+        ...(params.note ? [`Observação: ${params.note}`] : []),
+        "Você pode acompanhar tudo pela aba Meus documentos.",
+      ],
+      // Este e-mail não tem empresa no parâmetro — é aviso interno, e o nome
+      // da loja já está no cabeçalho da moldura.
+      empresa: "RS Pratas",
+    }),
   };
 }

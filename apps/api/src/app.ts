@@ -10,6 +10,7 @@ import { prisma } from "./db/prisma.js";
 import { redis } from "./db/redis.js";
 import { registerErrorHandler } from "./core/error-handler.js";
 import { maskMoneyDeep } from "./core/security/money-mask.js";
+import { escapaDaPressao } from "./core/security/pressure.js";
 import { authPlugin } from "./plugins/auth.plugin.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { twoFactorRoutes } from "./modules/auth/two-factor.routes.js";
@@ -98,6 +99,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     maxHeapUsedBytes: 1_500_000_000,
     retryAfter: 5,
     message: "Servidor sobrecarregado. Tente novamente em alguns segundos.",
+    /** Ver `escapaDaPressao`: recusar o health check derruba o serviço são. */
+    pressureHandler: (request) => {
+      if (escapaDaPressao(request)) return;
+
+      throw app.httpErrors.serviceUnavailable(
+        "Servidor sobrecarregado. Tente novamente em alguns segundos.",
+      );
+    },
   });
 
   registerErrorHandler(app);

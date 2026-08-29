@@ -56,7 +56,9 @@ export class SmtpEmailProvider implements EmailProvider {
       from: env.MAIL_FROM,
       to: message.to,
       subject: message.subject,
+      // Os dois no mesmo envio: o programa de quem recebe escolhe qual mostrar.
       text: message.text,
+      ...(message.html ? { html: message.html } : {}),
     });
   }
 }
