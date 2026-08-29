@@ -10,6 +10,7 @@ import {
 } from "./features/profile/apply-preferences";
 import { VERSAO_DO_PACOTE } from "./lib/app-update";
 import { ouvirConviteDeInstalacao, registrarServiceWorker } from "./lib/instalar";
+import { vigiarConexao } from "./lib/conexao";
 import { App } from "./App";
 import "./index.css";
 
@@ -32,6 +33,10 @@ aplicarPreferencias(lerPreferenciasGuardadas());
 // um componente perderia a única chance.
 ouvirConviteDeInstalacao();
 registrarServiceWorker();
+
+// Uma vigilancia so, para o sistema inteiro. Cada tela perguntando por conta
+// propria daria respostas diferentes ao mesmo tempo.
+vigiarConexao();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

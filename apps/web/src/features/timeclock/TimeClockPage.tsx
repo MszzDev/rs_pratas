@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock, Coffee, LogIn, LogOut, Undo2 } from "lucide-react";
 import type { TimeClockEventType } from "@rs-pratas/shared";
@@ -7,6 +7,12 @@ import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { reconferirConexao, useConexao } from "@/lib/conexao";
+import {
+  enviarMarcacoesPendentes,
+  guardarMarcacao,
+  marcacoesPendentes,
+} from "./fila-de-ponto";
 import { readDeviceId } from "@/lib/secure-storage";
 import { useAuth } from "../auth/auth-context";
 
@@ -35,6 +41,25 @@ interface PunchResponse {
   isWithinTolerance: boolean | null;
   minutesLate: number | null;
   justificationPending: boolean;
+}
+
+/**
+ * A marcação que ficou guardada no aparelho.
+ *
+ * Tipo próprio, e não um `PunchResponse` fingido: ela NÃO tem número de
+ * registro, porque quem o atribui é o servidor, e inventar um seria mentir
+ * sobre o documento que dá valor legal ao ponto.
+ */
+interface MarcacaoGuardada {
+  guardada: true;
+  type: TimeClockEventType;
+  registradoEm: string;
+}
+
+type ResultadoDaMarcacao = PunchResponse | MarcacaoGuardada;
+
+function ficouGuardada(resultado: ResultadoDaMarcacao): resultado is MarcacaoGuardada {
+  return "guardada" in resultado;
 }
 
 const EVENT_LABELS: Record<TimeClockEventType, string> = {
@@ -100,13 +125,40 @@ export function TimeClockPage() {
   const [escolhido, setEscolhido] = useState<TimeClockEventType | null>(null);
   const [motivo, setMotivo] = useState("");
   const [motivoLivre, setMotivoLivre] = useState("");
-  const [receipt, setReceipt] = useState<PunchResponse | null>(null);
+  const [receipt, setReceipt] = useState<ResultadoDaMarcacao | null>(null);
+  const [pendentes, setPendentes] = useState(() => marcacoesPendentes().length);
+  const conexao = useConexao();
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["timeclock", "next"],
     queryFn: () => apiFetch<NextEventResponse>("/api/v1/timeclock/next"),
   });
+
+  /**
+   * Entrega o que ficou represado assim que o servidor volta a responder.
+   *
+   * Preso ao estado da conexão, e não a um relógio: o momento certo de tentar
+   * é exatamente quando ela volta, e não trinta segundos depois.
+   */
+  useEffect(() => {
+    if (conexao !== "conectado" || pendentes === 0) return;
+
+    let cancelado = false;
+
+    void enviarMarcacoesPendentes().then((resultado) => {
+      if (cancelado) return;
+
+      setPendentes(resultado.restantes);
+      if (resultado.enviadas > 0) {
+        void queryClient.invalidateQueries({ queryKey: ["timeclock", "next"] });
+      }
+    });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [conexao, pendentes, queryClient]);
 
   const fechar = () => {
     setEscolhido(null);
@@ -121,15 +173,45 @@ export function TimeClockPage() {
       // do funcionário.
       const deviceId = await readDeviceId();
 
-      return apiFetch<PunchResponse>("/api/v1/timeclock/punch", {
-        method: "POST",
-        body: {
-          ...(deviceId ? { deviceId } : {}),
+      try {
+        return await apiFetch<PunchResponse>("/api/v1/timeclock/punch", {
+          method: "POST",
+          body: {
+            ...(deviceId ? { deviceId } : {}),
+            type: params.type,
+            clientTimestamp: new Date().toISOString(),
+            ...(params.justification ? { justification: params.justification } : {}),
+          },
+        });
+      } catch (erro) {
+        /**
+         * Sem servidor, a marcação fica guardada no aparelho.
+         *
+         * A regra do módulo, que vem da Portaria 671, é que nenhuma marcação
+         * pode ser bloqueada. Sem internet ela era: a tela dava erro e a pessoa
+         * ia trabalhar sem registro — exatamente o que a norma impede.
+         *
+         * Só falha de REDE entra na fila. Recusa do servidor — turno já
+         * encerrado, jornada não cadastrada — é resposta legítima e precisa
+         * aparecer na tela; guardá-la faria a pessoa achar que bateu.
+         */
+        if (erro instanceof ApiError) throw erro;
+
+        const guardada = guardarMarcacao({
           type: params.type,
-          clientTimestamp: new Date().toISOString(),
+          deviceId: deviceId ?? "",
           ...(params.justification ? { justification: params.justification } : {}),
-        },
-      });
+        });
+
+        reconferirConexao();
+        setPendentes(marcacoesPendentes().length);
+
+        return {
+          guardada: true as const,
+          type: params.type,
+          registradoEm: guardada.registradoEm,
+        };
+      }
     },
     onSuccess: (result) => {
       setReceipt(result);
@@ -183,18 +265,30 @@ export function TimeClockPage() {
         {receipt && (
           <div className="mb-5">
             <Alert
-              tone={receipt.justificationPending ? "info" : "success"}
-              title={`${SHORT_LABELS[receipt.type]} às ${formatTime(receipt.timestamp)}`}
+              tone={
+                ficouGuardada(receipt) ? "info" : receipt.justificationPending ? "info" : "success"
+              }
+              title={`${SHORT_LABELS[receipt.type]} às ${formatTime(
+                ficouGuardada(receipt) ? receipt.registradoEm : receipt.timestamp,
+              )}`}
             >
-              <p>Registro nº {receipt.nsr} gravado.</p>
-              {receipt.minutesLate !== null && receipt.minutesLate > 0 && (
+              {ficouGuardada(receipt) ? (
+                <p>
+                  Sem internet agora. A marcação ficou guardada neste tablet, com o horário em que
+                  você apertou, e é enviada sozinha quando a conexão voltar. Não precisa bater de
+                  novo.
+                </p>
+              ) : (
+                <p>Registro nº {receipt.nsr} gravado.</p>
+              )}
+              {!ficouGuardada(receipt) && receipt.minutesLate !== null && receipt.minutesLate > 0 && (
                 <p>
                   {receipt.isWithinTolerance
                     ? `${receipt.minutesLate} min após o horário — dentro da tolerância.`
                     : `${receipt.minutesLate} min de atraso.`}
                 </p>
               )}
-              {receipt.justificationPending && (
+              {!ficouGuardada(receipt) && receipt.justificationPending && (
                 <p>Falta justificar esta marcação. Procure o gerente para registrar o motivo.</p>
               )}
             </Alert>

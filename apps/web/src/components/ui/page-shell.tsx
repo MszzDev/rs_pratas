@@ -38,6 +38,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/features/auth/auth-context";
 import { Logo, LogoMark } from "@/components/ui/logo";
 import { StatusStrip } from "@/components/ui/status-strip";
+import { ConnectionNotice } from "@/components/ui/connection-notice";
 import { InstallButton } from "@/components/ui/install-button";
 import { PinExpiryNotice } from "@/features/auth/PinExpiryNotice";
 import { KioskExitDialog, useKioskExitGesture } from "@/features/kiosk/KioskExit";
@@ -332,6 +333,11 @@ export function PageShell({
           tabIndex={-1}
           className="mx-auto w-full max-w-[82rem] px-4 py-6 focus:outline-none md:px-6 md:py-8"
         >
+          {/*
+            A queda de conexão vem antes de tudo: é o que explica qualquer
+            outra coisa que der errado na tela abaixo.
+          */}
+          <ConnectionNotice />
           <PinExpiryNotice />
 
           {/*
