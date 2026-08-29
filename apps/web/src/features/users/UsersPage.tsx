@@ -48,6 +48,26 @@ const STATUS_LABELS: Record<string, string> = {
   INACTIVE: "Inativo",
 };
 
+type EntregaPorEmail = "ENVIADO" | "SEM_ENDERECO" | "DESLIGADO" | "RECUSADO";
+
+/**
+ * O que dizer sobre a entrega por e-mail.
+ *
+ * "Não enviado" sozinho mandava o dono adivinhar entre três coisas diferentes,
+ * e ele não tem como saber qual — a falha de e-mail nunca derruba o cadastro,
+ * de propósito, então ela acontece em silêncio. Cada motivo aqui vem com o que
+ * fazer a respeito.
+ */
+const RECADO_DA_ENTREGA: Record<EntregaPorEmail, string> = {
+  ENVIADO: "Enviada também para o e-mail cadastrado. Anote mesmo assim — não aparece de novo aqui.",
+  SEM_ENDERECO:
+    "Este funcionário não tem e-mail cadastrado, então nada foi enviado. Anote e entregue em mãos.",
+  DESLIGADO:
+    "O envio de e-mail está desligado no sistema — nada foi enviado. Veja em Configurações. Anote e entregue em mãos.",
+  RECUSADO:
+    "O provedor de e-mail recusou o envio. Confira o remetente em Configurações. Anote e entregue em mãos.",
+};
+
 export function UsersPage() {
   const confirmar = useConfirm();
   const [avisoDesligamento, setAvisoDesligamento] = useState<string | null>(null);
@@ -93,6 +113,7 @@ export function UsersPage() {
     /** O que a pessoa vai usar no tablet — a senha é só para o computador. */
     pin: string;
     emailSent: boolean;
+    entrega: EntregaPorEmail;
   } | null>(null);
 
   const users = useQuery({
@@ -116,6 +137,7 @@ export function UsersPage() {
         temporaryPassword: string;
         temporaryPin: string;
         emailSent: boolean;
+        entregaPorEmail: EntregaPorEmail;
       }>("/api/v1/users", {
         method: "POST",
         // E-mail em branco não vai como string vazia: o campo é opcional.
@@ -134,6 +156,7 @@ export function UsersPage() {
         password: result.temporaryPassword,
         pin: result.temporaryPin,
         emailSent: result.emailSent,
+        entrega: result.entregaPorEmail,
       });
       setError(null);
       setShowForm(false);
@@ -249,6 +272,7 @@ export function UsersPage() {
         temporaryPassword: string;
         temporaryPin: string;
         emailSent: boolean;
+        entregaPorEmail: EntregaPorEmail;
       }>(`/api/v1/users/${target.id}/regenerate-password`, { method: "POST" }).then((result) => ({
         ...result,
         name: target.name,
@@ -260,6 +284,7 @@ export function UsersPage() {
         password: result.temporaryPassword,
         pin: result.temporaryPin,
         emailSent: result.emailSent,
+        entrega: result.entregaPorEmail,
       }),
     onError: (caught) => handleError(caught, "Não foi possível gerar as credenciais."),
   });
@@ -294,9 +319,7 @@ export function UsersPage() {
         <div className="mb-6">
           <Alert tone="success" title={`Credencial de ${credential.name}`}>
             <p>
-              {credential.emailSent
-                ? "Enviada também para o e-mail cadastrado. Anote mesmo assim — não aparece de novo aqui."
-                : "Anote e entregue em mãos. Não aparece de novo."}
+              {RECADO_DA_ENTREGA[credential.entrega] ?? RECADO_DA_ENTREGA.SEM_ENDERECO}
             </p>
 
             <dl className="mt-3 grid gap-2 rounded-md bg-surface p-4 sm:grid-cols-3">

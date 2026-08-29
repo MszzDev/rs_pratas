@@ -8,7 +8,7 @@ import { badRequest, forbidden, notFound } from "../../core/errors.js";
 import { hashSecret } from "../../core/security/password.service.js";
 import { invalidatePermissionCache } from "../../core/rbac/permissions.engine.js";
 import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
-import { sendEmail } from "../../core/email/index.js";
+import { emailConfigurado, sendEmail } from "../../core/email/index.js";
 import { credentialsEmail, credentialsResetEmail } from "../../core/email/templates.js";
 import { generateEmployeeCode, generateTemporaryPassword } from "./credentials.js";
 
@@ -61,6 +61,30 @@ function assertCanAssignRole(actorRole: string, targetRole: UserRole): void {
   if ((targetRole === "DONO" || targetRole === "DESENVOLVEDOR") && actorRole !== "DONO") {
     throw forbidden("FORBIDDEN_ROLE", "Apenas o dono pode criar esse tipo de usuário.");
   }
+}
+
+/**
+ * Por que a credencial não foi por e-mail.
+ *
+ * Um booleano "não enviou" manda o dono adivinhar entre três coisas muito
+ * diferentes: o funcionário não tem e-mail cadastrado, o envio está desligado
+ * no servidor, ou o provedor recusou. As três se resolvem de formas distintas,
+ * e a primeira nem é um problema — é o cadastro sem e-mail, que é permitido.
+ *
+ * Distinguir importa porque falha de e-mail é silenciosa por desenho: o
+ * cadastro nunca é derrubado por ela, então ninguém descobre que o envio está
+ * desligado até alguém reclamar que não recebeu.
+ */
+export type EntregaPorEmail = "ENVIADO" | "SEM_ENDERECO" | "DESLIGADO" | "RECUSADO";
+
+async function entregar(
+  destino: string | null,
+  montar: (to: string) => Parameters<typeof sendEmail>[0],
+): Promise<EntregaPorEmail> {
+  if (!destino) return "SEM_ENDERECO";
+  if (!emailConfigurado()) return "DESLIGADO";
+
+  return (await sendEmail(montar(destino))) ? "ENVIADO" : "RECUSADO";
 }
 
 export async function createUser(params: {
@@ -143,18 +167,18 @@ export async function createUser(params: {
     select: { tradeName: true },
   });
 
-  const emailSent = user.email
-    ? await sendEmail(
-        credentialsEmail({
-          to: user.email,
-          name: user.name,
-          employeeCode: user.employeeCode,
-          temporaryPassword,
-          temporaryPin,
-          companyName: company.tradeName,
-        }),
-      )
-    : false;
+  const entregaPorEmail = await entregar(user.email, (to) =>
+    credentialsEmail({
+      to,
+      name: user.name,
+      employeeCode: user.employeeCode,
+      temporaryPassword,
+      temporaryPin,
+      companyName: company.tradeName,
+    }),
+  );
+
+  const emailSent = entregaPorEmail === "ENVIADO";
 
   await audit(request, {
     action: "USER_CREATE",
@@ -201,6 +225,8 @@ export async function createUser(params: {
     temporaryPin,
     /** A tela avisa se a entrega por e-mail funcionou. */
     emailSent,
+    /** E, quando não funcionou, por quê — para o dono saber o que consertar. */
+    entregaPorEmail,
   };
 }
 
@@ -259,18 +285,18 @@ export async function regenerateTemporaryPassword(params: {
     select: { tradeName: true },
   });
 
-  const emailSent = user.email
-    ? await sendEmail(
-        credentialsResetEmail({
-          to: user.email,
-          name: user.name,
-          employeeCode: user.employeeCode,
-          temporaryPassword,
-          temporaryPin,
-          companyName: company.tradeName,
-        }),
-      )
-    : false;
+  const entregaPorEmail = await entregar(user.email, (to) =>
+    credentialsResetEmail({
+      to,
+      name: user.name,
+      employeeCode: user.employeeCode,
+      temporaryPassword,
+      temporaryPin,
+      companyName: company.tradeName,
+    }),
+  );
+
+  const emailSent = entregaPorEmail === "ENVIADO";
 
   await audit(request, {
     action: "PASSWORD_CHANGE",
@@ -284,7 +310,13 @@ export async function regenerateTemporaryPassword(params: {
     newData: { credentialsEmailSent: emailSent },
   });
 
-  return { employeeCode: user.employeeCode, temporaryPassword, temporaryPin, emailSent };
+  return {
+    employeeCode: user.employeeCode,
+    temporaryPassword,
+    temporaryPin,
+    emailSent,
+    entregaPorEmail,
+  };
 }
 
 export async function listUsers(request: FastifyRequest) {
