@@ -49,7 +49,13 @@ export function EmailStatus() {
     },
     onError: (caught) => {
       setResultado(null);
-      setErro(caught instanceof ApiError ? caught.message : "Não foi possível testar agora.");
+      // Erro que não é do servidor quase sempre é a espera estourando antes
+      // da resposta. Dizer isso evita mexer na credencial por causa da rede.
+      setErro(
+        caught instanceof ApiError
+          ? caught.message
+          : "O servidor não respondeu a tempo. Tente de novo em alguns instantes.",
+      );
     },
   });
 

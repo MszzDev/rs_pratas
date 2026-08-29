@@ -6,7 +6,7 @@ import { badRequest, notFound } from "../../core/errors.js";
 import { assertStoreAccess, requireRole } from "../../core/rbac/require-role.hook.js";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
 import { env } from "../../config/env.js";
-import { emailConfigurado, sendEmail } from "../../core/email/index.js";
+import { emailConfigurado, enviarRelatando } from "../../core/email/index.js";
 
 const settingBodySchema = z.object({
   key: z.string().min(1).max(120),
@@ -131,7 +131,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       );
     }
 
-    const enviado = await sendEmail({
+    const { enviado, erro } = await enviarRelatando({
       to: destino,
       subject: "Teste de envio — RS Pratas",
       text: [
@@ -145,10 +145,9 @@ export async function settingsRoutes(app: FastifyInstance) {
     });
 
     if (!enviado) {
-      throw badRequest(
-        "EMAIL_FAILED",
-        "O provedor recusou o envio. Confira SMTP_URL e se o remetente (MAIL_FROM) pertence ao domínio autorizado.",
-      );
+      // O motivo vem do provedor. É a única tela do sistema onde o erro
+      // técnico é a informação útil — em todas as outras ele viraria ruído.
+      throw badRequest("EMAIL_FAILED", erro ?? "O provedor recusou o envio.");
     }
 
     return { enviado: true, para: destino };
