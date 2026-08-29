@@ -151,7 +151,20 @@ export function TerminalsPage() {
       setAparelhos(resultado);
 
       if (resultado.lista.length === 0) {
-        setAviso("Esta conta não tem nenhuma maquininha Point ligada e conectada à internet.");
+        /**
+         * Lista vazia quase nunca é conta errada.
+         *
+         * É o aparelho fora do modo PDV. A maquininha sai da caixa em modo
+         * avulso — onde o valor é digitado nela — e nesse modo ela não aparece
+         * para a API, por mais correta que a credencial esteja. Sem dizer
+         * isso, o dono confere o token, refaz a conta, e o aparelho continua
+         * invisível.
+         */
+        setAviso(
+          "Nenhuma maquininha encontrada nesta conta. Quase sempre é o aparelho fora do modo PDV: " +
+            "na própria maquininha, entre em Configurações e mude o modo de operação para PDV " +
+            "(integrado). Confira também se ela está ligada e na internet.",
+        );
       }
     },
     onError: handleError,
@@ -464,7 +477,24 @@ export function TerminalsPage() {
                       key={aparelho.id}
                       className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
                     >
-                      <span className="font-mono text-sm text-text-primary">{aparelho.id}</span>
+                      <span>
+                        <span className="block font-mono text-sm text-text-primary">
+                          {aparelho.id}
+                        </span>
+                        {/*
+                          O modo do aparelho estava sendo buscado e não era
+                          mostrado. Escolher uma maquininha em modo avulso deixa
+                          o cadastro certo e a cobrança sem efeito: o PDV manda,
+                          nada aparece na tela dela, e não há erro em lugar
+                          nenhum para investigar.
+                        */}
+                        {aparelho.modo && aparelho.modo.toUpperCase() !== "PDV" && (
+                          <span className="block text-sm text-warning">
+                            Em modo avulso — não recebe cobrança do PDV até mudar para PDV
+                            (integrado) na própria maquininha.
+                          </span>
+                        )}
+                      </span>
 
                       {aparelho.escolhido ? (
                         <span className="text-sm text-sage-dark">É esta</span>
