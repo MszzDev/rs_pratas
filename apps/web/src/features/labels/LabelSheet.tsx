@@ -12,9 +12,6 @@ export interface LabelPayload {
   layout: {
     widthMm: number;
     heightMm: number;
-    offsetXMm: number;
-    offsetYMm: number;
-    fontScale: number;
     isDoubleSided: boolean;
     /** O desenho montado no editor. Nulo usa o formato empilhado de sempre. */
     elements?: LabelElement[] | null;
@@ -67,9 +64,7 @@ function Label({ payload }: { payload: LabelPayload }) {
     height: `${layout.heightMm}mm`,
     // A calibração desloca a impressão inteira: rolo desalinhado é o problema
     // mais comum de impressora térmica de balcão.
-    marginLeft: `${layout.offsetXMm}mm`,
-    marginTop: `${layout.offsetYMm}mm`,
-    fontSize: `${2.1 * layout.fontScale}mm`,
+    fontSize: "2.1mm",
   };
 
   /**
@@ -92,10 +87,6 @@ function Label({ payload }: { payload: LabelPayload }) {
     return (
       <div
         className="print-label"
-        style={{
-          marginLeft: `${layout.offsetXMm}mm`,
-          marginTop: `${layout.offsetYMm}mm`,
-        }}
       >
         {desenho}
         {layout.isDoubleSided && (

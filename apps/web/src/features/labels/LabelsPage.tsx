@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  Crosshair,
   Layers,
   PenLine,
   Printer,
@@ -31,8 +30,6 @@ interface Template {
   name: string;
   widthMm: string;
   heightMm: string;
-  offsetXMm: string;
-  offsetYMm: string;
   isDoubleSided: boolean;
   showProductName: boolean;
   showSku: boolean;
@@ -85,7 +82,6 @@ const TAMANHOS_PRONTOS: Array<{
   // Comprida e estreita: dobra na argola e o preço fica dos dois lados.
   { larguraMm: 90, alturaMm: 12, para: "joia, dobrada na argola", dupla: true },
   { larguraMm: 30, alturaMm: 20, para: "peça na caixa ou no mostruário", dupla: false },
-  { larguraMm: 100, alturaMm: 125, para: "pacote de envio", dupla: false },
 ];
 
 /** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
@@ -110,7 +106,6 @@ export function LabelsPage() {
   const [storeId, setStoreId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [calibrating, setCalibrating] = useState<Template | null>(null);
   const [desenhando, setDesenhando] = useState<Template | null>(null);
   const [avulsa, setAvulsa] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
@@ -141,8 +136,6 @@ export function LabelsPage() {
     isDefault: false,
   });
 
-  const [offsetX, setOffsetX] = useState("0");
-  const [offsetY, setOffsetY] = useState("0");
 
 
   const templates = useQuery({
@@ -186,20 +179,6 @@ export function LabelsPage() {
     onSuccess: () => {
       setError(null);
       setCreating(false);
-      void queryClient.invalidateQueries({ queryKey: ["label-templates"] });
-    },
-    onError: handleError,
-  });
-
-  const calibrate = useMutation({
-    mutationFn: () =>
-      apiFetch(`/api/v1/label-templates/${calibrating?.id}/calibration`, {
-        method: "PATCH",
-        body: { offsetXMm: Number(offsetX), offsetYMm: Number(offsetY) },
-      }),
-    onSuccess: () => {
-      setError(null);
-      setCalibrating(null);
       void queryClient.invalidateQueries({ queryKey: ["label-templates"] });
     },
     onError: handleError,
@@ -498,47 +477,6 @@ export function LabelsPage() {
         </form>
       )}
 
-      {calibrating && (
-        <form
-          className="mb-6 rounded-lg border border-border bg-surface p-5"
-          onSubmit={(event) => {
-            event.preventDefault();
-            calibrate.mutate();
-          }}
-        >
-          <h2 className="mb-1 font-medium text-text-primary">Calibrar {calibrating.name}</h2>
-          <p className="mb-4 text-sm text-text-secondary">
-            Imprima uma etiqueta de teste. Se sair para a esquerda, aumente o horizontal; se sair
-            para cima, aumente o vertical.
-          </p>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label="Deslocamento horizontal (mm)"
-              type="number"
-              step="0.5"
-              value={offsetX}
-              onChange={(event) => setOffsetX(event.target.value)}
-            />
-            <Field
-              label="Deslocamento vertical (mm)"
-              type="number"
-              step="0.5"
-              value={offsetY}
-              onChange={(event) => setOffsetY(event.target.value)}
-            />
-          </div>
-
-          <div className="mt-5 flex gap-3">
-            <Button type="submit" disabled={calibrate.isPending}>
-              Salvar ajuste
-            </Button>
-            <Button type="button" variant="outline" onClick={() => setCalibrating(null)}>
-              Cancelar
-            </Button>
-          </div>
-        </form>
-      )}
 
       {batchOpen && (
         <div className="mb-6 rounded-lg border border-border bg-surface p-5 shadow-soft">
@@ -663,9 +601,6 @@ export function LabelsPage() {
               <p className="text-sm text-text-secondary">
                 {template.code} · {template.widthMm} × {template.heightMm} mm
                 {template.isDoubleSided ? " · dupla" : ""}
-                {Number(template.offsetXMm) !== 0 || Number(template.offsetYMm) !== 0
-                  ? ` · ajuste ${template.offsetXMm}/${template.offsetYMm} mm`
-                  : ""}
               </p>
             </div>
 
@@ -675,26 +610,11 @@ export function LabelsPage() {
                 variant="outline"
                 onClick={() => {
                   setDesenhando(template);
-                  setCalibrating(null);
                   setCreating(false);
                 }}
               >
                 <PenLine className="h-5 w-5" aria-hidden />
                 Desenhar
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setCalibrating(template);
-                  setOffsetX(template.offsetXMm);
-                  setOffsetY(template.offsetYMm);
-                  setCreating(false);
-                }}
-              >
-                <Crosshair className="h-5 w-5" aria-hidden />
-                Calibrar
               </Button>
 
               <Button

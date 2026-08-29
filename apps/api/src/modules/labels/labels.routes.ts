@@ -4,7 +4,6 @@ import { labelElementsSchema } from "@rs-pratas/shared";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
 import {
   buildBatchFromStock,
-  calibrateTemplate,
   cancelPrintJob,
   createTemplate,
   queueLabelBatch,
@@ -67,23 +66,6 @@ export async function labelRoutes(app: FastifyInstance) {
         .parse(request.body);
 
       return saveTemplateElements({ templateId: id, elements, request });
-    },
-  );
-
-  app.patch(
-    "/label-templates/:id/calibration",
-    { preHandler: [app.requireAuth, requirePermission("LABEL_TEMPLATE_MANAGE")] },
-    async (request) => {
-      const { id } = idParamSchema.parse(request.params);
-      const input = z
-        .object({
-          offsetXMm: z.number().min(-200).max(200),
-          offsetYMm: z.number().min(-200).max(200),
-          fontScale: z.number().min(0.5).max(2).optional(),
-        })
-        .parse(request.body);
-
-      return calibrateTemplate({ templateId: id, input, request });
     },
   );
 

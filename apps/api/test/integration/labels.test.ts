@@ -110,38 +110,7 @@ describe("modelos de etiqueta", () => {
     expect(response.statusCode).toBe(409);
   });
 
-  it("calibração recusa deslocamento maior que a própria etiqueta", async () => {
-    const { token, template } = await scenario();
 
-    const response = await app.inject({
-      method: "PATCH",
-      url: `/api/v1/label-templates/${template.id}/calibration`,
-      headers: auth(token),
-      payload: { offsetXMm: 200, offsetYMm: 0 },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json().error.code).toBe("OFFSET_TOO_LARGE");
-  });
-
-  it("calibração dentro do limite é aceita e auditada", async () => {
-    const { company, token, template } = await scenario();
-
-    const response = await app.inject({
-      method: "PATCH",
-      url: `/api/v1/label-templates/${template.id}/calibration`,
-      headers: auth(token),
-      payload: { offsetXMm: 1.5, offsetYMm: -0.5 },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(Number(response.json().offsetXMm)).toBe(1.5);
-
-    const entry = await prisma.auditLog.findFirst({
-      where: { companyId: company.id, action: "LABEL_TEMPLATE_UPDATE" },
-    });
-    expect(entry?.reason).toBe("calibração da impressora");
-  });
 
   it("o vendedor não cria modelo de etiqueta", async () => {
     const company = await createTestCompany();

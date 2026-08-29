@@ -149,62 +149,6 @@ export async function createTemplate(params: {
 }
 
 /**
- * Calibração: desloca a impressão em milímetros.
- *
- * Existe porque rolo de etiqueta desalinha com o uso e cada impressora tem
- * folga própria. Sem esse ajuste, o caminho do funcionário quando a etiqueta
- * sai cortada é trocar a impressora.
- */
-export async function calibrateTemplate(params: {
-  templateId: string;
-  input: { offsetXMm: number; offsetYMm: number; fontScale?: number | undefined };
-  request: FastifyRequest;
-}) {
-  const { templateId, input, request } = params;
-
-  const template = await prisma.labelTemplate.findFirst({
-    where: { id: templateId, companyId: request.user.companyId, deletedAt: null },
-  });
-  if (!template) {
-    throw notFound("TEMPLATE_NOT_FOUND", "Modelo de etiqueta não encontrado.");
-  }
-
-  // Deslocamento maior que a própria etiqueta joga a impressão para fora dela.
-  const maxX = Number(template.widthMm);
-  const maxY = Number(template.heightMm);
-  if (Math.abs(input.offsetXMm) > maxX || Math.abs(input.offsetYMm) > maxY) {
-    throw badRequest(
-      "OFFSET_TOO_LARGE",
-      `O ajuste não pode passar do tamanho da etiqueta (${maxX} × ${maxY} mm).`,
-    );
-  }
-
-  const updated = await prisma.labelTemplate.update({
-    where: { id: template.id },
-    data: {
-      offsetXMm: input.offsetXMm,
-      offsetYMm: input.offsetYMm,
-      ...(input.fontScale !== undefined ? { fontScale: input.fontScale } : {}),
-    },
-  });
-
-  await audit(request, {
-    action: "LABEL_TEMPLATE_UPDATE",
-    result: "SUCCESS",
-    userId: request.user.sub,
-    companyId: request.user.companyId,
-    userRoleSnapshot: request.user.role,
-    entityType: "LabelTemplate",
-    entityId: template.id,
-    previousData: { offsetXMm: template.offsetXMm, offsetYMm: template.offsetYMm },
-    newData: { offsetXMm: updated.offsetXMm, offsetYMm: updated.offsetYMm },
-    reason: "calibração da impressora",
-  });
-
-  return updated;
-}
-
-/**
  * Enfileira etiquetas de um produto.
  *
  * O conteúdo é resolvido AGORA e congelado no trabalho: se o preço mudar entre
@@ -314,9 +258,6 @@ function buildLabelPayload(params: {
     isDoubleSided: boolean;
     widthMm: Prisma.Decimal;
     heightMm: Prisma.Decimal;
-    offsetXMm: Prisma.Decimal;
-    offsetYMm: Prisma.Decimal;
-    fontScale: Prisma.Decimal;
     /** O desenho montado no editor, ou nulo para o formato empilhado. */
     elements: Prisma.JsonValue | null;
   };
@@ -360,9 +301,6 @@ function buildLabelPayload(params: {
     layout: {
       widthMm: Number(template.widthMm),
       heightMm: Number(template.heightMm),
-      offsetXMm: Number(template.offsetXMm),
-      offsetYMm: Number(template.offsetYMm),
-      fontScale: Number(template.fontScale),
       isDoubleSided: template.isDoubleSided,
       /**
        * O desenho que o dono montou, quando existe.
