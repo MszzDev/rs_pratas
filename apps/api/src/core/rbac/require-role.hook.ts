@@ -59,9 +59,31 @@ export async function userCanAccessStore(params: {
 export async function assertStoreAccess(
   request: FastifyRequest,
   storeId: string,
+  opcoes?: {
+    /**
+     * Aceita loja já removida.
+     *
+     * Só para LIMPAR o que ficou para trás. Removida a loja, o que apontava
+     * para ela vira órfão — e a verificação normal, que exige loja viva,
+     * transforma esse órfão em lixo permanente: a meta de uma loja fechada não
+     * podia ser apagada, porque a loja não existia mais para autorizar.
+     *
+     * É justamente o registro que mais se quer apagar, e o único caminho era
+     * mexer no banco à mão.
+     *
+     * Continua valendo tudo o mais: a permissão da rota, o escopo da empresa e
+     * o vínculo do usuário com a loja. O que muda é só não exigir que a loja
+     * esteja viva.
+     */
+    incluirRemovidas?: boolean;
+  },
 ): Promise<void> {
   const store = await prisma.store.findFirst({
-    where: { id: storeId, companyId: request.user.companyId, deletedAt: null },
+    where: {
+      id: storeId,
+      companyId: request.user.companyId,
+      ...(opcoes?.incluirRemovidas ? {} : { deletedAt: null }),
+    },
     select: { id: true },
   });
 

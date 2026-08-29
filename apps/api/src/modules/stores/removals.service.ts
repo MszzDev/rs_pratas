@@ -433,7 +433,8 @@ export async function removeGoal(params: {
     throw notFound("GOAL_NOT_FOUND", "Meta não encontrada.");
   }
 
-  await assertStoreAccess(request, goal.storeId);
+  // Meta de loja já removida também se apaga — é a que mais se quer apagar.
+  await assertStoreAccess(request, goal.storeId, { incluirRemovidas: true });
 
   // Meta não é referenciada por nada — o realizado é calculado das vendas.
   // Some de vez, sem deixar lixo.

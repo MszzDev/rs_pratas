@@ -461,6 +461,50 @@ describe("metas", () => {
     expect(goals[0].falta).toBe("600.00");
   });
 
+  /**
+   * O defeito que isto tranca: removida a loja, a meta dela virava lixo
+   * permanente. A verificação de acesso exigia loja VIVA, e a loja não existia
+   * mais para autorizar — então a meta ficava na tela, sem realizado nenhum,
+   * e o botão de apagar respondia "Loja não encontrada" para sempre.
+   *
+   * É justamente a meta que mais se quer apagar.
+   */
+  it("apaga meta de loja que já foi removida", async () => {
+    const { store, token } = await scenario();
+
+    const criada = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/goals",
+        headers: auth(token),
+        payload: {
+          storeId: store.id,
+          scope: "LOJA",
+          period: "MENSAL",
+          periodStart: new Date(Date.now() - 86_400_000).toISOString(),
+          periodEnd: new Date(Date.now() + 86_400_000).toISOString(),
+          targetAmount: 18000,
+        },
+      })
+    ).json();
+
+    // A loja sai de cena, como saiu a Loja Centro na vida real.
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { deletedAt: new Date() },
+    });
+
+    const resposta = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/goals/${criada.id}`,
+      headers: auth(token),
+      payload: { reason: "loja fechada" },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(await prisma.goal.findUnique({ where: { id: criada.id } })).toBeNull();
+  });
+
   it("meta batida não mostra falta negativa", async () => {
     const { store, session, token, product } = await scenario();
 
