@@ -22,21 +22,35 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!--
-              Torna o RS Pratas a tela inicial do tablet.
+        </activity>
 
-              Com Device Owner, o Android passa a abrir este aplicativo no lugar
-              da Home: ligar o aparelho já cai no PDV, e o botão Home volta para
-              cá em vez de sair. É o que faz o tablet parecer um caixa e não um
-              tablet com um aplicativo aberto.
-            -->
+        <!--
+          Ser a tela inicial do tablet é uma condição que LIGA E DESLIGA.
+
+          Antes, o filtro de HOME ficava direto na activity, e por isso era
+          permanente: mesmo depois de sair do quiosque e limpar a preferência,
+          o aplicativo continuava candidato a tela inicial. O Android voltava a
+          perguntar qual usar, lembrava a escolha, e o tablet "liberado"
+          seguia se comportando como caixa.
+
+          Num apelido separado, desligado por padrão, a condição vira algo que
+          o aplicativo controla: liga ao entrar no quiosque, desliga ao sair.
+          Fora do quiosque ele nem aparece na lista de candidatos — é um
+          aplicativo comum, como o dono pediu.
+        -->
+        <activity-alias
+            android:name=".TelaInicial"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
-        </activity>
+        </activity-alias>
 
         <!--
           Endereço que o comando de provisionamento procura:

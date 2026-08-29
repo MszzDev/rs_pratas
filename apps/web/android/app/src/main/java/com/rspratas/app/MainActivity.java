@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -193,6 +194,11 @@ public class MainActivity extends BridgeActivity {
 
     try {
       policy.clearPackagePersistentPreferredActivities(admin, getPackageName());
+
+      // E deixa de ser candidato a tela inicial. Limpar só a preferência não
+      // bastava: o Android voltava a perguntar qual usar e lembrava a escolha,
+      // e o tablet "liberado" continuava se comportando como caixa.
+      ligarApelidoDeTelaInicial(false);
       // A barra de status volta: sem ela o técnico fica sem relógio, sem
       // bateria e sem o painel de ajustes no aparelho que acabou de liberar.
       policy.setStatusBarDisabled(admin, false);
@@ -264,15 +270,44 @@ public class MainActivity extends BridgeActivity {
    * no PDV, sem ninguém tocar em nada.
    */
   private void assumirTelaInicial(DevicePolicyManager policy, ComponentName admin) {
+    // Primeiro liga o apelido: sem ele habilitado, não há componente que
+    // responda a HOME, e a preferência abaixo apontaria para o nada.
+    ligarApelidoDeTelaInicial(true);
+
     IntentFilter filtro = new IntentFilter(Intent.ACTION_MAIN);
     filtro.addCategory(Intent.CATEGORY_HOME);
     filtro.addCategory(Intent.CATEGORY_DEFAULT);
 
     try {
-      policy.addPersistentPreferredActivity(
-          admin, filtro, new ComponentName(this, MainActivity.class));
+      policy.addPersistentPreferredActivity(admin, filtro, apelidoDeTelaInicial());
     } catch (Exception erro) {
       Log.w(TAG, "Nao assumiu a tela inicial: " + erro.getMessage());
+    }
+  }
+
+  /** O componente do manifesto que responde por HOME. */
+  private ComponentName apelidoDeTelaInicial() {
+    return new ComponentName(getPackageName(), getPackageName() + ".TelaInicial");
+  }
+
+  /**
+   * Liga ou desliga a condição de tela inicial.
+   *
+   * `DONT_KILL_APP` importa: sem ele, mudar o próprio componente derruba o
+   * processo — e derrubar o PDV no instante em que ele entra no quiosque seria
+   * trocar um problema por outro bem pior.
+   */
+  private void ligarApelidoDeTelaInicial(boolean ligado) {
+    try {
+      getPackageManager()
+          .setComponentEnabledSetting(
+              apelidoDeTelaInicial(),
+              ligado
+                  ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                  : PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+              PackageManager.DONT_KILL_APP);
+    } catch (Exception erro) {
+      Log.w(TAG, "Nao mudou a condicao de tela inicial: " + erro.getMessage());
     }
   }
 
