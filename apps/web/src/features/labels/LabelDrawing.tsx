@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { CAMPOS_DE_VARIAS_LINHAS, type LabelElement } from "@rs-pratas/shared";
 import { barcodeModules, encodeCode128 } from "@/lib/barcode";
+import logoUrl from "@/assets/logo-rs-pratas.png";
 
 /**
  * A etiqueta desenhada a partir do que o dono montou.
@@ -22,28 +23,6 @@ export interface DadosDaEtiqueta {
   size: string | null;
   weightGrams: string | null;
   barcode: string | null;
-  /**
-   * Para onde o pacote vai, quando a etiqueta é de envio.
-   *
-   * Nulo na etiqueta de peça, que é a maioria. Os dois tipos compartilham o
-   * mesmo desenho e a mesma impressora porque posicionar em milímetros é a
-   * mesma mecânica — o que muda é a pergunta que a etiqueta responde: a da
-   * peça diz o que é e quanto custa, a do pacote diz para onde vai.
-   */
-  envio?: DadosDoEnvio | null;
-}
-
-export interface DadosDoEnvio {
-  destinatario: string | null;
-  /** Logradouro, número e complemento, uma parte por linha. */
-  endereco: string | null;
-  bairro: string | null;
-  cidadeUf: string | null;
-  cep: string | null;
-  /** A loja que despachou, em bloco. */
-  remetente: string | null;
-  /** Número do pedido na loja virtual. */
-  pedido: string | null;
 }
 
 /** O texto que cada elemento mostra, já formatado como sai no papel. */
@@ -65,33 +44,9 @@ export function textoDoElemento(elemento: LabelElement, dados: DadosDaEtiqueta):
       return elemento.texto ?? null;
     case "CODIGO_BARRAS":
       return dados.barcode;
-
-    case "DESTINATARIO":
-      return dados.envio?.destinatario ?? null;
-    case "ENDERECO_ENTREGA":
-      return dados.envio?.endereco ?? null;
-    case "BAIRRO":
-      return dados.envio?.bairro ?? null;
-    case "CIDADE_UF":
-      return dados.envio?.cidadeUf ?? null;
-    case "CEP":
-      // O CEP é o que decide a triagem nos Correios, e é lido por gente com
-      // pressa. Vai com o hífen mesmo quando o cadastro veio sem.
-      return dados.envio?.cep ? formatarCep(dados.envio.cep) : null;
-    case "REMETENTE":
-      return dados.envio?.remetente ?? null;
-    case "PEDIDO":
-      return dados.envio?.pedido ? `Pedido ${dados.envio.pedido}` : null;
-
     default:
       return null;
   }
-}
-
-/** 12345678 vira 12345-678; o que já vier formatado passa direto. */
-function formatarCep(cep: string): string {
-  const digitos = cep.replace(/\D/g, "");
-  return digitos.length === 8 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : cep;
 }
 
 function posicao(elemento: LabelElement): CSSProperties {
@@ -130,6 +85,45 @@ export function ElementoDaEtiqueta({
   elemento: LabelElement;
   dados: DadosDaEtiqueta;
 }) {
+  /**
+   * Logo e linha não têm texto, então saem antes da checagem de conteúdo
+   * vazio — que descartaria as duas.
+   */
+  if (elemento.campo === "LOGO") {
+    return (
+      <img
+        src={logoUrl}
+        alt=""
+        style={{
+          position: "absolute",
+          left: `${elemento.xMm}mm`,
+          top: `${elemento.yMm}mm`,
+          width: `${elemento.larguraMm}mm`,
+          height: `${elemento.alturaMm ?? elemento.larguraMm}mm`,
+          // A proporção manda: esticar a marca para preencher a caixa é o tipo
+          // de coisa que só o dono percebe, e percebe todo dia.
+          objectFit: "contain",
+        }}
+      />
+    );
+  }
+
+  if (elemento.campo === "LINHA") {
+    return (
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: `${elemento.xMm}mm`,
+          top: `${elemento.yMm}mm`,
+          width: `${elemento.larguraMm}mm`,
+          height: `${elemento.alturaMm ?? 0.4}mm`,
+          background: "#000",
+        }}
+      />
+    );
+  }
+
   const texto = textoDoElemento(elemento, dados);
   if (texto === null || texto === "") return null;
 
