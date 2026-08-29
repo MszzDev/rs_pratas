@@ -81,38 +81,52 @@ const TRAVADAS = [
  * Escrita à mão em vez de deduzida porque o banco tem quase noventa tabelas e
  * uma dedução errada aqui apagaria a coisa errada em produção.
  */
+/**
+ * A ordem importa: filho antes de pai, senão a chave estrangeira recusa.
+ *
+ * Escrita à mão em vez de deduzida porque o banco tem quase noventa tabelas e
+ * uma dedução errada aqui apagaria a coisa errada em produção.
+ *
+ * Cada linha RECEBE o cliente da transação. Na primeira versão elas usavam o
+ * cliente global, e o efeito foi silencioso e feio: as travas eram desligadas
+ * dentro da transação, mas os deletes saíam por outra conexão, onde elas
+ * continuavam valendo. As tabelas sem trava foram apagadas e confirmadas na
+ * hora — fora da transação, portanto sem volta — e a primeira protegida
+ * recusou. Ficou pela metade, que é exatamente o que a transação existia para
+ * impedir.
+ */
 const ORDEM = [
-  ["Fila de impressão", () => prisma.printJob.deleteMany({})],
-  ["Acionamentos de garantia", () => prisma.warrantyClaim.deleteMany({})],
-  ["Garantias", () => prisma.warranty.deleteMany({})],
-  ["Certificados", () => prisma.certificate.deleteMany({})],
-  ["Itens de devolução", () => prisma.saleReturnItem.deleteMany({})],
-  ["Devoluções", () => prisma.saleReturn.deleteMany({})],
-  ["Pagamentos", () => prisma.salePayment.deleteMany({})],
-  ["Itens de venda", () => prisma.saleItem.deleteMany({})],
-  ["Vendas", () => prisma.sale.deleteMany({})],
-  ["Itens de orçamento", () => prisma.quoteItem.deleteMany({})],
-  ["Orçamentos", () => prisma.quote.deleteMany({})],
-  ["Reservas", () => prisma.reservation.deleteMany({})],
-  ["Solicitações de peça", () => prisma.pieceRequest.deleteMany({})],
-  ["Ordens de serviço", () => prisma.serviceOrder.deleteMany({})],
-  ["Movimentos de caixa", () => prisma.cashMovement.deleteMany({})],
-  ["Sessões de caixa", () => prisma.cashSession.deleteMany({})],
-  ["Itens de transferência", () => prisma.stockTransferItem.deleteMany({})],
-  ["Transferências", () => prisma.stockTransfer.deleteMany({})],
-  ["Contagens (linhas)", () => prisma.inventoryCount.deleteMany({})],
-  ["Contagens", () => prisma.inventory.deleteMany({})],
-  ["Movimentos de estoque", () => prisma.stockMovement.deleteMany({})],
-  ["Marcações de ponto", () => prisma.timeClockEntry.deleteMany({})],
+  ["Fila de impressão", (tx) => tx.printJob.deleteMany({})],
+  ["Acionamentos de garantia", (tx) => tx.warrantyClaim.deleteMany({})],
+  ["Garantias", (tx) => tx.warranty.deleteMany({})],
+  ["Certificados", (tx) => tx.certificate.deleteMany({})],
+  ["Itens de devolução", (tx) => tx.saleReturnItem.deleteMany({})],
+  ["Devoluções", (tx) => tx.saleReturn.deleteMany({})],
+  ["Pagamentos", (tx) => tx.salePayment.deleteMany({})],
+  ["Itens de venda", (tx) => tx.saleItem.deleteMany({})],
+  ["Vendas", (tx) => tx.sale.deleteMany({})],
+  ["Itens de orçamento", (tx) => tx.quoteItem.deleteMany({})],
+  ["Orçamentos", (tx) => tx.quote.deleteMany({})],
+  ["Reservas", (tx) => tx.reservation.deleteMany({})],
+  ["Solicitações de peça", (tx) => tx.pieceRequest.deleteMany({})],
+  ["Ordens de serviço", (tx) => tx.serviceOrder.deleteMany({})],
+  ["Movimentos de caixa", (tx) => tx.cashMovement.deleteMany({})],
+  ["Sessões de caixa", (tx) => tx.cashSession.deleteMany({})],
+  ["Itens de transferência", (tx) => tx.stockTransferItem.deleteMany({})],
+  ["Transferências", (tx) => tx.stockTransfer.deleteMany({})],
+  ["Contagens (linhas)", (tx) => tx.inventoryCount.deleteMany({})],
+  ["Contagens", (tx) => tx.inventory.deleteMany({})],
+  ["Movimentos de estoque", (tx) => tx.stockMovement.deleteMany({})],
+  ["Marcações de ponto", (tx) => tx.timeClockEntry.deleteMany({})],
   /**
    * Os clientes saem por último, e só depois de tudo que aponta para eles.
    *
    * Eles são cadastro, não movimento — mas os que existem hoje foram criados
-   * nos testes, com nome e telefone inventados. Entrar em operação com sete
-   * cadastros falsos faz a vendedora achar que já conhece a cliente do balcão
-   * e vincular a venda à pessoa errada.
+   * nos testes, com nome e telefone inventados. Entrar em operação com eles faz
+   * a vendedora achar que já conhece a cliente do balcão e vincular a venda à
+   * pessoa errada.
    */
-  ["Clientes", () => prisma.customer.deleteMany({})],
+  ["Clientes", (tx) => tx.customer.deleteMany({})],
 ];
 
 if (modo === "--conferir") {
@@ -161,7 +175,7 @@ const resultado = await prisma.$transaction(
 
     const apagados = [];
     for (const [nome, apagar] of ORDEM) {
-      const { count } = await apagar.call(null).catch((erro) => {
+      const { count } = await apagar(tx).catch((erro) => {
         throw new Error(`falhou em ${nome}: ${erro.message}`);
       });
       if (count > 0) apagados.push(`${String(count).padStart(7)}  ${nome}`);
