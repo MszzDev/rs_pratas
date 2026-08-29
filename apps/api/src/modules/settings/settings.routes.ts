@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../db/prisma.js";
+import { regenerateTemporaryPassword } from "../users/users.service.js";
 import { audit } from "../../core/audit.service.js";
 import { badRequest, notFound } from "../../core/errors.js";
 import { assertStoreAccess, requireRole } from "../../core/rbac/require-role.hook.js";
@@ -73,6 +74,56 @@ export async function settingsRoutes(app: FastifyInstance) {
    * um cliente reclamar que não recebeu o comprovante. Esta rota existe para a
    * tela poder dizer.
    */
+  /**
+   * A conta de suporte técnico.
+   *
+   * Ela é escondida da lista de funcionários de propósito: é manutenção do
+   * sistema, não gente que trabalha na loja, e misturada ao quadro vira uma
+   * linha que o dono não reconhece.
+   *
+   * Só que esconder criou um beco. A conta nasce em primeiro acesso, e a única
+   * tela capaz de emitir credencial era justamente a que a omitia — então ela
+   * ficava para sempre inacessível, e o suporte não conseguia entrar para
+   * ajudar quando algo quebrasse.
+   *
+   * Aqui ela tem o lugar dela: fora do quadro de pessoal, dentro do que é
+   * configuração do sistema, com a única ação que o dono precisa ter sobre ela.
+   */
+  app.get("/settings/support-account", { preHandler: ownerOnly }, async (request) => {
+    const conta = await prisma.user.findFirst({
+      where: {
+        companyId: request.user.companyId,
+        role: "DESENVOLVEDOR",
+        deletedAt: null,
+      },
+      select: { name: true, employeeCode: true, status: true, email: true, lastLoginAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return { conta };
+  });
+
+  app.post("/settings/support-account/credentials", { preHandler: ownerOnly }, async (request) => {
+    const conta = await prisma.user.findFirst({
+      where: {
+        companyId: request.user.companyId,
+        role: "DESENVOLVEDOR",
+        deletedAt: null,
+      },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (!conta) {
+      throw badRequest(
+        "NO_SUPPORT_ACCOUNT",
+        "Esta empresa não tem conta de suporte técnico cadastrada.",
+      );
+    }
+
+    return regenerateTemporaryPassword({ userId: conta.id, request });
+  });
+
   app.get("/settings/email", { preHandler: ownerOnly }, async () => {
     return {
       ligado: emailConfigurado(),

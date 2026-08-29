@@ -6,6 +6,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { EmailStatus } from "./EmailStatus";
+import { SupportAccount } from "./SupportAccount";
 import { PrinterSettings } from "@/features/printing/PrinterSettings";
 
 interface Setting {
@@ -104,6 +105,7 @@ export function SettingsPage() {
       )}
 
       <EmailStatus />
+      <SupportAccount />
 
       {/*
         Some sozinha no computador do dono: impressora de balcão é assunto de
