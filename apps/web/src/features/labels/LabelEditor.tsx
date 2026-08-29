@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  desenhoDeEnvio,
   desenhoPadrao,
   type CampoDaEtiqueta,
   type LabelElement,
@@ -72,7 +73,14 @@ interface Modelo {
   elements: LabelElement[] | null;
 }
 
-/** Uma peça de mentira, para o desenho ter o que mostrar. */
+/**
+ * Uma peça e um pacote de mentira, para o desenho ter o que mostrar.
+ *
+ * O exemplo do envio traz um endereço de verdade em forma — rua com número,
+ * complemento na própria linha, CEP com hífen. Um exemplo curto demais faria o
+ * dono desenhar um espaço que o endereço real não cabe, e ele só descobriria
+ * isso com o primeiro pacote na mão.
+ */
 const EXEMPLO: DadosDaEtiqueta = {
   productName: "Anel Solitário Zircônia",
   sku: "RS-001",
@@ -80,6 +88,15 @@ const EXEMPLO: DadosDaEtiqueta = {
   size: "18",
   weightGrams: "2.400",
   barcode: "RS-001",
+  envio: {
+    destinatario: "Mariana Ferreira de Almeida",
+    endereco: "Rua das Palmeiras, 1042\napto 71, bloco B",
+    bairro: "Jardim Paulista",
+    cidadeUf: "São Paulo - SP",
+    cep: "01415002",
+    remetente: "Remetente: RS Pratas Centro\nAv. São João, 300\n01035-000 Centro - São Paulo - SP\n(11) 3333-0000",
+    pedido: "1288",
+  },
 };
 
 const CAMPOS: { valor: CampoDaEtiqueta; rotulo: string }[] = [
@@ -90,6 +107,17 @@ const CAMPOS: { valor: CampoDaEtiqueta; rotulo: string }[] = [
   { valor: "PESO", rotulo: "Peso" },
   { valor: "CODIGO_BARRAS", rotulo: "Código de barras" },
   { valor: "TEXTO", rotulo: "Texto livre" },
+];
+
+/** Os campos do pacote, separados porque respondem outra pergunta. */
+const CAMPOS_DE_ENVIO: { valor: CampoDaEtiqueta; rotulo: string }[] = [
+  { valor: "DESTINATARIO", rotulo: "Destinatário" },
+  { valor: "ENDERECO_ENTREGA", rotulo: "Endereço" },
+  { valor: "BAIRRO", rotulo: "Bairro" },
+  { valor: "CIDADE_UF", rotulo: "Cidade / UF" },
+  { valor: "CEP", rotulo: "CEP" },
+  { valor: "REMETENTE", rotulo: "Remetente" },
+  { valor: "PEDIDO", rotulo: "Nº do pedido" },
 ];
 
 /**
@@ -476,7 +504,7 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
           {/* ----------------------------------------------------- as escolhas */}
           <aside className="w-full space-y-5 lg:w-80">
             <div>
-              <h3 className="mb-2 text-sm font-medium text-text-secondary">Acrescentar</h3>
+              <h3 className="mb-2 text-sm font-medium text-text-secondary">Da peça</h3>
               <div className="flex flex-wrap gap-2">
                 {CAMPOS.map((campo) => (
                   <Button
@@ -490,6 +518,27 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
                   </Button>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-sm font-medium text-text-secondary">Do pacote</h3>
+              <div className="flex flex-wrap gap-2">
+                {CAMPOS_DE_ENVIO.map((campo) => (
+                  <Button
+                    key={campo.valor}
+                    type="button"
+                    variant="outline"
+                    onClick={() => acrescentar(campo.valor)}
+                  >
+                    <Plus className="h-4 w-4" aria-hidden />
+                    {campo.rotulo}
+                  </Button>
+                ))}
+              </div>
+
+              <p className="mt-2 text-sm text-text-muted">
+                Só aparecem impressos quando a etiqueta vem de uma compra da loja virtual.
+              </p>
             </div>
 
             {atual ? (
@@ -606,17 +655,37 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
               </p>
             )}
 
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setSalvo(false);
-                setElementos(desenhoPadrao(modelo.widthMm, modelo.heightMm));
-                setSelecionado(null);
-              }}
-            >
-              Voltar ao desenho padrão
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setSalvo(false);
+                  setElementos(desenhoPadrao(modelo.widthMm, modelo.heightMm));
+                  setSelecionado(null);
+                }}
+              >
+                Começar do modelo de peça
+              </Button>
+
+              {/*
+                Um ponto de partida para o pacote, na ordem em que o carteiro
+                lê: destinatário em destaque, endereço abaixo, CEP grande no
+                rodapé — é ele que decide a triagem — e o remetente pequeno no
+                topo, onde não compete com o destino.
+              */}
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setSalvo(false);
+                  setElementos(desenhoDeEnvio(modelo.widthMm, modelo.heightMm));
+                  setSelecionado(null);
+                }}
+              >
+                Começar do modelo de envio
+              </Button>
+            </div>
           </aside>
         </div>
       </div>

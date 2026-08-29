@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { LabelElement } from "@rs-pratas/shared";
+import { CAMPOS_DE_VARIAS_LINHAS, type LabelElement } from "@rs-pratas/shared";
 import { barcodeModules, encodeCode128 } from "@/lib/barcode";
 
 /**
@@ -22,6 +22,28 @@ export interface DadosDaEtiqueta {
   size: string | null;
   weightGrams: string | null;
   barcode: string | null;
+  /**
+   * Para onde o pacote vai, quando a etiqueta é de envio.
+   *
+   * Nulo na etiqueta de peça, que é a maioria. Os dois tipos compartilham o
+   * mesmo desenho e a mesma impressora porque posicionar em milímetros é a
+   * mesma mecânica — o que muda é a pergunta que a etiqueta responde: a da
+   * peça diz o que é e quanto custa, a do pacote diz para onde vai.
+   */
+  envio?: DadosDoEnvio | null;
+}
+
+export interface DadosDoEnvio {
+  destinatario: string | null;
+  /** Logradouro, número e complemento, uma parte por linha. */
+  endereco: string | null;
+  bairro: string | null;
+  cidadeUf: string | null;
+  cep: string | null;
+  /** A loja que despachou, em bloco. */
+  remetente: string | null;
+  /** Número do pedido na loja virtual. */
+  pedido: string | null;
 }
 
 /** O texto que cada elemento mostra, já formatado como sai no papel. */
@@ -43,26 +65,60 @@ export function textoDoElemento(elemento: LabelElement, dados: DadosDaEtiqueta):
       return elemento.texto ?? null;
     case "CODIGO_BARRAS":
       return dados.barcode;
+
+    case "DESTINATARIO":
+      return dados.envio?.destinatario ?? null;
+    case "ENDERECO_ENTREGA":
+      return dados.envio?.endereco ?? null;
+    case "BAIRRO":
+      return dados.envio?.bairro ?? null;
+    case "CIDADE_UF":
+      return dados.envio?.cidadeUf ?? null;
+    case "CEP":
+      // O CEP é o que decide a triagem nos Correios, e é lido por gente com
+      // pressa. Vai com o hífen mesmo quando o cadastro veio sem.
+      return dados.envio?.cep ? formatarCep(dados.envio.cep) : null;
+    case "REMETENTE":
+      return dados.envio?.remetente ?? null;
+    case "PEDIDO":
+      return dados.envio?.pedido ? `Pedido ${dados.envio.pedido}` : null;
+
     default:
       return null;
   }
 }
 
+/** 12345678 vira 12345-678; o que já vier formatado passa direto. */
+function formatarCep(cep: string): string {
+  const digitos = cep.replace(/\D/g, "");
+  return digitos.length === 8 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : cep;
+}
+
 function posicao(elemento: LabelElement): CSSProperties {
+  /**
+   * Endereço quebra; o resto corta.
+   *
+   * Numa etiqueta de joia, deixar o nome longo transbordar é melhor que
+   * quebrá-lo em duas linhas por cima do preço. Num endereço é o contrário:
+   * cortar "Rua das Palmeiras, 1042, apto 71" no meio faz o pacote não chegar.
+   */
+  const quebra = CAMPOS_DE_VARIAS_LINHAS.includes(elemento.campo);
+
   return {
     position: "absolute",
     left: `${elemento.xMm}mm`,
     top: `${elemento.yMm}mm`,
     width: `${elemento.larguraMm}mm`,
+    ...(elemento.alturaMm && quebra ? { height: `${elemento.alturaMm}mm` } : {}),
     textAlign: elemento.alinhamento,
     fontSize: `${elemento.tamanhoMm}mm`,
     fontWeight: elemento.negrito ? 700 : 400,
     // A altura da linha acompanha a letra: sem isto, o espaçamento padrão do
     // navegador empurraria o elemento para fora da posição escolhida.
-    lineHeight: 1.1,
-    // Etiqueta de joia é pequena e o nome da peça é longo. Deixar transbordar
-    // é melhor que quebrar em duas linhas por cima do elemento de baixo.
-    whiteSpace: "nowrap",
+    lineHeight: 1.15,
+    // `pre-line` respeita as quebras que o servidor já montou — uma parte do
+    // endereço por linha — e ainda quebra sozinho o que passar da largura.
+    whiteSpace: quebra ? "pre-line" : "nowrap",
     overflow: "hidden",
   };
 }

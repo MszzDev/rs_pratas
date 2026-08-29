@@ -1,10 +1,20 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Crosshair, Layers, PenLine, Printer, Tag, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Crosshair,
+  Layers,
+  Package,
+  PenLine,
+  Printer,
+  Tag,
+  Trash2,
+} from "lucide-react";
 import type { LabelElement } from "@rs-pratas/shared";
 import { LabelSheet } from "./LabelSheet";
 import { LabelEditor } from "./LabelEditor";
 import { LabelQuickPrint } from "./LabelQuickPrint";
+import { ShippingLabels } from "./ShippingLabels";
 import type { LabelPayload, LabelToPrint } from "./LabelSheet";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -105,6 +115,7 @@ export function LabelsPage() {
   const [calibrating, setCalibrating] = useState<Template | null>(null);
   const [desenhando, setDesenhando] = useState<Template | null>(null);
   const [avulsa, setAvulsa] = useState(false);
+  const [envio, setEnvio] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batch, setBatch] = useState<Record<string, number>>({});
   const [aviso, setAviso] = useState<string | null>(null);
@@ -298,11 +309,30 @@ export function LabelsPage() {
             onClick={() => {
               setAvulsa((current) => !current);
               setBatchOpen(false);
+              setEnvio(false);
               setCreating(false);
             }}
           >
             <Printer className="h-5 w-5" aria-hidden />
             Imprimir uma peça
+          </Button>
+
+          {/*
+            A etiqueta do pacote. Fica aqui, junto das outras, porque é a mesma
+            impressora e o mesmo rolo — o que muda é de onde vem o conteúdo.
+          */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setEnvio((current) => !current);
+              setAvulsa(false);
+              setBatchOpen(false);
+              setCreating(false);
+            }}
+          >
+            <Package className="h-5 w-5" aria-hidden />
+            Etiqueta de envio
           </Button>
 
           <Button
@@ -311,6 +341,7 @@ export function LabelsPage() {
             onClick={() => {
               setBatchOpen((current) => !current);
               setAvulsa(false);
+              setEnvio(false);
               setCreating(false);
             }}
           >
@@ -344,6 +375,14 @@ export function LabelsPage() {
           storeId={storeId}
           templateId={templates.data?.find((modelo) => modelo.isDefault)?.id}
           onClose={() => setAvulsa(false)}
+        />
+      )}
+
+      {envio && (
+        <ShippingLabels
+          storeId={storeId}
+          modelos={templates.data ?? []}
+          onClose={() => setEnvio(false)}
         />
       )}
 

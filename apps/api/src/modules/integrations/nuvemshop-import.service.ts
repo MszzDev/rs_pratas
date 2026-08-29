@@ -30,7 +30,13 @@ export interface ResultadoImportacao {
 /** Só dígitos, como o cadastro de cliente guarda. */
 const somenteDigitos = (valor: string) => valor.replace(/\D/g, "");
 
-async function credenciaisDaNuvemshop(companyId: string) {
+/**
+ * Exportado porque a etiqueta de envio precisa das mesmas credenciais.
+ *
+ * Duplicar a leitura do token seria duplicar também a regra de "só quando a
+ * integração está CONECTADA" — e é o tipo de regra que uma das cópias esquece.
+ */
+export async function credenciaisDaNuvemshop(companyId: string) {
   const integration = await prisma.integration.findUnique({
     where: { companyId_provider: { companyId, provider: "NUVEMSHOP" } },
   });

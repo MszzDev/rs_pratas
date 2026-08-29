@@ -1,6 +1,6 @@
 import type { LabelElement } from "@rs-pratas/shared";
 import { barcodeModules, encodeCode128 } from "@/lib/barcode";
-import { EtiquetaDesenhada } from "./LabelDrawing";
+import { EtiquetaDesenhada, type DadosDoEnvio } from "./LabelDrawing";
 
 export interface LabelPayload {
   productName: string | null;
@@ -9,6 +9,8 @@ export interface LabelPayload {
   size: string | null;
   weightGrams: string | null;
   barcode: string | null;
+  /** Presente só na etiqueta de pacote. Na de peça vem ausente. */
+  envio?: DadosDoEnvio | null;
   layout: {
     widthMm: number;
     heightMm: number;

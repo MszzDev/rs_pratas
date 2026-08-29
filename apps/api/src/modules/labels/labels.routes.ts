@@ -3,6 +3,11 @@ import type { FastifyInstance } from "fastify";
 import { labelElementsSchema } from "@rs-pratas/shared";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
 import {
+  assertNuvemshopConectada,
+  listShippingOrders,
+  queueShippingLabel,
+} from "./shipping.service.js";
+import {
   buildBatchFromStock,
   calibrateTemplate,
   cancelPrintJob,
@@ -103,6 +108,46 @@ export async function labelRoutes(app: FastifyInstance) {
         .parse(request.body);
 
       return reply.status(201).send(await queueProductLabels({ input, request }));
+    },
+  );
+
+  /**
+   * Os pedidos da loja virtual que estão para despachar.
+   *
+   * Fica no módulo de etiquetas, e não no de integrações, porque a pergunta
+   * que responde é de quem vai imprimir: "quais pacotes eu monto agora?".
+   */
+  app.get(
+    "/print-jobs/shipping/orders",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request) => {
+      const { dias } = z
+        .object({ dias: z.coerce.number().int().min(1).max(120).optional() })
+        .parse(request.query);
+
+      await assertNuvemshopConectada(request.user.companyId);
+      return listShippingOrders({ request, desdeDias: dias });
+    },
+  );
+
+  /** A etiqueta de um pacote, montada a partir da compra. */
+  app.post(
+    "/print-jobs/shipping",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request, reply) => {
+      const input = z
+        .object({
+          storeId: z.string().uuid(),
+          orderId: z.string().min(1).max(40),
+          // Poucas cópias de propósito: pacote leva uma etiqueta, e o segundo
+          // exemplar existe só para o caso de a primeira sair borrada.
+          copies: z.number().int().min(1).max(5).default(1),
+          templateId: z.string().uuid(),
+          deviceId: z.string().uuid().optional(),
+        })
+        .parse(request.body);
+
+      return reply.status(201).send(await queueShippingLabel({ input, request }));
     },
   );
 

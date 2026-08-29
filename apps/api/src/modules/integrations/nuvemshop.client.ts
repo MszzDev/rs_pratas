@@ -50,6 +50,30 @@ export interface NuvemshopOrder {
     quantity: number;
     price: string;
   }>;
+
+  /**
+   * Para onde a compra vai.
+   *
+   * Vem preenchido nos pedidos com entrega e ausente nos de retirada na loja.
+   * Os nomes dos campos sao os da Nuvemshop, em ingles, de proposito: este
+   * arquivo e a fronteira com a API deles, e traduzir aqui esconderia de qual
+   * campo veio o que — que e justamente o que se precisa saber quando um
+   * endereco chega errado.
+   */
+  shipping_address?: {
+    name?: string | null;
+    address?: string | null;
+    number?: string | null;
+    floor?: string | null;
+    locality?: string | null;
+    city?: string | null;
+    province?: string | null;
+    zipcode?: string | null;
+    country?: string | null;
+    phone?: string | null;
+  } | null;
+
+  shipping_status?: string | null;
 }
 
 /**
