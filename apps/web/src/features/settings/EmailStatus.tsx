@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Mail, MailX } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { apiFetch, ApiError } from "@/lib/api-client";
 
@@ -20,12 +21,16 @@ interface EstadoDoEmail {
  * ninguém descobre que o e-mail está desligado até um cliente reclamar que não
  * recebeu.
  *
- * Este cartão é o antídoto. Diz o estado sem rodeio e oferece o teste — que
- * vai para o e-mail de quem clicou, e não para um endereço digitado na hora.
+ * Este cartão é o antídoto. Diz o estado sem rodeio e oferece o teste.
+ *
+ * O teste vai para o e-mail de quem clicou, e aceita outro endereço quando
+ * pedido: a pergunta que se faz aqui não é só "o envio funciona?", é "chega, ou
+ * cai no spam?" — e isso muda conforme o provedor de quem recebe.
  */
 export function EmailStatus() {
   const [resultado, setResultado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [outro, setOutro] = useState("");
 
   const estado = useQuery({
     queryKey: ["email-status"],
@@ -34,7 +39,10 @@ export function EmailStatus() {
 
   const testar = useMutation({
     mutationFn: () =>
-      apiFetch<{ para: string }>("/api/v1/settings/email/test", { method: "POST" }),
+      apiFetch<{ para: string }>("/api/v1/settings/email/test", {
+        method: "POST",
+        body: outro.trim() ? { para: outro.trim() } : {},
+      }),
     onSuccess: (resposta) => {
       setErro(null);
       setResultado(`Enviado para ${resposta.para}. Confira a caixa de entrada e o spam.`);
@@ -87,9 +95,21 @@ export function EmailStatus() {
         </div>
 
         {ligado && (
-          <Button type="button" disabled={testar.isPending} onClick={() => testar.mutate()}>
-            {testar.isPending ? "Enviando..." : "Enviar teste para mim"}
-          </Button>
+          <div className="flex flex-wrap items-end gap-3">
+            <Field
+              label="Mandar o teste para"
+              type="email"
+              value={outro}
+              onChange={(evento) => setOutro(evento.target.value)}
+              placeholder="seu e-mail"
+              hint="Deixe em branco para mandar ao e-mail da sua conta."
+              className="min-w-[16rem]"
+            />
+
+            <Button type="button" disabled={testar.isPending} onClick={() => testar.mutate()}>
+              {testar.isPending ? "Enviando..." : "Enviar teste"}
+            </Button>
+          </div>
         )}
       </div>
 

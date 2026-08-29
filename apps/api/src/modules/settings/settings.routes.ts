@@ -100,10 +100,27 @@ export async function settingsRoutes(app: FastifyInstance) {
       select: { email: true, name: true },
     });
 
-    if (!user.email) {
+    /**
+     * Para onde vai o teste.
+     *
+     * O padrão continua sendo o e-mail de quem clicou — é o destino que não
+     * precisa de confirmação de ninguém. Mas poder escolher importa para a
+     * pergunta que realmente se faz aqui: "chega, ou cai no spam?". A resposta
+     * muda conforme o provedor de quem recebe, e a caixa do dono é uma só.
+     *
+     * Continua sendo rota de dono, e o texto é fixo — não há como usar isto
+     * para mandar mensagem escrita por alguém a um endereço qualquer.
+     */
+    const { para } = z
+      .object({ para: z.string().email("Endereço inválido.").optional() })
+      .parse(request.body ?? {});
+
+    const destino = para ?? user.email;
+
+    if (!destino) {
       throw badRequest(
         "NO_EMAIL",
-        "Sua conta não tem e-mail cadastrado. Coloque um em Funcionários para poder testar.",
+        "Sua conta não tem e-mail cadastrado. Escreva um endereço no campo ou coloque um em Funcionários.",
       );
     }
 
@@ -115,7 +132,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     const enviado = await sendEmail({
-      to: user.email,
+      to: destino,
       subject: "Teste de envio — RS Pratas",
       text: [
         `Olá, ${user.name.split(" ")[0]}.`,
@@ -134,7 +151,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       );
     }
 
-    return { enviado: true, para: user.email };
+    return { enviado: true, para: destino };
   });
 
   app.put("/settings/app", { preHandler: ownerOnly }, async (request) => {
