@@ -260,6 +260,79 @@ describe("desenho da etiqueta", () => {
     expect(response.statusCode).toBe(403);
   });
 
+  /**
+   * O defeito que isto tranca: o dono posicionava o preço no editor, via na
+   * prévia, salvava — e a etiqueta saía sem preço, porque um interruptor
+   * escolhido na criação do modelo dizia "não mostrar preço". Sem erro em
+   * lugar nenhum, e o rolo já impresso.
+   */
+  async function modeloSemPreco(token: string) {
+    return (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/label-templates",
+        headers: auth(token),
+        payload: {
+          code: "SEMPRECO",
+          name: "Sem preço",
+          widthMm: 50,
+          heightMm: 30,
+          showPrice: false,
+        },
+      })
+    ).json();
+  }
+
+  it("com desenho, o interruptor de esconder não apaga mais o dado", async () => {
+    const { store, token, product } = await scenario();
+    const modelo = await modeloSemPreco(token);
+
+    // O desenho tem um elemento de preço, e é ele que decide.
+    await app.inject({
+      method: "PUT",
+      url: `/api/v1/label-templates/${modelo.id}/elements`,
+      headers: auth(token),
+      payload: { elements: desenho },
+    });
+
+    const job = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/print-jobs/labels",
+        headers: auth(token),
+        payload: {
+          storeId: store.id,
+          productId: product.id,
+          copies: 1,
+          templateId: modelo.id,
+        },
+      })
+    ).json();
+
+    expect(job.payload.price).not.toBeNull();
+  });
+
+  it("sem desenho, o interruptor continua mandando", async () => {
+    const { store, token, product } = await scenario();
+    const modelo = await modeloSemPreco(token);
+
+    const job = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/print-jobs/labels",
+        headers: auth(token),
+        payload: {
+          storeId: store.id,
+          productId: product.id,
+          copies: 1,
+          templateId: modelo.id,
+        },
+      })
+    ).json();
+
+    expect(job.payload.price).toBeNull();
+  });
+
   it("o trabalho já na fila leva o desenho de quando foi criado", async () => {
     const { store, token, template, product } = await scenario();
 

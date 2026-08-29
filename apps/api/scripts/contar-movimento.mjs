@@ -20,7 +20,7 @@ function conexaoGuardada() {
   // com um byte nulo entre cada letra — o que faz a expressão abaixo não achar
   // nada, sem erro nenhum.
   const utf16 = bruto[0] === 0xff && bruto[1] === 0xfe;
-  const texto = bruto.toString(utf16 ? "utf16le" : "utf8").replace(/^﻿/, "");
+  const texto = bruto.toString(utf16 ? "utf16le" : "utf8").replace(/^\uFEFF/, "");
 
   const achou = /^\s*DATABASE_URL\s*=\s*(.+)$/m.exec(texto);
   if (!achou) throw new Error("DATABASE_URL não encontrada em .env.backup");

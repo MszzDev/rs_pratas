@@ -327,16 +327,36 @@ function buildLabelPayload(params: {
   weightGrams: Prisma.Decimal | null;
 }) {
   const { template } = params;
+  const elementos = (template.elements as LabelElement[] | null) ?? null;
+
+  /**
+   * Quando há desenho, é o DESENHO que decide o que aparece.
+   *
+   * Os interruptores ("mostrar preço", "mostrar código") são o mecanismo
+   * antigo, e a pergunta que eles respondem — quais campos entram na etiqueta
+   * — passa a ser respondida pela presença do elemento no desenho. Manter os
+   * dois é ter duas fontes de verdade, e a invisível ganhava:
+   *
+   * O dono posicionava o preço no editor, via ele na prévia, salvava, e a
+   * etiqueta saía sem preço — porque o interruptor estava desligado num
+   * formulário que ele nem abriu. Sem erro em lugar nenhum, e o rolo já
+   * impresso.
+   *
+   * Um elemento que não foi colocado simplesmente não é desenhado; não é
+   * preciso apagar o dado para escondê-lo.
+   */
+  const mandaODesenho = Array.isArray(elementos) && elementos.length > 0;
+  const mostrar = (ligado: boolean) => mandaODesenho || ligado;
 
   return {
     // Nome longo não cabe numa etiqueta de joia; cortar aqui é melhor que
     // deixar a impressora decidir onde quebrar.
-    productName: template.showProductName ? params.productName.slice(0, 28) : null,
-    sku: template.showSku ? params.sku : null,
-    price: template.showPrice ? params.price.toFixed(2) : null,
-    size: template.showSize ? params.size : null,
-    weightGrams: template.showWeight ? (params.weightGrams?.toFixed(3) ?? null) : null,
-    barcode: template.showBarcode ? barcodeFor(params.sku) : null,
+    productName: mostrar(template.showProductName) ? params.productName.slice(0, 28) : null,
+    sku: mostrar(template.showSku) ? params.sku : null,
+    price: mostrar(template.showPrice) ? params.price.toFixed(2) : null,
+    size: mostrar(template.showSize) ? params.size : null,
+    weightGrams: mostrar(template.showWeight) ? (params.weightGrams?.toFixed(3) ?? null) : null,
+    barcode: mostrar(template.showBarcode) ? barcodeFor(params.sku) : null,
     layout: {
       widthMm: Number(template.widthMm),
       heightMm: Number(template.heightMm),
@@ -352,7 +372,7 @@ function buildLabelPayload(params: {
        * mexer no desenho enquanto a fila anda, as etiquetas já enfileiradas
        * não podem mudar de forma no meio do caminho.
        */
-      elements: (template.elements as LabelElement[] | null) ?? null,
+      elements: elementos,
     },
   };
 }
