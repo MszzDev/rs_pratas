@@ -76,7 +76,16 @@ const envSchema = z.object({
    * segue funcionando e a credencial continua aparecendo na tela do dono, que
    * é a entrega garantida. O e-mail é o atalho, não a única via.
    */
-  MAIL_TRANSPORT: z.enum(["log", "smtp"]).default("log"),
+  MAIL_TRANSPORT: z.enum(["log", "smtp", "brevo"]).default("log"),
+
+  /**
+   * Chave da API do Brevo, para enviar por HTTPS em vez de SMTP.
+   *
+   * Necessária quando a hospedagem bloqueia as portas de SMTP — o que o Render
+   * faz. Pega-se em app.brevo.com/settings/keys/api, e NÃO é a mesma coisa que
+   * a chave SMTP: são duas credenciais diferentes na mesma conta.
+   */
+  BREVO_API_KEY: z.string().optional(),
   /** Ex.: smtps://loja%40dominio.com.br:SENHA_DE_APP@smtp.dominio.com.br:465 */
   SMTP_URL: z.string().optional(),
 

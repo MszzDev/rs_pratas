@@ -79,11 +79,14 @@ export async function settingsRoutes(app: FastifyInstance) {
       remetente: env.MAIL_FROM,
       // O endereço do servidor SEM a senha: o suficiente para conferir que é o
       // provedor certo, sem devolver credencial para a tela.
-      servidor: env.SMTP_URL
-        ? env.SMTP_URL.replace(/\/\/[^@]*@/, "//")
-        : env.SMTP_HOST
-          ? `${env.SMTP_HOST}:${env.SMTP_PORT}`
-          : null,
+      servidor:
+        env.MAIL_TRANSPORT === "brevo"
+          ? "api.brevo.com (HTTPS)"
+          : env.SMTP_URL
+            ? env.SMTP_URL.replace(/\/\/[^@]*@/, "//")
+            : env.SMTP_HOST
+              ? `${env.SMTP_HOST}:${env.SMTP_PORT}`
+              : null,
     };
   });
 

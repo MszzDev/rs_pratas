@@ -3,6 +3,7 @@ import { logger } from "../logger.js";
 import type { EmailMessage, EmailProvider } from "./email.provider.js";
 import { LogEmailProvider } from "./log.provider.js";
 import { SmtpEmailProvider } from "./smtp.provider.js";
+import { BrevoEmailProvider } from "./brevo.provider.js";
 
 export type { EmailMessage, EmailProvider } from "./email.provider.js";
 
@@ -16,6 +17,7 @@ let provider: EmailProvider | null = null;
  * provedor — e onde não há URL para montar errado.
  */
 export function emailConfigurado(): boolean {
+  if (env.MAIL_TRANSPORT === "brevo") return Boolean(env.BREVO_API_KEY);
   if (env.MAIL_TRANSPORT !== "smtp") return false;
 
   return Boolean(
@@ -28,6 +30,11 @@ function resolveProvider(): EmailProvider {
 
   if (!emailConfigurado()) {
     provider = new LogEmailProvider();
+    return provider;
+  }
+
+  if (env.MAIL_TRANSPORT === "brevo") {
+    provider = new BrevoEmailProvider(env.BREVO_API_KEY as string);
     return provider;
   }
 
