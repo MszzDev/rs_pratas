@@ -78,6 +78,20 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
   const larguraDaPagina = rolo ? larguraDaBobina(rolo) : 0;
 
   const estiloDaFolha = {
+    /**
+     * A largura da folha, dita explicitamente.
+     *
+     * `.print-sheet` é `position: absolute`, e caixa absoluta sem largura
+     * **encolhe até o conteúdo**. Com etiquetas de 33 mm a folha inteira ficava
+     * com 33 mm — e numa caixa de 33 mm três etiquetas de 33 mm nunca cabem
+     * lado a lado. Cada uma caía numa linha, a tira saía estreita, e a
+     * impressora centralizava esse fiapo no meio do rolo: a coluna do meio
+     * impressa e as duas laterais em branco, um terço de aproveitamento.
+     *
+     * O `flex-wrap` estava certo o tempo todo; faltava dar a ele espaço para
+     * quebrar.
+     */
+    width: `${larguraDaPagina}mm`,
     columnGap: `${rolo?.gapXMm ?? 0}mm`,
     rowGap: `${rolo?.gapYMm ?? 0}mm`,
   };
