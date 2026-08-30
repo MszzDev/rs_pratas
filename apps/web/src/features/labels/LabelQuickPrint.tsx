@@ -37,15 +37,36 @@ interface Produto {
   variations: Variacao[];
 }
 
+export interface ModeloDisponivel {
+  id: string;
+  name: string;
+  widthMm: string;
+  heightMm: string;
+  isDefault: boolean;
+}
+
 export function LabelQuickPrint({
   storeId,
-  templateId,
+  modelos,
   onClose,
 }: {
   storeId: string;
-  templateId?: string | undefined;
+  modelos: ModeloDisponivel[];
   onClose: () => void;
 }) {
+  /**
+   * Qual modelo usar nesta impressão.
+   *
+   * Antes era sempre o padrão da empresa, sem opção. Só que a loja tem mais de
+   * um rolo — um comprido para a argola, um pequeno para a caixa — e trocar o
+   * padrão inteiro só para imprimir três etiquetas de outro tamanho é mudar uma
+   * escolha da empresa para resolver um caso do balcão.
+   *
+   * Começa no padrão, que é o certo na maioria das vezes, e deixa trocar.
+   */
+  const [modeloId, setModeloId] = useState(
+    () => modelos.find((m) => m.isDefault)?.id ?? modelos[0]?.id ?? "",
+  );
   const queryClient = useQueryClient();
 
   const [busca, setBusca] = useState("");
@@ -75,7 +96,7 @@ export function LabelQuickPrint({
           storeId,
           productId: escolhido?.id,
           ...(variacaoId ? { variationId: variacaoId } : {}),
-          ...(templateId ? { templateId } : {}),
+          ...(modeloId ? { templateId: modeloId } : {}),
           copies: copias,
         },
       }),
@@ -121,12 +142,39 @@ export function LabelQuickPrint({
         </div>
       )}
 
-      {storeId === "" ? (
+      {modelos.length === 0 ? (
+        <Alert tone="error">
+          Nenhum modelo de etiqueta cadastrado. Sem modelo o sistema não imprime — é melhor
+          recusar que gastar um rolo torto.
+        </Alert>
+      ) : storeId === "" ? (
         <Alert tone="info">
           Escolha a loja primeiro — a etiqueta vai para a fila da impressora daquela loja.
         </Alert>
       ) : escolhido === null ? (
         <>
+          <div className="mb-4 max-w-sm">
+            <label
+              className="mb-1 block text-sm font-medium text-text-primary"
+              htmlFor="modelo-da-etiqueta"
+            >
+              Modelo da etiqueta
+            </label>
+            <select
+              id="modelo-da-etiqueta"
+              value={modeloId}
+              onChange={(evento) => setModeloId(evento.target.value)}
+              className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
+            >
+              {modelos.map((modelo) => (
+                <option key={modelo.id} value={modelo.id}>
+                  {modelo.name} — {modelo.widthMm} × {modelo.heightMm} mm
+                  {modelo.isDefault ? " (padrão)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <Field
             label="Procurar a peça"
             value={busca}

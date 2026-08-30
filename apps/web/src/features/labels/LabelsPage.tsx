@@ -110,6 +110,16 @@ export function LabelsPage() {
   const [creating, setCreating] = useState(false);
   const [desenhando, setDesenhando] = useState<Template | null>(null);
   const [avulsa, setAvulsa] = useState(false);
+
+  /**
+   * O modelo que o LOTE usa.
+   *
+   * Separado do padrão da empresa pelo mesmo motivo da impressão avulsa: a
+   * virada de estoque pode pedir um rolo diferente do que fica no balcão, e
+   * trocar o padrão inteiro para isso é mudar uma escolha da empresa para
+   * resolver um caso do dia.
+   */
+  const [modeloDoLote, setModeloDoLote] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
   const [batch, setBatch] = useState<Record<string, number>>({});
   const [aviso, setAviso] = useState<string | null>(null);
@@ -194,6 +204,7 @@ export function LabelsPage() {
           method: "POST",
           body: {
             storeId,
+            ...(modeloDoLote ? { templateId: modeloDoLote } : {}),
             items: (batchSuggestion.data ?? [])
               .map((row) => ({
                 productId: row.productId,
@@ -350,7 +361,7 @@ export function LabelsPage() {
       {avulsa && (
         <LabelQuickPrint
           storeId={storeId}
-          templateId={templates.data?.find((modelo) => modelo.isDefault)?.id}
+          modelos={templates.data ?? []}
           onClose={() => setAvulsa(false)}
         />
       )}
@@ -508,6 +519,30 @@ export function LabelsPage() {
           </p>
 
           {!storeId && <Alert tone="info">Escolha a loja no filtro abaixo primeiro.</Alert>}
+
+          {(templates.data?.length ?? 0) > 0 && (
+            <div className="mb-4 max-w-sm">
+              <label
+                className="mb-1 block text-sm font-medium text-text-primary"
+                htmlFor="modelo-do-lote"
+              >
+                Modelo da etiqueta
+              </label>
+              <select
+                id="modelo-do-lote"
+                value={modeloDoLote}
+                onChange={(event) => setModeloDoLote(event.target.value)}
+                className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
+              >
+                <option value="">Usar o padrão da empresa</option>
+                {(templates.data ?? []).map((modelo) => (
+                  <option key={modelo.id} value={modelo.id}>
+                    {modelo.name} — {modelo.widthMm} × {modelo.heightMm} mm
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {storeId && (
             <>
