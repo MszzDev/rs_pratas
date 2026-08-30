@@ -253,44 +253,28 @@ html {
     margin: 0;
   }
 
-  /* Esconde a interface e mostra só a folha. `visibility` em vez de `display`
-     porque preserva o posicionamento dos elementos filhos.
+  /* Apaga a interface e deixa só a folha.
+     
+     `display: none` e não `visibility: hidden`: o segundo esconde mas MANTÉM o
+     espaço, então a tela do sistema continuava com a altura dela e o navegador
+     gerava uma página para cada pedaço. Saíam dez páginas em branco depois das
+     três com etiqueta, e numa impressora térmica cada uma dessas é uma
+     etiqueta perdida.
+
+     A folha fica presa ao `body`, fora da árvore do aplicativo, justamente
+     para sobreviver a esse `display: none`.
 
      A regra só vale quando existe uma folha de etiqueta na página: sem o
      `:has`, imprimir QUALQUER outra tela — o espelho de ponto, por exemplo —
-     saía em branco, porque a regra apagava tudo e não havia folha para
+     sairia em branco, porque a regra apagaria tudo e não haveria folha para
      mostrar no lugar. */
-  body:has(.print-sheet) * {
-    visibility: hidden;
+  body:has(.print-sheet) #root {
+    display: none !important;
   }
 
-  /* O `body:has(...)` do bloco acima precisa ser repetido aqui.
-
-     Sem ele, este seletor tem especificidade MENOR que o que esconde
-     (0,1,0 contra 0,1,1), e o navegador mantém tudo invisível: a folha é
-     posicionada, ocupa a página e sai em branco. Foi exatamente o que
-     aconteceu — etiquetas imprimindo quatro páginas vazias. */
-  body:has(.print-sheet) .print-sheet,
-  body:has(.print-sheet) .print-sheet * {
-    visibility: visible;
-  }
-
-  /* A folha enche a LINHA antes de descer.
-
-     Rolo de etiqueta costuma vir com mais de uma coluna — o da loja tem três
-     de 33 mm lado a lado. Com as etiquetas empilhadas uma por linha, o sistema
-     usava só a primeira coluna e desperdiçava duas a cada avanço: um terço do
-     rolo virava lixo, e o funcionário não tinha como perceber além de ver o
-     rolo acabar rápido demais.
-
-     `wrap` resolve sem precisar saber quantas colunas existem: o navegador
-     encaixa quantas couberem na largura do papel e quebra sozinho. Serve igual
-     para rolo de uma coluna, onde cada etiqueta ocupa a largura toda e a
-     quebra acontece a cada uma. */
+  /* A folha flui normalmente: gera exatamente as páginas que tem linhas, nem
+     uma a mais. Fora da impressão ela continua escondida. */
   .print-sheet {
-    position: absolute;
-    left: 0;
-    top: 0;
     display: block;
     background: #ffffff;
   }
@@ -332,7 +316,14 @@ html {
     flex-direction: column;
     justify-content: center;
     gap: 0.4mm;
-    padding: 0.8mm 1.2mm;
+    /* Folga generosa nas laterais.
+    
+       Com 1,2 mm o código de barras chegava a 30,6 mm numa etiqueta de 33, e
+       meio milímetro de desalinhamento já o fazia encostar no recorte vizinho —
+       o conteúdo de uma etiqueta invadindo a outra. Rolo de várias colunas
+       nunca fica perfeitamente alinhado, então o desenho precisa tolerar isso
+       em vez de exigir precisão que o papel não dá. */
+    padding: 0.8mm 2mm;
     text-align: center;
   }
 

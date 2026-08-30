@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import type { LabelElement } from "@rs-pratas/shared";
 import { barcodeModules, encodeCode128 } from "@/lib/barcode";
 import { EtiquetaDesenhada } from "./LabelDrawing";
@@ -138,7 +139,17 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
     boxSizing: "border-box" as const,
   };
 
-  return (
+  /**
+   * A folha vive fora da árvore do aplicativo, presa direto ao `body`.
+   *
+   * É o que permite apagar a interface inteira na impressão com `display:
+   * none`. Antes ela era só escondida com `visibility: hidden`, que **mantém o
+   * espaço ocupado**: a tela do sistema continuava com a altura dela, e o
+   * navegador gerava uma página para cada pedaço — dez páginas em branco
+   * depois das três com etiqueta. Numa impressora térmica cada uma dessas é
+   * uma etiqueta perdida.
+   */
+  return createPortal(
     <>
       {rolo && (
         <style>{`@page { size: ${larguraDaPagina}mm ${alturaDaPagina}mm; margin: 0; }`}</style>
@@ -160,7 +171,8 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
           </div>
         ))}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
