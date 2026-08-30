@@ -88,6 +88,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
+      Para saber se há internet ANTES de tentar carregar as telas.
+
+      Sem isto o tablet sem rede fica com a tela preta: o aplicativo busca as
+      telas no site publicado, não acha nada, e não tem o que desenhar — nem
+      sequer o aviso de que falta internet.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
       Volta ao PDV sozinho depois que o tablet reinicia. Sem isto, uma queda de
       energia deixaria o aparelho na tela de bloqueio esperando alguém abrir o
       aplicativo — e quem abre a loja de manhã não é quem instalou o sistema.

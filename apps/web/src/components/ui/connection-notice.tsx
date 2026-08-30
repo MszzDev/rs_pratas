@@ -1,5 +1,6 @@
 import { CloudOff } from "lucide-react";
 import { useConexao } from "@/lib/conexao";
+import { WifiButton } from "@/components/ui/wifi-button";
 
 /**
  * A tarja de "sem conexão".
@@ -35,6 +36,9 @@ export function ConnectionNotice() {
           quando a internet voltar. Venda, caixa e estoque precisam de conexão e voltam junto com
           ela.
         </p>
+
+        {/* O botão fica aqui porque é aqui que a pessoa está quando precisa. */}
+        <WifiButton variante="aviso" />
       </div>
     </div>
   );

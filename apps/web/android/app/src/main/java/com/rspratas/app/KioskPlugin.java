@@ -4,6 +4,7 @@ import android.app.ActivityManager;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Build;
 import android.provider.Settings;
 import android.view.WindowManager;
@@ -101,6 +102,66 @@ public class KioskPlugin extends Plugin {
                 call.resolve(new JSObject().put("saiu", true));
               } catch (IllegalStateException erro) {
                 call.reject("Não foi possível sair do modo quiosque.", erro);
+              }
+            });
+  }
+
+  /**
+   * Abre a tela de Wi-Fi do Android.
+   *
+   * Precisa existir SEMPRE, e sem passar pela autorizacao do servidor. O
+   * motivo e um circulo: sair do quiosque exige autorizacao de quem esta no
+   * servidor, e o servidor so responde se houver internet. Um tablet que perdeu
+   * o Wi-Fi — mudou a senha da loja, trocou o roteador, foi para outro endereco
+   * — nao tinha como voltar a se conectar por dentro do sistema. Ficava mudo,
+   * e a saida era desinstalar ou provisionar de novo.
+   *
+   * Conectar-se a uma rede nao e acao sensivel: nao mexe em venda, em dinheiro
+   * nem em cadastro. O que se ganha destrancando isto e um tablet que volta a
+   * funcionar; o que se perderia trancando e a loja parada.
+   *
+   * O confinamento e interrompido pelo tempo da escolha e volta sozinho no
+   * `onResume` — nao ha janela em que o aparelho fique solto sem que alguem
+   * esteja olhando para ele.
+   */
+  @PluginMethod
+  public void abrirWifi(PluginCall call) {
+    getActivity()
+        .runOnUiThread(
+            () -> {
+              try {
+                DevicePolicyManager policy = policy();
+
+                // Sem Device Owner nao ha confinamento para interromper; a tela
+                // de Wi-Fi abre do mesmo jeito.
+                if (policy != null && policy.isDeviceOwnerApp(getContext().getPackageName())) {
+                  try {
+                    getActivity().stopLockTask();
+                  } catch (IllegalStateException ignorado) {
+                    // Ja estava fora. Segue.
+                  }
+                }
+
+                /**
+                 * O painel do Android 10 em diante abre SOBRE o aplicativo, sem
+                 * dar acesso ao resto das configuracoes. E o que se quer: a
+                 * pessoa escolhe a rede e volta, sem passar perto de "apagar
+                 * dados" nem de "desinstalar aplicativo".
+                 *
+                 * Abaixo disso o painel nao existe, e o caminho e a tela de
+                 * Wi-Fi inteira — que ja e melhor que nao ter caminho nenhum.
+                 */
+                Intent intencao =
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                        ? new Intent(Settings.Panel.ACTION_WIFI)
+                        : new Intent(Settings.ACTION_WIFI_SETTINGS);
+
+                intencao.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(intencao);
+
+                call.resolve(new JSObject().put("abriu", true));
+              } catch (Exception erro) {
+                call.reject("Não foi possível abrir a tela de Wi-Fi.", erro);
               }
             });
   }

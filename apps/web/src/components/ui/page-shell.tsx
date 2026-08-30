@@ -40,6 +40,7 @@ import { Logo, LogoMark } from "@/components/ui/logo";
 import { StatusStrip } from "@/components/ui/status-strip";
 import { ConnectionNotice } from "@/components/ui/connection-notice";
 import { InstallButton } from "@/components/ui/install-button";
+import { WifiButton } from "@/components/ui/wifi-button";
 import { PinExpiryNotice } from "@/features/auth/PinExpiryNotice";
 import { KioskExitDialog, useKioskExitGesture } from "@/features/kiosk/KioskExit";
 import { LeaveWithoutClockOut } from "@/features/timeclock/LeaveWithoutClockOut";
@@ -468,6 +469,7 @@ function UserFooter({
         </div>
       </NavLink>
 
+      <WifiButton />
       <InstallButton />
 
       <button

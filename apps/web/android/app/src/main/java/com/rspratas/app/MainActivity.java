@@ -1,10 +1,14 @@
 package com.rspratas.app;
 
+import android.app.AlertDialog;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
+import android.provider.Settings;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -42,6 +46,9 @@ public class MainActivity extends BridgeActivity {
    * acabou de ser autorizado a fazer. A janela abaixo é a trégua.
    */
   private long saiuEm = 0L;
+
+  /** Evita empilhar o mesmo aviso a cada volta ao primeiro plano. */
+  private boolean avisoDeRedeAberto = false;
 
   /**
    * Quanto tempo parado antes de deixar a tela apagar.
@@ -118,6 +125,144 @@ public class MainActivity extends BridgeActivity {
   }
 
   /**
+   * Sem internet, oferece o Wi-Fi antes que a tela fique preta.
+   *
+   * O aplicativo carrega as telas do site publicado — é o que permite corrigir
+   * um botão sem visitar cinco lojas. O preço aparece quando a rede cai: não há
+   * o que desenhar, nem sequer um aviso, e o tablet fica com a tela preta.
+   *
+   * E aí o sistema fecha um círculo do qual não se sai: o aviso de "sem
+   * conexão" vive nas telas que não carregaram, a saída do quiosque pede
+   * autorização do servidor que não responde, e a barra do Android está
+   * desligada. Um tablet que perdeu o Wi-Fi — a loja trocou a senha, o roteador
+   * foi substituído — virava um aparelho morto até alguém aparecer com um cabo.
+   *
+   * Por isso esta verificação é NATIVA e acontece antes de tudo: é a única
+   * camada que continua de pé quando a de cima não carrega.
+   */
+  private void oferecerWifiSeNaoHouverInternet() {
+    if (temInternet()) {
+      recarregarSeFicouVazio();
+      return;
+    }
+
+    if (avisoDeRedeAberto) return;
+
+    avisoDeRedeAberto = true;
+
+    new AlertDialog.Builder(this)
+        .setTitle("Sem internet")
+        .setMessage(
+            "O sistema precisa de internet para abrir. Conecte o tablet a uma rede Wi-Fi e"
+                + " toque em Tentar de novo.")
+        .setCancelable(false)
+        .setPositiveButton(
+            "Conectar",
+            (dialogo, qual) -> {
+              avisoDeRedeAberto = false;
+              abrirTelaDeWifi();
+            })
+        .setNegativeButton(
+            "Tentar de novo",
+            (dialogo, qual) -> {
+              avisoDeRedeAberto = false;
+              // Recarrega as telas: se a rede voltou enquanto o aviso estava
+              // aberto, é isto que traz o sistema de volta sem reiniciar nada.
+              if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().reload();
+              }
+            })
+        .show();
+  }
+
+  /**
+   * Recarrega quando a internet volta e a tela ficou vazia.
+   *
+   * Sem isto, conectar o Wi-Fi não adiantava nada. O aplicativo tenta carregar
+   * as telas UMA vez, ao abrir; se naquele instante não havia rede, ele fica
+   * com a WebView em branco e nunca mais tenta.
+   *
+   * E não dá para contornar reiniciando: sendo Device Owner, o aplicativo é
+   * pacote protegido, e o Android RECUSA encerrá-lo. O log diz "Ignoring
+   * request to force stop protected package" — nem pelo cabo se consegue. Sem
+   * esta recarga, o tablet ficaria com a tela preta até ser reprovisionado.
+   *
+   * A condição é a tela estar vazia, e não "a rede voltou": recarregar um
+   * sistema que está funcionando jogaria fora o que a vendedora tem na tela.
+   */
+  private void recarregarSeFicouVazio() {
+    if (bridge == null || bridge.getWebView() == null) return;
+
+    String endereco = bridge.getWebView().getUrl();
+
+    if (endereco == null || endereco.isEmpty() || "about:blank".equals(endereco)) {
+      Log.i(TAG, "Internet de volta e tela vazia — recarregando.");
+      bridge.getWebView().reload();
+    }
+  }
+
+  /**
+   * Internet de verdade, e não "tem Wi-Fi".
+   *
+   * `NET_CAPABILITY_VALIDATED` é o que separa uma coisa da outra: o tablet
+   * ligado no roteador da loja com o link caído está conectado ao Wi-Fi e sem
+   * internet nenhuma. É o caso mais comum na loja, e o que mais confunde.
+   */
+  private boolean temInternet() {
+    ConnectivityManager gerente =
+        (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+
+    if (gerente == null) return true;
+
+    NetworkCapabilities capacidades = gerente.getNetworkCapabilities(gerente.getActiveNetwork());
+
+    return capacidades != null
+        && capacidades.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        && capacidades.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+  }
+
+  /**
+   * Abre a tela de Wi-Fi do Android, interrompendo o confinamento pelo tempo
+   * da escolha. O `onResume` reentra sozinho quando a pessoa volta.
+   */
+  void abrirTelaDeWifi() {
+    try {
+      DevicePolicyManager policy =
+          (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+
+      if (policy != null && policy.isDeviceOwnerApp(getPackageName())) {
+        try {
+          stopLockTask();
+        } catch (IllegalStateException ignorado) {
+          // Já estava fora do confinamento. Segue.
+        }
+      }
+
+      /**
+       * SEM trégua aqui, ao contrário da saída técnica.
+       *
+       * A trégua existe para o técnico conseguir trabalhar depois de uma saída
+       * autorizada — cinco minutos livres. Conectar o Wi-Fi é outra coisa: um
+       * recado de trinta segundos, e o aparelho tem que voltar a ser caixa no
+       * instante em que a pessoa termina.
+       *
+       * Reaproveitá-la aqui deixava o tablet solto na tela do Android depois
+       * de conectar, esperando cinco minutos para se trancar sozinho.
+       *
+       * Não há risco de o confinamento voltar cedo demais: o `onResume` só
+       * dispara quando se VOLTA para cá, e voltar é justamente quando ele deve
+       * voltar. Ir para o Wi-Fi passa pelo `onPause`.
+       */
+
+      Intent intencao = new Intent(Settings.ACTION_WIFI_SETTINGS);
+      intencao.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+      startActivity(intencao);
+    } catch (Exception erro) {
+      Log.w(TAG, "Nao foi possivel abrir o Wi-Fi: " + erro.getMessage());
+    }
+  }
+
+  /**
    * Segura a tela acesa e recomeça a contagem dos trinta minutos.
    *
    * Chamado a cada toque. Reagendar é barato — trocar um agendamento no
@@ -159,6 +304,10 @@ public class MainActivity extends BridgeActivity {
     // Voltar do descanso conta como uso: quem acordou o tablet vai mexer nele,
     // e a tela apagando de novo em seguida seria absurdo.
     manterTelaAcesa();
+
+    // Antes de qualquer outra coisa: sem internet, nada nesta tela vai
+    // carregar, e o aviso precisa vir de cá.
+    oferecerWifiSeNaoHouverInternet();
 
     if (System.currentTimeMillis() - saiuEm < TREGUA_MS) {
       Log.i(TAG, "Saida autorizada recente — nao reentrando no confinamento.");

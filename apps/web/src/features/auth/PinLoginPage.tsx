@@ -11,6 +11,7 @@ import { apiFetch, ApiError } from "@/lib/api-client";
 import { readDeviceId, readDeviceLabel } from "@/lib/secure-storage";
 import { useAuth } from "./auth-context";
 import { PinKeypad } from "./PinKeypad";
+import { WifiButton } from "@/components/ui/wifi-button";
 
 /**
  * A entrada do tablet: matrícula e seis números.
@@ -246,6 +247,17 @@ export function PinLoginPage() {
                 </div>
               </>
             )}
+
+            {/*
+              Sem internet ninguém entra — então o botão de Wi-Fi precisa estar
+              ANTES do login, e não depois. Um botão que só aparece com a sessão
+              aberta nunca estaria aqui no momento em que a loja precisa dele: a
+              saída do quiosque pede autorização do servidor, e sem rede não há
+              quem autorize.
+            */}
+            <div className="mt-5 flex justify-center border-t border-border pt-4">
+              <WifiButton variante="aviso" />
+            </div>
           </div>
         </div>
       </section>
