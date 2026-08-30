@@ -13,6 +13,7 @@ import {
   queueReceipt,
   reportPrintResult,
   saveTemplateElements,
+  setDefaultTemplate,
 } from "./labels.service.js";
 
 const idParamSchema = z.object({ id: z.string().uuid() });
@@ -88,7 +89,17 @@ export async function labelRoutes(app: FastifyInstance) {
     },
   );
 
-  /** Sugestão de lote  /** Sugestão de lote a partir do estoque da loja — uma etiqueta por peça. */
+  /** Sugestão de lote  /** Qual modelo a impressão usa quando ninguém indica outro. */
+  app.patch(
+    "/label-templates/:id/default",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_TEMPLATE_MANAGE")] },
+    async (request) => {
+      const { id } = idParamSchema.parse(request.params);
+      return setDefaultTemplate({ templateId: id, request });
+    },
+  );
+
+  /** Sugestão de lote a partir do estoque da loja — uma etiqueta por peça. */
   app.get(
     "/print-jobs/batch-suggestion",
     { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },

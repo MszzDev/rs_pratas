@@ -112,6 +112,42 @@ describe("modelos de etiqueta", () => {
 
 
 
+  /**
+   * O buraco que isto tranca: "usar como padrão" existia SÓ na criação. Quem
+   * cadastrasse dois modelos sem marcar nenhum ficava sem padrão para sempre,
+   * e a impressão por peça — que usa o padrão quando não se indica outro —
+   * passava a recusar antes de criar o trabalho.
+   *
+   * Na tela isso aparece como "as etiquetas não estão indo para a fila", que é
+   * o sintoma mais enganoso possível: parece problema de impressora.
+   */
+  it("define o padrão depois de o modelo já existir", async () => {
+    const { token, template } = await scenario();
+
+    const outro = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/label-templates",
+        headers: auth(token),
+        payload: { code: "SEGUNDO", name: "Segundo", widthMm: 30, heightMm: 20 },
+      })
+    ).json();
+
+    const resposta = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/label-templates/${outro.id}/default`,
+      headers: auth(token),
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().isDefault).toBe(true);
+
+    // E o anterior deixou de ser: dois padrões fariam a mesma peça sair com
+    // etiqueta diferente conforme a ordem do banco naquele instante.
+    const antigo = await prisma.labelTemplate.findUnique({ where: { id: template.id } });
+    expect(antigo?.isDefault).toBe(false);
+  });
+
   it("o vendedor não cria modelo de etiqueta", async () => {
     const company = await createTestCompany();
     const { user: seller, password } = await createTestUser({

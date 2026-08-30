@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Layers,
   PenLine,
+  Star,
   Printer,
   Tag,
   Trash2,
@@ -207,6 +208,25 @@ export function LabelsPage() {
       setBatchOpen(false);
       setBatch({});
       void queryClient.invalidateQueries({ queryKey: ["print-queue"] });
+    },
+    onError: handleError,
+  });
+
+  /**
+   * Qual modelo a impressão usa quando ninguém indica outro.
+   *
+   * Faltava por completo: "usar como padrão" existia só na criação. Quem
+   * cadastrasse dois modelos sem marcar nenhum ficava sem padrão para sempre —
+   * e a impressão por peça passava a recusar antes de criar o trabalho, o que
+   * na tela parece "não está indo para a fila".
+   */
+  const tornarPadrao = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/api/v1/label-templates/${id}/default`, { method: "PATCH" }),
+    onSuccess: () => {
+      setError(null);
+      setAviso("Modelo definido como padrão. A impressão por peça passa a usá-lo.");
+      void queryClient.invalidateQueries({ queryKey: ["label-templates"] });
     },
     onError: handleError,
   });
@@ -616,6 +636,22 @@ export function LabelsPage() {
                 <PenLine className="h-5 w-5" aria-hidden />
                 Desenhar
               </Button>
+
+              {/*
+                Só aparece em quem NÃO é o padrão: um botão que já está no
+                estado que promete confunde mais do que ajuda.
+              */}
+              {!template.isDefault && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={tornarPadrao.isPending}
+                  onClick={() => tornarPadrao.mutate(template.id)}
+                >
+                  <Star className="h-5 w-5" aria-hidden />
+                  Tornar padrão
+                </Button>
+              )}
 
               <Button
                 type="button"

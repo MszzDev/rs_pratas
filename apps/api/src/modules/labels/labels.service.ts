@@ -79,6 +79,61 @@ export async function saveTemplateElements(params: {
   return salvo;
 }
 
+/**
+ * Marca um modelo como o padrão da empresa.
+ *
+ * Faltava, e o buraco era destes que só aparecem no balcão: "usar como padrão"
+ * existia SÓ na hora de criar o modelo. Quem cadastrasse dois sem marcar
+ * nenhum ficava sem padrão para sempre — e a impressão por peça, que usa o
+ * padrão quando não se indica outro, passava a recusar antes mesmo de criar o
+ * trabalho. A fila ficava vazia, o que parece "não está indo" e é, na verdade,
+ * "foi recusado".
+ *
+ * Só um por empresa: marcar este desmarca o anterior, na mesma transação.
+ * Dois padrões fariam a mesma peça sair com etiqueta diferente conforme a
+ * ordem do banco naquele instante.
+ */
+export async function setDefaultTemplate(params: {
+  templateId: string;
+  request: FastifyRequest;
+}) {
+  const { templateId, request } = params;
+
+  const template = await prisma.labelTemplate.findFirst({
+    where: { id: templateId, companyId: request.user.companyId, deletedAt: null },
+  });
+
+  if (!template) {
+    throw notFound("TEMPLATE_NOT_FOUND", "Modelo de etiqueta não encontrado.");
+  }
+
+  const atualizado = await prisma.$transaction(async (tx) => {
+    await tx.labelTemplate.updateMany({
+      where: { companyId: request.user.companyId, isDefault: true },
+      data: { isDefault: false },
+    });
+
+    return tx.labelTemplate.update({
+      where: { id: template.id },
+      data: { isDefault: true },
+    });
+  });
+
+  await audit(request, {
+    action: "LABEL_TEMPLATE_UPDATE",
+    result: "SUCCESS",
+    userId: request.user.sub,
+    companyId: request.user.companyId,
+    userRoleSnapshot: request.user.role,
+    entityType: "LabelTemplate",
+    entityId: template.id,
+    reason: "modelo definido como padrão da empresa",
+    newData: { code: template.code },
+  });
+
+  return atualizado;
+}
+
 export async function createTemplate(params: {
   input: {
     code: string;
