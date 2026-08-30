@@ -34,6 +34,7 @@ interface Template {
   gapXMm: string;
   gapYMm: string;
   columnsPerRow: number;
+  rollWidthMm: string;
   isDoubleSided: boolean;
   showProductName: boolean;
   showSku: boolean;
@@ -83,6 +84,7 @@ const TAMANHOS_PRONTOS: Array<{
   colunas: number;
   folgaMm: number;
   intervaloMm: number;
+  bobinaMm: number;
   para: string;
   dupla: boolean;
 }> = [
@@ -93,17 +95,19 @@ const TAMANHOS_PRONTOS: Array<{
     colunas: 3,
     folgaMm: 1.2,
     intervaloMm: 3.1,
+    bobinaMm: 104,
     para: "rolo de três colunas, o da loja",
     dupla: false,
   },
   // Comprida e estreita: dobra na argola e o preço fica dos dois lados.
-  { larguraMm: 90, alturaMm: 12, colunas: 1, folgaMm: 0, intervaloMm: 0, para: "joia, dobrada na argola", dupla: true },
+  { larguraMm: 90, alturaMm: 12, colunas: 1, folgaMm: 0, intervaloMm: 0, bobinaMm: 0, para: "joia, dobrada na argola", dupla: true },
   {
     larguraMm: 30,
     alturaMm: 20,
     colunas: 1,
     folgaMm: 0,
     intervaloMm: 0,
+    bobinaMm: 0,
     para: "peça na caixa ou no mostruário",
     dupla: false,
   },
@@ -141,6 +145,7 @@ function comFormatoDoRolo(payload: LabelPayload, modelos: Template[]): LabelPayl
       columnsPerRow: modelo.columnsPerRow,
       gapXMm: Number(modelo.gapXMm),
       gapYMm: Number(modelo.gapYMm),
+      rollWidthMm: Number(modelo.rollWidthMm),
     },
   };
 }
@@ -200,6 +205,7 @@ export function LabelsPage() {
     gapXMm: "0",
     gapYMm: "0",
     columnsPerRow: 1,
+    rollWidthMm: "0",
     isDoubleSided: true,
     showProductName: true,
     showSku: true,
@@ -250,6 +256,7 @@ export function LabelsPage() {
           heightMm: Number(form.heightMm),
           gapXMm: Number(form.gapXMm),
           gapYMm: Number(form.gapYMm),
+          rollWidthMm: Number(form.rollWidthMm),
         },
       }),
     onSuccess: () => {
@@ -487,6 +494,7 @@ export function LabelsPage() {
                         columnsPerRow: tamanho.colunas,
                         gapXMm: String(tamanho.folgaMm),
                         gapYMm: String(tamanho.intervaloMm),
+                        rollWidthMm: String(tamanho.bobinaMm),
                         isDoubleSided: tamanho.dupla,
                       })
                     }
@@ -560,6 +568,15 @@ export function LabelsPage() {
               value={form.gapXMm}
               onChange={(event) => setForm({ ...form, gapXMm: event.target.value })}
               hint="O espaço entre uma coluna e a próxima. Zero se elas se encostam."
+            />
+            <Field
+              label="Largura total do rolo (mm)"
+              type="number"
+              step="0.5"
+              min={0}
+              value={form.rollWidthMm}
+              onChange={(event) => setForm({ ...form, rollWidthMm: event.target.value })}
+              hint="A bobina inteira, com a borda dos dois lados. Tem que ser IGUAL ao papel configurado no driver da impressora, senão o navegador encolhe tudo. Zero calcula pelas colunas."
             />
             <Field
               label="Intervalo entre linhas (mm)"

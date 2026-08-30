@@ -1839,6 +1839,16 @@ model LabelTemplate {
   /// Um é rolo de coluna única, e é o padrão.
   columnsPerRow Int @default(1)
 
+  /// A largura TOTAL da bobina, em milímetros, incluindo a borda de papel
+  /// exposto dos dois lados.
+  ///
+  /// Precisa bater exatamente com o papel configurado no driver da impressora.
+  /// Quando não bate, o navegador escala a página inteira para caber — e o
+  /// desenho sai menor e deslocado, sem nenhum aviso.
+  ///
+  /// Zero significa "calcule pelas colunas", que é o certo quando não há borda.
+  rollWidthMm Decimal @default(0) @db.Decimal(6, 2)
+
   /// Etiqueta de joia costuma ser dupla: dobra ao meio e as duas metades
   /// ficam coladas na argola. A segunda metade repete o código.
   isDoubleSided Boolean @default(true)

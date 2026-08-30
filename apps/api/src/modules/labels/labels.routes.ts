@@ -35,6 +35,8 @@ const createTemplateSchema = z.object({
   gapYMm: z.number().min(0).max(50).optional(),
   /** Quantas etiquetas o rolo tem lado a lado. Um é rolo de coluna única. */
   columnsPerRow: z.number().int().min(1).max(10).optional(),
+  /** A largura total da bobina. Tem que bater com o papel do driver. */
+  rollWidthMm: z.number().min(0).max(300).optional(),
   isDoubleSided: z.boolean().optional(),
   showProductName: z.boolean().optional(),
   showSku: z.boolean().optional(),

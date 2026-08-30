@@ -17,6 +17,8 @@ export interface LabelPayload {
     gapYMm?: number;
     /** Quantas etiquetas o rolo tem lado a lado. Um é rolo de coluna única. */
     columnsPerRow?: number;
+    /** A largura TOTAL da bobina, com a borda dos dois lados. */
+    rollWidthMm?: number;
     isDoubleSided: boolean;
     /** O desenho montado no editor. Nulo usa o formato empilhado de sempre. */
     elements?: LabelElement[] | null;
@@ -75,20 +77,28 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
    * linha e a seguinte, que é o trabalho dela.
    */
   /**
-   * A altura da página é o PASSO do rolo, não o tamanho da etiqueta.
+   * A página tem que ter EXATAMENTE o papel configurado no driver.
    *
-   * No papel, cada etiqueta ocupa o próprio corpo mais o intervalo até a
-   * seguinte. Declarando a página com o corpo apenas, sobra o intervalo a cada
-   * avanço: o desenho e o recorte vão se desencontrando um pouco por linha, e
-   * quando a soma passa de uma etiqueta aparece uma em branco. Depois duas,
-   * depois três — o desperdício cresce ao longo do rolo.
+   * Quando não tem, o navegador escala a página inteira para caber, e o
+   * desenho sai menor e deslocado sem aviso nenhum. Foi o que aconteceu ao
+   * tentar declarar o passo do rolo aqui: o driver dizia 21 mm de altura e o
+   * sistema dizia 24,1, e o Chrome encolheu tudo.
    *
-   * Com o passo completo, cada página corresponde a um recorte e o desvio não
-   * tem como acumular. A etiqueta continua desenhada só no corpo; o intervalo
-   * fica em branco de propósito, porque é onde o papel é picotado.
+   * Quem cuida do intervalo entre uma linha e a próxima é a impressora, ao
+   * avançar até o recorte seguinte. O sistema só desenha o corpo da etiqueta.
    */
-  const alturaDaPagina = rolo ? rolo.heightMm + (rolo.gapYMm ?? 0) : 0;
+  const alturaDaPagina = rolo ? rolo.heightMm : 0;
   const larguraDaPagina = rolo ? larguraDaBobina(rolo) : 0;
+
+  /**
+   * A borda de papel exposto antes da primeira coluna.
+   *
+   * O rolo da loja tem 104 mm, e as três etiquetas de 33 mm com as duas folgas
+   * de 1,2 somam 101,4 — sobram 2,6 mm, 1,3 de cada lado. Sem essa margem o
+   * desenho começa colado na borda e as três colunas saem à esquerda dos
+   * recortes.
+   */
+  const margem = rolo ? Math.max(0, (larguraDaPagina - larguraDoConteudo(rolo)) / 2) : 0;
 
   /**
    * As etiquetas agrupadas em linhas do rolo, uma linha por página.
@@ -124,6 +134,8 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
      * quebrar.
      */
     width: `${larguraDaPagina}mm`,
+    paddingLeft: `${margem}mm`,
+    boxSizing: "border-box" as const,
   };
 
   return (
@@ -139,7 +151,6 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
             style={{
               height: `${alturaDaPagina}mm`,
               columnGap: `${rolo?.gapXMm ?? 0}mm`,
-              // O intervalo fica DEPOIS do corpo, como no papel.
               alignItems: "flex-start",
             }}
           >
@@ -179,6 +190,14 @@ function colunasPorLinha(rolo: LabelPayload["layout"]) {
  * dos dois lados, que a impressora resolve sozinha ao centralizar.
  */
 function larguraDaBobina(rolo: LabelPayload["layout"]) {
+  // A bobina informada vence: é ela que tem que bater com o papel do driver.
+  if (rolo.rollWidthMm && rolo.rollWidthMm > 0) return rolo.rollWidthMm;
+
+  return larguraDoConteudo(rolo);
+}
+
+/** As colunas mais as folgas entre elas, sem a borda de papel exposto. */
+function larguraDoConteudo(rolo: LabelPayload["layout"]) {
   const colunas = colunasPorLinha(rolo);
   const folga = rolo.gapXMm ?? 0;
 
