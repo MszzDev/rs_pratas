@@ -75,7 +75,7 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
    * linha e a seguinte, que é o trabalho dela.
    */
   const alturaDaPagina = rolo ? rolo.heightMm : 0;
-  const larguraDaPagina = rolo ? rolo.widthMm * colunasPorLinha(rolo) : 0;
+  const larguraDaPagina = rolo ? larguraDaBobina(rolo) : 0;
 
   const estiloDaFolha = {
     columnGap: `${rolo?.gapXMm ?? 0}mm`,
@@ -109,6 +109,23 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
  */
 function colunasPorLinha(rolo: LabelPayload["layout"]) {
   return Math.max(1, rolo.columnsPerRow ?? 1);
+}
+
+/**
+ * A largura de uma linha inteira do rolo: as colunas mais as folgas entre elas.
+ *
+ * As folgas contam. Esquecê-las encurta a página e a impressora centraliza o
+ * que recebe — o desenho sai deslocado meio milímetro para a esquerda em cada
+ * coluna, o bastante para o código de barras encostar no picote.
+ *
+ * O que sobra entre esta largura e a bobina física é a borda de papel exposto
+ * dos dois lados, que a impressora resolve sozinha ao centralizar.
+ */
+function larguraDaBobina(rolo: LabelPayload["layout"]) {
+  const colunas = colunasPorLinha(rolo);
+  const folga = rolo.gapXMm ?? 0;
+
+  return rolo.widthMm * colunas + folga * (colunas - 1);
 }
 
 function Label({ payload }: { payload: LabelPayload }) {
