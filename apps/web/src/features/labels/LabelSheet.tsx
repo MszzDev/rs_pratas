@@ -77,6 +77,25 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
   const alturaDaPagina = rolo ? rolo.heightMm : 0;
   const larguraDaPagina = rolo ? larguraDaBobina(rolo) : 0;
 
+  /**
+   * As etiquetas agrupadas em linhas do rolo, uma linha por página.
+   *
+   * Antes a quebra era deixada para o navegador: a folha crescia e ele cortava
+   * a cada altura de página. Só que `break-inside: avoid` protege a etiqueta de
+   * ser partida ao meio, e qualquer fração de milímetro que sobrasse fazia a
+   * linha inteira pular para a página seguinte — deixando a anterior em branco.
+   * Numa impressora térmica, página em branco é **etiqueta em branco**: o rolo
+   * saía com um vazio a cada duas linhas.
+   *
+   * Agrupando aqui, cada página tem exatamente uma linha do rolo e não há
+   * sobra para arredondar.
+   */
+  const porLinha = rolo ? colunasPorLinha(rolo) : 1;
+  const linhas: (typeof etiquetas)[] = [];
+  for (let i = 0; i < etiquetas.length; i += porLinha) {
+    linhas.push(etiquetas.slice(i, i + porLinha));
+  }
+
   const estiloDaFolha = {
     /**
      * A largura da folha, dita explicitamente.
@@ -92,8 +111,6 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
      * quebrar.
      */
     width: `${larguraDaPagina}mm`,
-    columnGap: `${rolo?.gapXMm ?? 0}mm`,
-    rowGap: `${rolo?.gapYMm ?? 0}mm`,
   };
 
   return (
@@ -102,8 +119,19 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
         <style>{`@page { size: ${larguraDaPagina}mm ${alturaDaPagina}mm; margin: 0; }`}</style>
       )}
       <div className="print-sheet" style={estiloDaFolha} aria-hidden>
-        {etiquetas.map((etiqueta) => (
-          <Label key={etiqueta.key} payload={etiqueta.payload} />
+        {linhas.map((linha, indice) => (
+          <div
+            key={linha[0]?.key ?? indice}
+            className="print-row"
+            style={{
+              height: `${alturaDaPagina}mm`,
+              columnGap: `${rolo?.gapXMm ?? 0}mm`,
+            }}
+          >
+            {linha.map((etiqueta) => (
+              <Label key={etiqueta.key} payload={etiqueta.payload} />
+            ))}
+          </div>
         ))}
       </div>
     </>

@@ -291,10 +291,22 @@ html {
     position: absolute;
     left: 0;
     top: 0;
-    display: flex;
-    flex-wrap: wrap;
-    align-content: flex-start;
+    display: block;
     background: #ffffff;
+  }
+
+  /* Uma linha do rolo, e uma página. A quebra é explícita porque deixá-la
+     para o navegador enchia o rolo de etiquetas em branco: bastava uma fração
+     de milímetro sobrar para a linha inteira pular de página. */
+  .print-row {
+    display: flex;
+    flex: 0 0 auto;
+    width: 100%;
+    align-items: stretch;
+  }
+  .print-row:not(:last-child) {
+    break-after: page;
+    page-break-after: always;
   }
 
   .print-label {
