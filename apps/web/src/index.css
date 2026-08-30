@@ -275,16 +275,33 @@ html {
     visibility: visible;
   }
 
+  /* A folha enche a LINHA antes de descer.
+
+     Rolo de etiqueta costuma vir com mais de uma coluna — o da loja tem três
+     de 33 mm lado a lado. Com as etiquetas empilhadas uma por linha, o sistema
+     usava só a primeira coluna e desperdiçava duas a cada avanço: um terço do
+     rolo virava lixo, e o funcionário não tinha como perceber além de ver o
+     rolo acabar rápido demais.
+
+     `wrap` resolve sem precisar saber quantas colunas existem: o navegador
+     encaixa quantas couberem na largura do papel e quebra sozinho. Serve igual
+     para rolo de uma coluna, onde cada etiqueta ocupa a largura toda e a
+     quebra acontece a cada uma. */
   .print-sheet {
     position: absolute;
     left: 0;
     top: 0;
-    display: block;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
     background: #ffffff;
   }
 
   .print-label {
     display: flex;
+    /* Não encolhe nem estica: a etiqueta tem o tamanho do recorte do papel, e
+       deixar o flex ajustá-la faria o desenho sair fora do picote. */
+    flex: 0 0 auto;
     box-sizing: border-box;
     align-items: stretch;
     overflow: hidden;

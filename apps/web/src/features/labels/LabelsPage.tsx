@@ -80,6 +80,7 @@ const TAMANHOS_PRONTOS: Array<{
   para: string;
   dupla: boolean;
 }> = [
+  { larguraMm: 33, alturaMm: 21, para: "etiqueta pequena, rolo de várias colunas", dupla: false },
   // Comprida e estreita: dobra na argola e o preço fica dos dois lados.
   { larguraMm: 90, alturaMm: 12, para: "joia, dobrada na argola", dupla: true },
   { larguraMm: 30, alturaMm: 20, para: "peça na caixa ou no mostruário", dupla: false },
