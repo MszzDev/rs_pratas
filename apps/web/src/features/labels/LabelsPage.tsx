@@ -806,6 +806,23 @@ export function LabelsPage() {
         </ul>
       )}
 
+      {/*
+        Sem loja escolhida, a seção não mostrava NADA — nem lista, nem aviso.
+        Só o título e espaço em branco.
+
+        A fila é por loja, e a etiqueta some da vista de quem está olhando a
+        loja errada, ou nenhuma. Isso aparece como "não está indo para a fila"
+        quando, na verdade, o trabalho está lá e a tela é que não diz onde
+        procurar. Foi exatamente o que aconteceu: a etiqueta estava enfileirada
+        no Quiosque Elis Maas e a tela mostrava vazio.
+      */}
+      {!storeId && (
+        <Alert tone="info">
+          Escolha a loja acima para ver a fila. Cada loja tem a sua — a etiqueta vai para a
+          impressora da loja onde foi pedida.
+        </Alert>
+      )}
+
       {storeId && queue.data?.length === 0 && (
         <Alert tone="success">Nada esperando impressão nesta loja.</Alert>
       )}
