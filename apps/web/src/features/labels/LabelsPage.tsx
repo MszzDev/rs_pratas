@@ -82,6 +82,7 @@ const TAMANHOS_PRONTOS: Array<{
   alturaMm: number;
   colunas: number;
   folgaMm: number;
+  intervaloMm: number;
   para: string;
   dupla: boolean;
 }> = [
@@ -91,16 +92,18 @@ const TAMANHOS_PRONTOS: Array<{
     alturaMm: 21,
     colunas: 3,
     folgaMm: 1.2,
+    intervaloMm: 3.1,
     para: "rolo de três colunas, o da loja",
     dupla: false,
   },
   // Comprida e estreita: dobra na argola e o preço fica dos dois lados.
-  { larguraMm: 90, alturaMm: 12, colunas: 1, folgaMm: 0, para: "joia, dobrada na argola", dupla: true },
+  { larguraMm: 90, alturaMm: 12, colunas: 1, folgaMm: 0, intervaloMm: 0, para: "joia, dobrada na argola", dupla: true },
   {
     larguraMm: 30,
     alturaMm: 20,
     colunas: 1,
     folgaMm: 0,
+    intervaloMm: 0,
     para: "peça na caixa ou no mostruário",
     dupla: false,
   },
@@ -483,6 +486,7 @@ export function LabelsPage() {
                         heightMm: String(tamanho.alturaMm),
                         columnsPerRow: tamanho.colunas,
                         gapXMm: String(tamanho.folgaMm),
+                        gapYMm: String(tamanho.intervaloMm),
                         isDoubleSided: tamanho.dupla,
                       })
                     }
@@ -556,6 +560,15 @@ export function LabelsPage() {
               value={form.gapXMm}
               onChange={(event) => setForm({ ...form, gapXMm: event.target.value })}
               hint="O espaço entre uma coluna e a próxima. Zero se elas se encostam."
+            />
+            <Field
+              label="Intervalo entre linhas (mm)"
+              type="number"
+              step="0.1"
+              min={0}
+              value={form.gapYMm}
+              onChange={(event) => setForm({ ...form, gapYMm: event.target.value })}
+              hint="O espaço entre uma linha de etiquetas e a seguinte. Errar aqui faz o desvio ir somando até sair etiqueta em branco."
             />
           </div>
 

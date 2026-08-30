@@ -74,7 +74,20 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
    * resolve os dois de uma vez — a impressora avança sozinha a folga entre uma
    * linha e a seguinte, que é o trabalho dela.
    */
-  const alturaDaPagina = rolo ? rolo.heightMm : 0;
+  /**
+   * A altura da página é o PASSO do rolo, não o tamanho da etiqueta.
+   *
+   * No papel, cada etiqueta ocupa o próprio corpo mais o intervalo até a
+   * seguinte. Declarando a página com o corpo apenas, sobra o intervalo a cada
+   * avanço: o desenho e o recorte vão se desencontrando um pouco por linha, e
+   * quando a soma passa de uma etiqueta aparece uma em branco. Depois duas,
+   * depois três — o desperdício cresce ao longo do rolo.
+   *
+   * Com o passo completo, cada página corresponde a um recorte e o desvio não
+   * tem como acumular. A etiqueta continua desenhada só no corpo; o intervalo
+   * fica em branco de propósito, porque é onde o papel é picotado.
+   */
+  const alturaDaPagina = rolo ? rolo.heightMm + (rolo.gapYMm ?? 0) : 0;
   const larguraDaPagina = rolo ? larguraDaBobina(rolo) : 0;
 
   /**
@@ -126,6 +139,8 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
             style={{
               height: `${alturaDaPagina}mm`,
               columnGap: `${rolo?.gapXMm ?? 0}mm`,
+              // O intervalo fica DEPOIS do corpo, como no papel.
+              alignItems: "flex-start",
             }}
           >
             {linha.map((etiqueta) => (
