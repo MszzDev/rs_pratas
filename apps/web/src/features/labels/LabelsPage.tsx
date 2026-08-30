@@ -106,6 +106,42 @@ const TAMANHOS_PRONTOS: Array<{
   },
 ];
 
+/**
+ * Completa o formato do rolo num trabalho antigo.
+ *
+ * O `payload` é congelado quando a etiqueta entra na fila, para o preço sair
+ * como estava quando foi pedida. O efeito colateral é que um trabalho criado
+ * antes de o sistema conhecer rolo de várias colunas carrega essa informação
+ * ausente para sempre — e imprime numa coluna só, desperdiçando duas de cada
+ * três etiquetas, mesmo depois do modelo estar certo.
+ *
+ * Aqui o formato é completado a partir do modelo atual. Só o formato: preço,
+ * nome e código continuam vindo congelados, que é o ponto de congelar.
+ */
+function comFormatoDoRolo(payload: LabelPayload, modelos: Template[]): LabelPayload {
+  if (payload.layout.columnsPerRow !== undefined) return payload;
+
+  // Casa pelo tamanho: é o que identifica o rolo, e o trabalho não guarda de
+  // qual modelo veio.
+  const modelo = modelos.find(
+    (m) =>
+      Number(m.widthMm) === payload.layout.widthMm &&
+      Number(m.heightMm) === payload.layout.heightMm,
+  );
+
+  if (!modelo) return payload;
+
+  return {
+    ...payload,
+    layout: {
+      ...payload.layout,
+      columnsPerRow: modelo.columnsPerRow,
+      gapXMm: Number(modelo.gapXMm),
+      gapYMm: Number(modelo.gapYMm),
+    },
+  };
+}
+
 /** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
 const keyOf = (row: { productId: string; variationId: string | null }) =>
   `${row.productId}:${row.variationId ?? ""}`;
@@ -779,13 +815,11 @@ export function LabelsPage() {
             type="button"
             onClick={() => {
               const fila = (queue.data ?? []).filter((job) => job.type === "ETIQUETA");
-              setParaImprimir(
-                fila.map((job) => ({
-                  jobId: job.id,
-                  copies: job.copies,
-                  payload: job.payload,
-                })),
-              );
+              setParaImprimir(fila.map((job) => ({
+                jobId: job.id,
+                copies: job.copies,
+                payload: comFormatoDoRolo(job.payload, templates.data ?? []),
+              })));
 
               // O navegador precisa ter a folha montada antes de abrir o
               // diálogo; o próximo quadro garante que o React já pintou.
