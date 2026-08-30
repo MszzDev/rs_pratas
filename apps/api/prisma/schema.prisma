@@ -1817,6 +1817,28 @@ model LabelTemplate {
   widthMm  Decimal @db.Decimal(6, 2)
   heightMm Decimal @db.Decimal(6, 2)
 
+  /// O espaço entre uma etiqueta e a próxima no rolo, em milímetros.
+  ///
+  /// Rolo de etiqueta não é papel contínuo: entre um recorte e o seguinte
+  /// existe uma folga, e a impressora avança essa folga inteira a cada
+  /// etiqueta. Sem contar com ela, o sistema empilha os desenhos colados e o
+  /// erro se acumula — a terceira etiqueta já sai em cima do picote.
+  ///
+  /// `gapX` é a folga entre colunas, `gapY` entre linhas. Zero é o certo para
+  /// rolo contínuo.
+  gapXMm Decimal @default(0) @db.Decimal(6, 2)
+  gapYMm Decimal @default(0) @db.Decimal(6, 2)
+
+  /// Quantas etiquetas o rolo tem lado a lado.
+  ///
+  /// O modelo guarda o tamanho de UMA etiqueta, que é como o dono pensa ao
+  /// cadastrar. Mas a página enviada à impressora precisa ter a largura da
+  /// bobina inteira: com a largura de uma só, o navegador quebra a linha depois
+  /// da primeira coluna e duas de cada três etiquetas saem em branco.
+  ///
+  /// Um é rolo de coluna única, e é o padrão.
+  columnsPerRow Int @default(1)
+
   /// Etiqueta de joia costuma ser dupla: dobra ao meio e as duas metades
   /// ficam coladas na argola. A segunda metade repete o código.
   isDoubleSided Boolean @default(true)

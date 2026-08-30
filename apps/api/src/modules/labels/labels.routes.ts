@@ -24,6 +24,17 @@ const createTemplateSchema = z.object({
   /** Em milímetros. Etiqueta de joia costuma ficar entre 10 e 60 mm. */
   widthMm: z.number().min(5).max(200),
   heightMm: z.number().min(5).max(200),
+  /**
+   * A folga entre uma etiqueta e a próxima no rolo.
+   *
+   * Sem ela o sistema empilha os desenhos colados, e como a impressora avança
+   * etiqueta + folga a cada avanço, o erro se acumula: a terceira já sai em
+   * cima do picote. Zero é o certo para rolo contínuo.
+   */
+  gapXMm: z.number().min(0).max(50).optional(),
+  gapYMm: z.number().min(0).max(50).optional(),
+  /** Quantas etiquetas o rolo tem lado a lado. Um é rolo de coluna única. */
+  columnsPerRow: z.number().int().min(1).max(10).optional(),
   isDoubleSided: z.boolean().optional(),
   showProductName: z.boolean().optional(),
   showSku: z.boolean().optional(),

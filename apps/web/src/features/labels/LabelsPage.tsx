@@ -31,6 +31,9 @@ interface Template {
   name: string;
   widthMm: string;
   heightMm: string;
+  gapXMm: string;
+  gapYMm: string;
+  columnsPerRow: number;
   isDoubleSided: boolean;
   showProductName: boolean;
   showSku: boolean;
@@ -77,13 +80,30 @@ interface BatchRow {
 const TAMANHOS_PRONTOS: Array<{
   larguraMm: number;
   alturaMm: number;
+  colunas: number;
+  folgaMm: number;
   para: string;
   dupla: boolean;
 }> = [
-  { larguraMm: 33, alturaMm: 21, para: "etiqueta pequena, rolo de várias colunas", dupla: false },
+  // O rolo da loja: três colunas de 33 mm, com 1,2 mm de folga entre elas.
+  {
+    larguraMm: 33,
+    alturaMm: 21,
+    colunas: 3,
+    folgaMm: 1.2,
+    para: "rolo de três colunas, o da loja",
+    dupla: false,
+  },
   // Comprida e estreita: dobra na argola e o preço fica dos dois lados.
-  { larguraMm: 90, alturaMm: 12, para: "joia, dobrada na argola", dupla: true },
-  { larguraMm: 30, alturaMm: 20, para: "peça na caixa ou no mostruário", dupla: false },
+  { larguraMm: 90, alturaMm: 12, colunas: 1, folgaMm: 0, para: "joia, dobrada na argola", dupla: true },
+  {
+    larguraMm: 30,
+    alturaMm: 20,
+    colunas: 1,
+    folgaMm: 0,
+    para: "peça na caixa ou no mostruário",
+    dupla: false,
+  },
 ];
 
 /** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
@@ -138,6 +158,9 @@ export function LabelsPage() {
     name: "",
     widthMm: "50",
     heightMm: "12",
+    gapXMm: "0",
+    gapYMm: "0",
+    columnsPerRow: 1,
     isDoubleSided: true,
     showProductName: true,
     showSku: true,
@@ -186,6 +209,8 @@ export function LabelsPage() {
           ...form,
           widthMm: Number(form.widthMm),
           heightMm: Number(form.heightMm),
+          gapXMm: Number(form.gapXMm),
+          gapYMm: Number(form.gapYMm),
         },
       }),
     onSuccess: () => {
@@ -420,12 +445,15 @@ export function LabelsPage() {
                         ...form,
                         widthMm: String(tamanho.larguraMm),
                         heightMm: String(tamanho.alturaMm),
+                        columnsPerRow: tamanho.colunas,
+                        gapXMm: String(tamanho.folgaMm),
                         isDoubleSided: tamanho.dupla,
                       })
                     }
                   >
                     <span className="font-semibold">
                       {tamanho.larguraMm} × {tamanho.alturaMm} mm
+                      {tamanho.colunas > 1 ? ` · ${tamanho.colunas} colunas` : ""}
                     </span>
                     <span className="text-sm font-normal opacity-80">{tamanho.para}</span>
                   </Button>
@@ -470,6 +498,28 @@ export function LabelsPage() {
               required
               value={form.heightMm}
               onChange={(event) => setForm({ ...form, heightMm: event.target.value })}
+            />
+            <Field
+              label="Colunas do rolo"
+              type="number"
+              step="1"
+              min={1}
+              max={10}
+              required
+              value={String(form.columnsPerRow)}
+              onChange={(event) =>
+                setForm({ ...form, columnsPerRow: Math.max(1, Number(event.target.value) || 1) })
+              }
+              hint="Quantas etiquetas vêm lado a lado. Errar aqui faz sair etiqueta em branco."
+            />
+            <Field
+              label="Folga entre colunas (mm)"
+              type="number"
+              step="0.1"
+              min={0}
+              value={form.gapXMm}
+              onChange={(event) => setForm({ ...form, gapXMm: event.target.value })}
+              hint="O espaço entre uma coluna e a próxima. Zero se elas se encostam."
             />
           </div>
 

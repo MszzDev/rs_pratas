@@ -12,6 +12,11 @@ export interface LabelPayload {
   layout: {
     widthMm: number;
     heightMm: number;
+    /** A folga entre uma etiqueta e a próxima no rolo, em milímetros. */
+    gapXMm?: number;
+    gapYMm?: number;
+    /** Quantas etiquetas o rolo tem lado a lado. Um é rolo de coluna única. */
+    columnsPerRow?: number;
     isDoubleSided: boolean;
     /** O desenho montado no editor. Nulo usa o formato empilhado de sempre. */
     elements?: LabelElement[] | null;
@@ -47,13 +52,63 @@ export function LabelSheet({ labels }: { labels: LabelToPrint[] }) {
     })),
   );
 
+  /**
+   * O rolo desta impressão.
+   *
+   * Vem da primeira etiqueta porque a folha inteira é do mesmo rolo: não faz
+   * sentido misturar modelos de tamanhos diferentes numa impressão só.
+   */
+  const rolo = etiquetas[0]?.payload.layout;
+
+  /**
+   * O tamanho da PÁGINA, declarado pelo sistema.
+   *
+   * Sem isso o navegador usa o papel escolhido no diálogo de impressão, e
+   * qualquer diferença entre esse papel e a etiqueta faz o conteúdo transbordar
+   * para uma página nova. Numa impressora térmica, página nova é **etiqueta
+   * nova**: saem etiquetas em branco no meio do lote, e o desenho vai
+   * escorregando para fora do picote.
+   *
+   * Aconteceu na loja: o lote saía com brancas intercaladas e o texto subindo
+   * até cair na dobra. Declarar a página do tamanho exato de uma linha do rolo
+   * resolve os dois de uma vez — a impressora avança sozinha a folga entre uma
+   * linha e a seguinte, que é o trabalho dela.
+   */
+  const alturaDaPagina = rolo ? rolo.heightMm : 0;
+  const larguraDaPagina = rolo ? rolo.widthMm * colunasPorLinha(rolo) : 0;
+
+  const estiloDaFolha = {
+    columnGap: `${rolo?.gapXMm ?? 0}mm`,
+    rowGap: `${rolo?.gapYMm ?? 0}mm`,
+  };
+
   return (
-    <div className="print-sheet" aria-hidden>
-      {etiquetas.map((etiqueta) => (
-        <Label key={etiqueta.key} payload={etiqueta.payload} />
-      ))}
-    </div>
+    <>
+      {rolo && (
+        <style>{`@page { size: ${larguraDaPagina}mm ${alturaDaPagina}mm; margin: 0; }`}</style>
+      )}
+      <div className="print-sheet" style={estiloDaFolha} aria-hidden>
+        {etiquetas.map((etiqueta) => (
+          <Label key={etiqueta.key} payload={etiqueta.payload} />
+        ))}
+      </div>
+    </>
   );
+}
+
+/**
+ * Quantas etiquetas cabem lado a lado numa linha do rolo.
+ *
+ * O modelo guarda o tamanho de UMA etiqueta, não a largura da bobina — é assim
+ * que o dono pensa ao cadastrar ("minha etiqueta é 33 por 21"). Mas a página
+ * precisa ter a largura da bobina inteira, senão o navegador quebra a linha
+ * depois da primeira coluna e duas de cada três etiquetas saem em branco.
+ *
+ * `columnsPerRow` diz quantas colunas o rolo tem. Um significa rolo de coluna
+ * única, e a conta continua valendo sem caso especial.
+ */
+function colunasPorLinha(rolo: LabelPayload["layout"]) {
+  return Math.max(1, rolo.columnsPerRow ?? 1);
 }
 
 function Label({ payload }: { payload: LabelPayload }) {

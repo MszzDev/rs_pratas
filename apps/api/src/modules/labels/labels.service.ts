@@ -140,6 +140,9 @@ export async function createTemplate(params: {
     name: string;
     widthMm: number;
     heightMm: number;
+    gapXMm?: number | undefined;
+    gapYMm?: number | undefined;
+    columnsPerRow?: number | undefined;
     isDoubleSided?: boolean | undefined;
     showProductName?: boolean | undefined;
     showSku?: boolean | undefined;
@@ -176,6 +179,9 @@ export async function createTemplate(params: {
         name: input.name,
         widthMm: input.widthMm,
         heightMm: input.heightMm,
+        gapXMm: input.gapXMm ?? 0,
+        gapYMm: input.gapYMm ?? 0,
+        columnsPerRow: input.columnsPerRow ?? 1,
         isDoubleSided: input.isDoubleSided ?? true,
         showProductName: input.showProductName ?? true,
         showSku: input.showSku ?? true,
@@ -313,6 +319,9 @@ function buildLabelPayload(params: {
     isDoubleSided: boolean;
     widthMm: Prisma.Decimal;
     heightMm: Prisma.Decimal;
+    gapXMm: Prisma.Decimal;
+    gapYMm: Prisma.Decimal;
+    columnsPerRow: number;
     /** O desenho montado no editor, ou nulo para o formato empilhado. */
     elements: Prisma.JsonValue | null;
   };
@@ -356,6 +365,13 @@ function buildLabelPayload(params: {
     layout: {
       widthMm: Number(template.widthMm),
       heightMm: Number(template.heightMm),
+      /**
+       * A folga entre etiquetas vai junto do trabalho pelo mesmo motivo do
+       * desenho: é o rolo que estava valendo quando a etiqueta foi pedida.
+       */
+      gapXMm: Number(template.gapXMm),
+      gapYMm: Number(template.gapYMm),
+      columnsPerRow: template.columnsPerRow,
       isDoubleSided: template.isDoubleSided,
       /**
        * O desenho que o dono montou, quando existe.
