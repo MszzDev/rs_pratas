@@ -49,6 +49,7 @@ const ROLO_DE_TESTE = {
   intervaloYMm: 3.1,
   bobinaMm: 104,
   dupla: false,
+  elementos: null,
 };
 
 export function LabelPrinterSettings() {

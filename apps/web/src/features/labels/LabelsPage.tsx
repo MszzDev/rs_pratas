@@ -228,6 +228,8 @@ async function imprimirDiretoNaEtiqueta(etiquetas: LabelToPrint[]): Promise<bool
     intervaloYMm: primeira.gapYMm ?? 0,
     bobinaMm: primeira.rollWidthMm ?? 0,
     dupla: primeira.isDoubleSided,
+    // O desenho manda: se o dono posicionou o tamanho da peça, o tamanho sai.
+    elementos: primeira.elements ?? null,
   };
 
   // Uma cópia é uma etiqueta de verdade no papel, não um número num comando.

@@ -1,3 +1,4 @@
+import type { LabelElement } from "@rs-pratas/shared";
 import { barcodeModules, encodeCode128 } from "./barcode";
 
 /**
@@ -47,6 +48,17 @@ export interface RoloDeEtiqueta {
    * uma etiqueta com preço só de um lado é ilegível na metade das vezes.
    */
   dupla: boolean;
+  /**
+   * O desenho montado no editor, quando existe.
+   *
+   * Manda no que aparece e onde: se o dono posicionou o tamanho da peça, o
+   * tamanho sai; se não posicionou, não sai. Antes este gerador desenhava um
+   * layout fixo e ignorava o editor — o dono montava a etiqueta, salvava, e o
+   * papel saía diferente do que ele tinha acabado de ver na tela.
+   *
+   * Nulo usa o formato empilhado de sempre.
+   */
+  elementos: LabelElement[] | null;
 }
 
 export interface ConteudoDaEtiqueta {
@@ -149,6 +161,11 @@ function desenharUmLado(
   const escala = rolo.dupla ? 0.72 : 1;
   const alturaEtiquetaMm = alturaPt / PONTOS_POR_MM;
 
+  if (rolo.elementos && rolo.elementos.length > 0) {
+    desenharPeloDesenho(ctx, etiqueta, rolo.elementos, inicio, largura, escala);
+    return;
+  }
+
   {
     let y = Math.round(1 * PONTOS_POR_MM);
 
@@ -184,6 +201,81 @@ function desenharUmLado(
       ctx.textAlign = "center";
       escreverCortando(ctx, `R$ ${etiqueta.preco}`, centro, y, util);
     }
+  }
+}
+
+/**
+ * Desenha a etiqueta seguindo o que o dono montou no editor.
+ *
+ * Cada elemento traz a própria posição e tamanho em milímetros, e é isso que a
+ * impressora recebe — a mesma unidade da régua da tela. O que se vê no editor é
+ * o que sai no papel, sem conversão no meio do caminho.
+ *
+ * Na etiqueta dupla o desenho é encolhido para caber em cada metade, porque o
+ * dono monta pensando na etiqueta inteira e a dobra corta o espaço ao meio.
+ */
+function desenharPeloDesenho(
+  ctx: CanvasRenderingContext2D,
+  etiqueta: ConteudoDaEtiqueta,
+  elementos: LabelElement[],
+  inicio: number,
+  largura: number,
+  escala: number,
+): void {
+  const pt = (mm: number) => mm * escala * PONTOS_POR_MM;
+
+  for (const elemento of elementos) {
+    const x = inicio + pt(elemento.xMm);
+    const y = pt(elemento.yMm);
+    const w = Math.min(pt(elemento.larguraMm), largura - pt(elemento.xMm));
+    if (w <= 0) continue;
+
+    if (elemento.campo === "LINHA") {
+      ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.max(1, Math.round(pt(0.3))));
+      continue;
+    }
+
+    if (elemento.campo === "CODIGO_BARRAS") {
+      if (!etiqueta.codigoDeBarras) continue;
+      const altura = Math.round(pt(elemento.alturaMm ?? 6));
+      desenharBarras(ctx, etiqueta.codigoDeBarras, x, y, w, altura);
+      continue;
+    }
+
+    const valor = valorDoCampo(elemento, etiqueta);
+    if (!valor) continue;
+
+    /* `tamanhoMm` é a altura da letra, e é assim que o dono pensa: "essa letra
+       de dois milímetros". O canvas mede fonte da mesma forma. */
+    ctx.font = `${elemento.negrito ? "bold " : ""}${Math.round(pt(elemento.tamanhoMm))}px Arial, sans-serif`;
+    ctx.textAlign = elemento.alinhamento;
+
+    const ancora =
+      elemento.alinhamento === "left" ? x : elemento.alinhamento === "right" ? x + w : x + w / 2;
+
+    escreverCortando(ctx, valor, ancora, y, w);
+  }
+}
+
+/** O que cada elemento mostra, vindo do conteúdo da peça. */
+function valorDoCampo(elemento: LabelElement, etiqueta: ConteudoDaEtiqueta): string | null {
+  switch (elemento.campo) {
+    case "NOME":
+      return etiqueta.nome;
+    case "SKU":
+      return etiqueta.sku;
+    case "PRECO":
+      return etiqueta.preco ? `R$ ${etiqueta.preco}` : null;
+    case "TAMANHO":
+      return etiqueta.tamanho ? `Tam. ${etiqueta.tamanho}` : null;
+    case "PESO":
+      return null;
+    case "TEXTO":
+      return elemento.texto ?? null;
+    case "LOGO":
+      return "RS PRATAS";
+    default:
+      return null;
   }
 }
 
