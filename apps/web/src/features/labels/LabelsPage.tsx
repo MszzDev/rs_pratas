@@ -84,6 +84,18 @@ interface BatchRow {
  * tamanho errado antes de alguém reparar. Os campos continuam abertos —
  * o atalho preenche, não decide.
  */
+/**
+ * Os rolos que a loja usa, com as medidas já conferidas no papel.
+ *
+ * Existem porque acertar isso na mão custou um dia inteiro: são seis números
+ * que precisam bater com o rolo físico ao mesmo tempo, e errar qualquer um
+ * imprime torto ou gasta etiqueta em branco sem dizer o motivo.
+ *
+ * `bobinaMm` é a largura TOTAL da tira, com a borda de papel exposto dos dois
+ * lados — é o único número que não dá para deduzir do resto, porque depende de
+ * como o fornecedor cortou. Zero manda o sistema calcular pelas colunas, o que
+ * é o certo quando as etiquetas ocupam a tira inteira.
+ */
 const TAMANHOS_PRONTOS: Array<{
   larguraMm: number;
   alturaMm: number;
@@ -94,7 +106,7 @@ const TAMANHOS_PRONTOS: Array<{
   para: string;
   dupla: boolean;
 }> = [
-  // O rolo da loja: três colunas de 33 mm, com 1,2 mm de folga entre elas.
+  // O rolo que está na impressora hoje, medido e conferido no papel.
   {
     larguraMm: 33,
     alturaMm: 21,
@@ -102,17 +114,49 @@ const TAMANHOS_PRONTOS: Array<{
     folgaMm: 1.2,
     intervaloMm: 3.1,
     bobinaMm: 104,
-    para: "rolo de três colunas, o da loja",
+    para: "o rolo da loja, três colunas",
+    dupla: false,
+  },
+  // As mesmas etiquetas em rolo de menos colunas. A bobina fica em zero: sem
+  // o rolo na mão não dá para saber a borda, e o sistema calcula pelas colunas
+  // até alguém medir.
+  {
+    larguraMm: 33,
+    alturaMm: 21,
+    colunas: 2,
+    folgaMm: 1.2,
+    intervaloMm: 3.1,
+    bobinaMm: 0,
+    para: "mesma etiqueta, rolo de duas colunas",
+    dupla: false,
+  },
+  {
+    larguraMm: 33,
+    alturaMm: 21,
+    colunas: 1,
+    folgaMm: 0,
+    intervaloMm: 3.1,
+    bobinaMm: 0,
+    para: "mesma etiqueta, rolo de coluna única",
     dupla: false,
   },
   // Comprida e estreita: dobra na argola e o preço fica dos dois lados.
-  { larguraMm: 90, alturaMm: 12, colunas: 1, folgaMm: 0, intervaloMm: 0, bobinaMm: 0, para: "joia, dobrada na argola", dupla: true },
+  {
+    larguraMm: 90,
+    alturaMm: 12,
+    colunas: 1,
+    folgaMm: 0,
+    intervaloMm: 3,
+    bobinaMm: 0,
+    para: "joia, dobrada na argola",
+    dupla: true,
+  },
   {
     larguraMm: 30,
     alturaMm: 20,
     colunas: 1,
     folgaMm: 0,
-    intervaloMm: 0,
+    intervaloMm: 3,
     bobinaMm: 0,
     para: "peça na caixa ou no mostruário",
     dupla: false,
@@ -183,6 +227,7 @@ async function imprimirDiretoNaEtiqueta(etiquetas: LabelToPrint[]): Promise<bool
     folgaXMm: primeira.gapXMm ?? 0,
     intervaloYMm: primeira.gapYMm ?? 0,
     bobinaMm: primeira.rollWidthMm ?? 0,
+    dupla: primeira.isDoubleSided,
   };
 
   // Uma cópia é uma etiqueta de verdade no papel, não um número num comando.
@@ -198,6 +243,82 @@ async function imprimirDiretoNaEtiqueta(etiquetas: LabelToPrint[]): Promise<bool
 
   await imprimirBytesNaEtiqueta(montarEtiquetasTspl(conteudos, rolo));
   return true;
+}
+
+/**
+ * O que configurar no driver do Windows para este modelo.
+ *
+ * O sistema e o driver precisam concordar sobre o papel: quando não concordam,
+ * o navegador escala a página inteira para caber, em silêncio, e o desenho sai
+ * menor e deslocado sem nenhum aviso. Descobrir isso custou um dia — a conta
+ * estava certa nos dois lugares, só que eram contas diferentes.
+ *
+ * Mostrar os números aqui, calculados a partir do que foi digitado, evita que
+ * alguém tenha que refazer a conta de cabeça na frente da impressora.
+ *
+ * Só aparece na impressão pelo navegador. No caminho direto pela rede o driver
+ * não participa, e é por isso que ele é o preferido.
+ */
+function ConfiguracaoDoDriver({
+  larguraMm,
+  alturaMm,
+  colunas,
+  folgaMm,
+  intervaloMm,
+  bobinaMm,
+}: {
+  larguraMm: number;
+  alturaMm: number;
+  colunas: number;
+  folgaMm: number;
+  intervaloMm: number;
+  bobinaMm: number;
+}) {
+  if (larguraMm <= 0 || alturaMm <= 0) return null;
+
+  const conteudo = larguraMm * colunas + folgaMm * Math.max(0, colunas - 1);
+  const bobina = bobinaMm > 0 ? bobinaMm : conteudo;
+  const borda = (bobina - conteudo) / 2;
+
+  return (
+    <div className="mt-5 rounded-md border border-border bg-bg p-3">
+      <p className="text-sm font-medium text-text-primary">
+        No driver da impressora, para este rolo:
+      </p>
+
+      <dl className="mt-2 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+        <div className="flex justify-between gap-3 sm:contents">
+          <dt className="text-text-secondary">Tamanho do papel</dt>
+          <dd className="font-medium text-text-primary">
+            {bobina.toFixed(1)} × {alturaMm.toFixed(1)} mm
+          </dd>
+        </div>
+        <div className="flex justify-between gap-3 sm:contents">
+          <dt className="text-text-secondary">Altura do intervalo</dt>
+          <dd className="font-medium text-text-primary">{intervaloMm.toFixed(1)} mm</dd>
+        </div>
+        <div className="flex justify-between gap-3 sm:contents">
+          <dt className="text-text-secondary">Tipo de mídia</dt>
+          <dd className="font-medium text-text-primary">Etiquetas com intervalos</dd>
+        </div>
+        <div className="flex justify-between gap-3 sm:contents">
+          <dt className="text-text-secondary">Ação pós-impressão</dt>
+          <dd className="font-medium text-text-primary">Nenhuma</dd>
+        </div>
+      </dl>
+
+      <p className="mt-2 text-sm text-text-secondary">
+        Sobram <strong>{borda.toFixed(2)} mm</strong> de papel exposto em cada lado
+        {colunas > 1 ? `, e ${colunas} colunas cabem na tira` : ""}.
+        {borda < 0 && " O valor está negativo: a bobina informada é menor que as etiquetas somadas."}
+      </p>
+
+      <p className="mt-2 text-sm text-text-secondary">
+        Imprimindo direto pela rede, nada disso é necessário — o sistema manda a medida
+        para a impressora.
+      </p>
+    </div>
+  );
 }
 
 /** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
@@ -527,11 +648,12 @@ export function LabelsPage() {
               {TAMANHOS_PRONTOS.map((tamanho) => {
                 const escolhido =
                   form.widthMm === String(tamanho.larguraMm) &&
-                  form.heightMm === String(tamanho.alturaMm);
+                  form.heightMm === String(tamanho.alturaMm) &&
+                  form.columnsPerRow === tamanho.colunas;
 
                 return (
                   <Button
-                    key={`${tamanho.larguraMm}x${tamanho.alturaMm}`}
+                    key={`${tamanho.larguraMm}x${tamanho.alturaMm}x${tamanho.colunas}`}
                     type="button"
                     variant={escolhido ? "primary" : "outline"}
                     aria-pressed={escolhido}
@@ -638,6 +760,15 @@ export function LabelsPage() {
               hint="O espaço entre uma linha de etiquetas e a seguinte. Errar aqui faz o desvio ir somando até sair etiqueta em branco."
             />
           </div>
+
+          <ConfiguracaoDoDriver
+            larguraMm={Number(form.widthMm) || 0}
+            alturaMm={Number(form.heightMm) || 0}
+            colunas={form.columnsPerRow}
+            folgaMm={Number(form.gapXMm) || 0}
+            intervaloMm={Number(form.gapYMm) || 0}
+            bobinaMm={Number(form.rollWidthMm) || 0}
+          />
 
           <fieldset className="mt-5">
             <legend className="mb-2 text-sm font-medium text-text-primary">

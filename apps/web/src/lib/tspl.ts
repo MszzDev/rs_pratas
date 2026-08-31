@@ -38,6 +38,15 @@ export interface RoloDeEtiqueta {
   intervaloYMm: number;
   /** A bobina inteira, com a borda de papel exposto dos dois lados. */
   bobinaMm: number;
+  /**
+   * Etiqueta que dobra ao meio.
+   *
+   * Etiqueta de joia comprida é dobrada na argola, e as duas metades ficam
+   * coladas costas com costas. Quem olha a peça na vitrine vê um lado; quem a
+   * pega e vira vê o outro. Por isso o conteúdo é repetido nas duas metades —
+   * uma etiqueta com preço só de um lado é ilegível na metade das vezes.
+   */
+  dupla: boolean;
 }
 
 export interface ConteudoDaEtiqueta {
@@ -90,26 +99,67 @@ function desenharLinha(etiquetas: ConteudoDaEtiqueta[], rolo: RoloDeEtiqueta): I
   const larguraEtiquetaPt = Math.round(rolo.larguraMm * PONTOS_POR_MM);
   const passoPt = Math.round((rolo.larguraMm + rolo.folgaXMm) * PONTOS_POR_MM);
 
-  /* Folga interna generosa: rolo de várias colunas nunca fica perfeitamente
-     alinhado, e o desenho precisa tolerar meio milímetro de desvio em vez de
-     exigir do papel uma precisão que ele não dá. */
-  const margemPt = Math.round(2 * PONTOS_POR_MM);
-
   etiquetas.forEach((etiqueta, coluna) => {
-    const x0 = bordaPt + coluna * passoPt + margemPt;
-    const util = larguraEtiquetaPt - margemPt * 2;
-    const centro = x0 + util / 2;
+    const inicioDaEtiqueta = bordaPt + coluna * passoPt;
 
+    if (!rolo.dupla) {
+      desenharUmLado(ctx, etiqueta, inicioDaEtiqueta, larguraEtiquetaPt, alturaPt, rolo);
+      return;
+    }
+
+    /* A dobra fica no meio: cada metade recebe o mesmo conteúdo, e uma linha
+       pontilhada marca onde vincar. Sem a marca, quem monta a etiqueta dobra
+       no olho e as duas metades saem desencontradas. */
+    const metade = Math.floor(larguraEtiquetaPt / 2);
+
+    desenharUmLado(ctx, etiqueta, inicioDaEtiqueta, metade, alturaPt, rolo);
+    desenharUmLado(ctx, etiqueta, inicioDaEtiqueta + metade, metade, alturaPt, rolo);
+
+    const dobra = inicioDaEtiqueta + metade;
+    for (let y = 2; y < alturaPt - 2; y += 6) {
+      ctx.fillRect(dobra, y, 1, 3);
+    }
+  });
+
+  return ctx.getImageData(0, 0, larguraPt, alturaPt);
+}
+
+/**
+ * Um lado da etiqueta: nome, código, barras e preço, empilhados e centralizados.
+ *
+ * Recebe a largura em vez de assumi-la porque na etiqueta dupla cada lado tem
+ * metade do espaço, e o desenho precisa encolher junto em vez de vazar para a
+ * metade vizinha.
+ */
+function desenharUmLado(
+  ctx: CanvasRenderingContext2D,
+  etiqueta: ConteudoDaEtiqueta,
+  inicio: number,
+  largura: number,
+  alturaPt: number,
+  rolo: RoloDeEtiqueta,
+): void {
+  const margemPt = Math.round((rolo.dupla ? 1 : 2) * PONTOS_POR_MM);
+  const x0 = inicio + margemPt;
+  const util = largura - margemPt * 2;
+  const centro = x0 + util / 2;
+
+  /* Etiqueta dupla é estreita e baixa: o texto precisa encolher junto, senão
+     não sobra altura para o código de barras. */
+  const escala = rolo.dupla ? 0.72 : 1;
+  const alturaEtiquetaMm = alturaPt / PONTOS_POR_MM;
+
+  {
     let y = Math.round(1 * PONTOS_POR_MM);
 
     if (etiqueta.nome) {
       /* Negrito e um pouco maior: no primeiro teste real o nome saiu legível
          mas fraco, e etiqueta de joia é lida de perto, sob vitrine, por quem
          está decidindo a compra. */
-      ctx.font = `bold ${Math.round(2.6 * PONTOS_POR_MM)}px Arial, sans-serif`;
+      ctx.font = `bold ${Math.round(2.6 * escala * PONTOS_POR_MM)}px Arial, sans-serif`;
       ctx.textAlign = "center";
       escreverCortando(ctx, etiqueta.nome, centro, y, util);
-      y += Math.round(3.2 * PONTOS_POR_MM);
+      y += Math.round(3.2 * escala * PONTOS_POR_MM);
     }
 
     const linhaDeCima = [etiqueta.sku, etiqueta.tamanho ? `Tam. ${etiqueta.tamanho}` : null]
@@ -117,26 +167,24 @@ function desenharLinha(etiquetas: ConteudoDaEtiqueta[], rolo: RoloDeEtiqueta): I
       .join("  ");
 
     if (linhaDeCima) {
-      ctx.font = `bold ${Math.round(2.1 * PONTOS_POR_MM)}px Arial, sans-serif`;
+      ctx.font = `bold ${Math.round(2.1 * escala * PONTOS_POR_MM)}px Arial, sans-serif`;
       ctx.textAlign = "center";
       escreverCortando(ctx, linhaDeCima, centro, y, util);
-      y += Math.round(2.6 * PONTOS_POR_MM);
+      y += Math.round(2.6 * escala * PONTOS_POR_MM);
     }
 
     if (etiqueta.codigoDeBarras) {
-      const alturaBarras = Math.round(rolo.alturaMm * 0.34 * PONTOS_POR_MM);
+      const alturaBarras = Math.round(alturaEtiquetaMm * 0.34 * PONTOS_POR_MM);
       desenharBarras(ctx, etiqueta.codigoDeBarras, x0, y, util, alturaBarras);
       y += alturaBarras + Math.round(0.6 * PONTOS_POR_MM);
     }
 
     if (etiqueta.preco) {
-      ctx.font = `bold ${Math.round(3 * PONTOS_POR_MM)}px Arial, sans-serif`;
+      ctx.font = `bold ${Math.round(3 * escala * PONTOS_POR_MM)}px Arial, sans-serif`;
       ctx.textAlign = "center";
       escreverCortando(ctx, `R$ ${etiqueta.preco}`, centro, y, util);
     }
-  });
-
-  return ctx.getImageData(0, 0, larguraPt, alturaPt);
+  }
 }
 
 /** Escreve cortando com reticências quando não cabe, em vez de invadir a vizinha. */
