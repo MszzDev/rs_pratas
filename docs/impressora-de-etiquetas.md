@@ -126,3 +126,50 @@ utilitário.
 
 Imprima cinco etiquetas seguidas. Uma só não prova nada — o modo de falha típico
 é justamente imprimir a primeira e travar.
+
+## O caminho direto: o sistema fala com a impressora
+
+Tudo acima descreve a impressão pelo navegador, que funciona mas exige o driver
+do Windows configurado em sincronia com o modelo. Existe um caminho melhor, e é
+o preferido:
+
+**`Configurações` → `Impressora de etiqueta` → `Rede` → o IP da impressora.**
+
+Com isso o sistema monta a etiqueta em TSPL, na resolução exata da impressora, e
+manda direto. O navegador não participa: não há diálogo, margem, escala nem
+página em branco, e o driver do Windows deixa de importar.
+
+### O endereço
+
+A impressora da loja está em **`192.168.15.240`**, com IP fixo. A porta é a
+9100, padrão de fato das térmicas.
+
+Ela veio de fábrica em `192.168.0.35`, que é uma faixa diferente da rede da loja
+— por isso não aparecia em varredura nenhuma. O ajuste fica na aba `Ethernet` do
+utilitário e **exige o cabo USB conectado**, porque é por ele que o utilitário
+fala com ela.
+
+Se um dia trocarem o roteador e a rede mudar de faixa, é esse número que precisa
+ser ajustado, junto com o gateway.
+
+### As linguagens
+
+Ela entende **TSPL, EPL e ZPL** — testado mandando as três pela rede, cada uma
+marcando uma faixa em altura diferente, e as três saíram. O sistema usa TSPL.
+
+O que ela **não** tem são as **fontes internas**: o comando `TEXT` não produz
+saída nenhuma, enquanto `BAR` funciona. Por isso o sistema desenha a etiqueta
+como imagem e manda os pontos prontos pelo comando `BITMAP`. Fica maior em
+bytes, não depende de fonte, e garante que o que aparece na tela é o que sai no
+papel.
+
+### Uma coisa por vez
+
+O utilitário, a fila do Windows e a rede disputam a impressora. Ao investigar,
+feche o utilitário e desconecte o USB antes de testar pela rede — e vice-versa.
+Impressora ocupada aceita a conexão e descarta o conteúdo em silêncio, o que
+parece defeito e não é.
+
+Depois de ligar ou de mudar o endereço, **espere ela iniciar por completo** antes
+de mandar qualquer coisa. Uma checagem feita cedo demais dá "sem resposta" numa
+impressora que está perfeitamente bem.
