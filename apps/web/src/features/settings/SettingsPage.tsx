@@ -8,6 +8,7 @@ import { apiFetch, ApiError } from "@/lib/api-client";
 import { EmailStatus } from "./EmailStatus";
 import { SupportAccount } from "./SupportAccount";
 import { PrinterSettings } from "@/features/printing/PrinterSettings";
+import { LabelPrinterSettings } from "@/features/printing/LabelPrinterSettings";
 
 interface Setting {
   id: string;
@@ -113,6 +114,7 @@ export function SettingsPage() {
       */}
       <div className="mb-5">
         <PrinterSettings />
+        <LabelPrinterSettings />
       </div>
 
       <div className="space-y-4">

@@ -10,6 +10,12 @@ import {
   Trash2,
 } from "lucide-react";
 import type { LabelElement } from "@rs-pratas/shared";
+import {
+  imprimirBytesNaEtiqueta,
+  lerImpressoraDeEtiqueta,
+  explicarFalha,
+} from "@/features/printing/printer";
+import { montarEtiquetasTspl } from "@/lib/tspl";
 import { LabelSheet } from "./LabelSheet";
 import { LabelEditor } from "./LabelEditor";
 import { LabelQuickPrint } from "./LabelQuickPrint";
@@ -148,6 +154,50 @@ function comFormatoDoRolo(payload: LabelPayload, modelos: Template[]): LabelPayl
       rollWidthMm: Number(modelo.rollWidthMm),
     },
   };
+}
+
+/**
+ * Manda o lote direto para a impressora de etiqueta, sem passar pelo navegador.
+ *
+ * O caminho do navegador funciona, mas ele decide coisas que não são dele
+ * quando o papel tem 33 mm e vem picotado: escolhe o tamanho da folha, aplica
+ * margem, escala o desenho para caber e cria páginas por conta própria — e
+ * cada página a mais é uma etiqueta desperdiçada.
+ *
+ * Falando TSPL, o sistema diz a medida em milímetros e a impressora obedece.
+ *
+ * Devolve `false` quando não há impressora de etiqueta escolhida neste
+ * aparelho; aí quem chamou cai no navegador, que continua valendo para o PC.
+ */
+async function imprimirDiretoNaEtiqueta(etiquetas: LabelToPrint[]): Promise<boolean> {
+  const escolhida = await lerImpressoraDeEtiqueta();
+  if (!escolhida) return false;
+
+  const primeira = etiquetas[0]?.payload.layout;
+  if (!primeira) return false;
+
+  const rolo = {
+    larguraMm: primeira.widthMm,
+    alturaMm: primeira.heightMm,
+    colunas: Math.max(1, primeira.columnsPerRow ?? 1),
+    folgaXMm: primeira.gapXMm ?? 0,
+    intervaloYMm: primeira.gapYMm ?? 0,
+    bobinaMm: primeira.rollWidthMm ?? 0,
+  };
+
+  // Uma cópia é uma etiqueta de verdade no papel, não um número num comando.
+  const conteudos = etiquetas.flatMap((etiqueta) =>
+    Array.from({ length: etiqueta.copies }, () => ({
+      nome: etiqueta.payload.productName,
+      sku: etiqueta.payload.sku,
+      preco: etiqueta.payload.price,
+      tamanho: etiqueta.payload.size,
+      codigoDeBarras: etiqueta.payload.barcode,
+    })),
+  );
+
+  await imprimirBytesNaEtiqueta(montarEtiquetasTspl(conteudos, rolo));
+  return true;
 }
 
 /** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
@@ -845,15 +895,31 @@ export function LabelsPage() {
             type="button"
             onClick={() => {
               const fila = (queue.data ?? []).filter((job) => job.type === "ETIQUETA");
-              setParaImprimir(fila.map((job) => ({
+              const etiquetas = fila.map((job) => ({
                 jobId: job.id,
                 copies: job.copies,
                 payload: comFormatoDoRolo(job.payload, templates.data ?? []),
-              })));
+              }));
 
-              // O navegador precisa ter a folha montada antes de abrir o
-              // diálogo; o próximo quadro garante que o React já pintou.
-              requestAnimationFrame(() => window.print());
+              void (async () => {
+                try {
+                  // Impressora de etiqueta escolhida no aparelho: fala direto
+                  // com ela e o navegador nem entra na história.
+                  if (await imprimirDiretoNaEtiqueta(etiquetas)) {
+                    setParaImprimir(etiquetas);
+                    return;
+                  }
+                } catch (erro) {
+                  setError(explicarFalha(erro));
+                  return;
+                }
+
+                setParaImprimir(etiquetas);
+
+                // O navegador precisa ter a folha montada antes de abrir o
+                // diálogo; o próximo quadro garante que o React já pintou.
+                requestAnimationFrame(() => window.print());
+              })();
             }}
           >
             <Printer className="h-5 w-5" aria-hidden />

@@ -36,6 +36,16 @@ const Impressora = registerPlugin<ImpressoraPlugin>("Impressora");
 
 const CHAVE = "rs.impressora";
 
+/**
+ * A impressora de ETIQUETA é outra máquina.
+ *
+ * O balcão tem duas: a de comprovante, que fala ESC/POS em bobina contínua, e
+ * a de etiqueta, que fala TSPL em papel picotado. Guardar as duas na mesma
+ * chave faria escolher uma desconfigurar a outra — e o erro só apareceria na
+ * hora de imprimir, com o cliente esperando.
+ */
+const CHAVE_ETIQUETA = "rs.impressora.etiqueta";
+
 export interface ImpressoraEscolhida {
   nome: string;
   /** Endereço Bluetooth, caminho do aparelho USB, ou IP na rede. */
@@ -94,6 +104,38 @@ export async function guardarImpressora(escolhida: ImpressoraEscolhida | null): 
   await Preferences.set({ key: CHAVE, value: JSON.stringify(escolhida) });
 }
 
+export async function lerImpressoraDeEtiqueta(): Promise<ImpressoraEscolhida | null> {
+  if (!temImpressora()) return null;
+
+  const { value } = await Preferences.get({ key: CHAVE_ETIQUETA });
+  if (!value) return null;
+
+  try {
+    const guardada = JSON.parse(value) as Partial<ImpressoraEscolhida>;
+    if (!guardada.endereco) return null;
+
+    return {
+      nome: guardada.nome ?? "Impressora de etiqueta",
+      endereco: guardada.endereco,
+      ligacao: guardada.ligacao ?? "BLUETOOTH",
+      colunas: guardada.colunas ?? 0,
+      ...(guardada.porta ? { porta: guardada.porta } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function guardarImpressoraDeEtiqueta(
+  escolhida: ImpressoraEscolhida | null,
+): Promise<void> {
+  if (!escolhida) {
+    await Preferences.remove({ key: CHAVE_ETIQUETA });
+    return;
+  }
+  await Preferences.set({ key: CHAVE_ETIQUETA, value: JSON.stringify(escolhida) });
+}
+
 export async function situacaoDaImpressao() {
   if (!temImpressora()) {
     return { temBluetooth: false, ligado: false, permitido: false };
@@ -137,6 +179,9 @@ export function explicarFalha(erro: unknown): string {
   if (texto.includes("SEM_PERMISSAO")) {
     return "O tablet não deixou o sistema usar o Bluetooth. Autorize quando ele perguntar.";
   }
+  if (texto.includes("FALTAM_DADOS_ETIQUETA")) {
+    return "Nenhuma impressora de etiqueta escolhida neste aparelho. Escolha em Ajustes.";
+  }
   if (texto.includes("FALTAM_DADOS")) {
     return "Nenhuma impressora escolhida para este tablet. Escolha em Ajustes.";
   }
@@ -172,6 +217,37 @@ export async function imprimirBytes(conteudo: string): Promise<void> {
 
   // A escolha da porta é a ÚNICA diferença entre os três caminhos. Os bytes
   // são os mesmos, porque a linguagem da impressora é a mesma.
+  if (escolhida.ligacao === "REDE") {
+    await Impressora.imprimirNaRede({
+      ip: escolhida.endereco,
+      conteudo,
+      ...(escolhida.porta ? { porta: escolhida.porta } : {}),
+    });
+    return;
+  }
+
+  if (escolhida.ligacao === "USB") {
+    await Impressora.imprimirNoUsb({ endereco: escolhida.endereco, conteudo });
+    return;
+  }
+
+  await Impressora.imprimir({ endereco: escolhida.endereco, conteudo });
+}
+
+/**
+ * Manda bytes para a impressora de ETIQUETA.
+ *
+ * Mesma mecânica de `imprimirBytes`, apontando para a outra máquina. O que
+ * viaja aqui é TSPL, e não ESC/POS — mas o plugin não sabe a diferença: ele
+ * despeja os bytes na porta e quem interpreta é a impressora.
+ */
+export async function imprimirBytesNaEtiqueta(conteudo: string): Promise<void> {
+  const escolhida = await lerImpressoraDeEtiqueta();
+
+  if (!escolhida) {
+    throw new Error("FALTAM_DADOS_ETIQUETA");
+  }
+
   if (escolhida.ligacao === "REDE") {
     await Impressora.imprimirNaRede({
       ip: escolhida.endereco,
