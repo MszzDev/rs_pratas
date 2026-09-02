@@ -90,6 +90,63 @@ export function rodandoInstalado(): boolean {
 }
 
 /**
+ * O aparelho é iPhone ou iPad?
+ *
+ * Importa porque o Safari **nunca** dispara o convite de instalação: ele não
+ * implementa `beforeinstallprompt`. Um sistema que só mostra o botão quando o
+ * convite chega simplesmente não oferece instalação nesses aparelhos — foi o
+ * que aconteceu com o iPad da dona, que ficou sem como instalar enquanto o
+ * computador instalava normalmente.
+ *
+ * A detecção do iPad precisa do toque: desde o iPadOS 13 o Safari se identifica
+ * como Macintosh para receber os sites de computador. O que sobra para
+ * distingui-lo de um Mac de verdade é ter tela sensível ao toque.
+ */
+export function ehAppleDeToque(): boolean {
+  const ua = navigator.userAgent;
+
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+
+  return navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+}
+
+/**
+ * É o Safari, o único navegador que instala no iPhone e no iPad?
+ *
+ * Chrome, Firefox e Edge no iOS são o motor do Safari por fora, mas **nenhum
+ * deles tem "Adicionar à Tela de Início"**. Quem tentar instalar por ali não
+ * acha a opção e conclui que o sistema não permite. Melhor mandar abrir no
+ * Safari do que deixar a pessoa procurar um botão que não existe.
+ */
+export function ehSafari(): boolean {
+  const ua = navigator.userAgent;
+  return /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+}
+
+/**
+ * Como este aparelho instala o sistema.
+ *
+ * - `automatica`: o navegador oferece, e o botão abre a caixa dele.
+ * - `manual`: o aparelho instala, mas só pelo menu do próprio navegador — é o
+ *   caso do iPhone e do iPad, e aí o botão precisa **ensinar** em vez de
+ *   tentar.
+ * - `outro-navegador`: instala, mas não neste navegador.
+ * - `nenhuma`: já está instalado, ou o navegador não sabe instalar.
+ */
+export type FormaDeInstalar = "automatica" | "manual" | "outro-navegador" | "nenhuma";
+
+export function formaDeInstalar(conviteDisponivel: boolean): FormaDeInstalar {
+  if (rodandoInstalado()) return "nenhuma";
+  if (conviteDisponivel) return "automatica";
+
+  if (ehAppleDeToque()) {
+    return ehSafari() ? "manual" : "outro-navegador";
+  }
+
+  return "nenhuma";
+}
+
+/**
  * Registra o service worker.
  *
  * Ele não guarda nada — existe porque sem service worker o navegador não
