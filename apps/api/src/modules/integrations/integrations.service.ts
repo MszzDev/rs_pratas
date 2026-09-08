@@ -18,7 +18,7 @@ import * as mercadopago from "./mercadopago.client.js";
 
 export type Credentials = Record<string, string>;
 
-function lerCredenciais(cifrado: string | null): Credentials {
+export function lerCredenciais(cifrado: string | null): Credentials {
   if (!cifrado) return {};
   try {
     return JSON.parse(decryptSecret(cifrado)) as Credentials;

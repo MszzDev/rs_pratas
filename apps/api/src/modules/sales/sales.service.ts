@@ -10,6 +10,7 @@ import { applyMovement } from "../stock/stock.service.js";
 import { assertSessionOpen } from "../cash/cash.service.js";
 import { assertTerminalCanCharge } from "../terminals/terminals.service.js";
 import { enviarComprovanteAutomatico } from "./receipt.service.js";
+import { publicarEstoqueDasPecasVendidas } from "../integrations/nuvemshop-publicar.service.js";
 
 /**
  * Venda.
@@ -443,6 +444,24 @@ export async function completeSale(params: {
    * está gravada, e o reenvio manual continua na tela.
    */
   void enviarComprovanteAutomatico({ saleId: sale.id, request });
+
+  /**
+   * E a vitrine da loja online acompanha, quando a venda foi na loja que a
+   * alimenta.
+   *
+   * Também sem `await`: a venda está gravada e o dinheiro entrou, então
+   * segurar a tela porque o site demorou seria trocar um problema pequeno por
+   * um grande. Se falhar, ela registra e cala — a sincronia completa corrige
+   * depois o que ficou para trás.
+   *
+   * Sem isso, alguém compra pela internet uma peça que acabou de sair pela
+   * porta da loja, paga, e descobre depois que ela não existe mais.
+   */
+  void publicarEstoqueDasPecasVendidas({
+    companyId: request.user.companyId,
+    storeId: input.storeId,
+    saleId: sale.id,
+  });
 
   return sale;
 }

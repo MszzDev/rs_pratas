@@ -13,6 +13,7 @@ import {
   syncStockToNuvemshop,
   testIntegration,
 } from "./integrations.service.js";
+import { baixarPedidosDaNuvemshop } from "./nuvemshop-orders.service.js";
 import {
   importCustomersFromNuvemshop,
   importProductsFromNuvemshop,
@@ -92,6 +93,20 @@ export async function integrationRoutes(app: FastifyInstance) {
     "/integrations/nuvemshop/sync-stock",
     { preHandler: [app.requireAuth, requirePermission("INTEGRATION_NUVEMSHOP")] },
     async (request) => syncStockToNuvemshop({ request }),
+  );
+
+  /**
+   * O caminho de volta: os pedidos do site baixando o estoque da loja.
+   *
+   * Separado de `sync-stock` porque são sentidos diferentes e falham por
+   * motivos diferentes. Juntar os dois num botão só faria a dona não saber
+   * qual metade quebrou quando aparecesse um erro — e a metade que baixa
+   * estoque é a que não pode ficar sem rodar.
+   */
+  app.post(
+    "/integrations/nuvemshop/sync-orders",
+    { preHandler: [app.requireAuth, requirePermission("INTEGRATION_NUVEMSHOP")] },
+    async (request) => baixarPedidosDaNuvemshop({ request }),
   );
 
   app.get(

@@ -96,6 +96,49 @@ export function getPayment(accessToken: string, paymentId: string | number) {
 }
 
 /**
+ * Os pagamentos de um período, para conferir contra as vendas do sistema.
+ *
+ * A busca é por `date_created` e não por `date_approved` porque a aprovação
+ * pode cair fora da janela pedida: um pagamento criado às 23h58 e aprovado às
+ * 00h01 sumiria da conferência do dia em que a venda aconteceu, e apareceria
+ * como diferença no dia seguinte — nos dois dias errados de uma vez.
+ *
+ * Pagina até acabar. A trava de páginas existe para um erro de paginação do
+ * outro lado não virar laço infinito num fechamento de caixa.
+ */
+export async function searchPayments(
+  accessToken: string,
+  periodo: { de: Date; ate: Date },
+): Promise<MercadoPagoPayment[]> {
+  const encontrados: MercadoPagoPayment[] = [];
+  const porPagina = 50;
+
+  for (let deslocamento = 0; deslocamento < porPagina * 20; deslocamento += porPagina) {
+    const params = new URLSearchParams({
+      sort: "date_created",
+      criteria: "desc",
+      range: "date_created",
+      begin_date: periodo.de.toISOString(),
+      end_date: periodo.ate.toISOString(),
+      limit: String(porPagina),
+      offset: String(deslocamento),
+    });
+
+    const pagina = await request<{ results?: MercadoPagoPayment[] }>(
+      accessToken,
+      `/v1/payments/search?${params.toString()}`,
+    );
+
+    const resultados = pagina.results ?? [];
+    encontrados.push(...resultados);
+
+    if (resultados.length < porPagina) break;
+  }
+
+  return encontrados;
+}
+
+/**
  * Estorna um pagamento, total ou parcial.
  *
  * Sem valor, estorna tudo. Com valor, estorna a parte — que é o caso da

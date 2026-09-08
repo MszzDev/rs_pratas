@@ -2387,6 +2387,14 @@ model Integration {
   storeId String?
 
   lastSyncAt    DateTime?
+
+  /// Quando os PEDIDOS do site foram lidos pela última vez.
+  ///
+  /// Separado de `lastSyncAt`, que é a ida — o estoque que o sistema publica.
+  /// São dois sentidos independentes: publicar estoque com sucesso não
+  /// significa que os pedidos foram lidos, e juntar os dois num carimbo só
+  /// faria uma sincronia bem-sucedida esconder a outra que nunca rodou.
+  lastOrderSyncAt DateTime?
   lastError     String?
   connectedAt   DateTime?
   connectedById String?

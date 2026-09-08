@@ -20,6 +20,7 @@ import {
   listPointDevices,
   setPointDevice,
 } from "./point-charge.service.js";
+import { conciliarMaquininha } from "./conciliacao.service.js";
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 
@@ -64,6 +65,41 @@ const statusSchema = z.object({
 });
 
 export async function terminalRoutes(app: FastifyInstance) {
+  /**
+   * O dinheiro da maquininha contra as vendas do sistema.
+   *
+   * O caso que importa é pagamento sem venda: o cliente pagou, levou a peça, e
+   * a venda não foi registrada. O estrago é duplo e silencioso — a peça segue
+   * no estoque para ser vendida de novo, e o faturamento do dia fica menor que
+   * o dinheiro que entrou.
+   */
+  app.get(
+    "/terminals/conciliacao",
+    { preHandler: [app.requireAuth, requirePermission("TERMINAL_EDIT")] },
+    async (request) => {
+      const query = z
+        .object({
+          storeId: z.string().uuid(),
+          de: z.string().datetime().optional(),
+          ate: z.string().datetime().optional(),
+        })
+        .parse(request.query);
+
+      // Sem período, o dia de hoje: é o fechamento de caixa que motiva a
+      // conferência, e ele acontece no fim do próprio dia.
+      const agora = new Date();
+      const inicioDeHoje = new Date(agora);
+      inicioDeHoje.setHours(0, 0, 0, 0);
+
+      return conciliarMaquininha({
+        request,
+        storeId: query.storeId,
+        de: query.de ? new Date(query.de) : inicioDeHoje,
+        ate: query.ate ? new Date(query.ate) : agora,
+      });
+    },
+  );
+
   app.get("/terminals", { preHandler: app.requireAuth }, async (request) => {
     const query = z.object({ storeId: z.string().uuid().optional() }).parse(request.query);
 
