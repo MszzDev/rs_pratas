@@ -95,6 +95,14 @@ if (!apagar) {
 
 const TRAVADAS = ["sale_items", "sale_payments", "stock_movements", "cash_movements", "audit_logs"];
 
+/**
+ * O limite padrão de 5 segundos não serve aqui.
+ *
+ * O banco está na nuvem e cada ida e volta custa dezenas de milissegundos;
+ * desligar as travas, devolver o estoque e apagar cinco tabelas passa disso
+ * com folga. Estourar o limite não é perigoso — a transação volta atrás
+ * inteira —, mas deixa o trabalho por fazer e assusta quem está rodando.
+ */
 const resultado = await prisma.$transaction(async (tx) => {
   for (const tabela of TRAVADAS) {
     await tx.$executeRawUnsafe(`ALTER TABLE "${tabela}" DISABLE TRIGGER USER`);
@@ -139,7 +147,7 @@ const resultado = await prisma.$transaction(async (tx) => {
     caixa: caixa.count,
     devolvidoAoEstoque: movimentos.length,
   };
-});
+}, { timeout: 120_000, maxWait: 30_000 });
 
 console.log("=== APAGADO ===");
 console.log(`  vendas: ${resultado.vendas}`);

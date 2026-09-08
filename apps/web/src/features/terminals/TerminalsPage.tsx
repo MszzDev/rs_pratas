@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { PageShell } from "@/components/ui/page-shell";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { ConciliacaoMaquininha } from "./ConciliacaoMaquininha";
 
 type TerminalStatus = "PENDING" | "ACTIVE" | "BLOCKED" | "RETIRED";
 
@@ -260,6 +261,29 @@ export function TerminalsPage() {
           <Alert tone="success">{aviso}</Alert>
         </div>
       )}
+
+      {/*
+        A conferência aparece por LOJA, e não por maquininha.
+
+        O que se confere é o caixa do dia, e o caixa é da loja: uma loja com
+        duas maquininhas tem um caixa só, e somar as duas é o que responde
+        "entrou dinheiro que não virou venda?". Uma seção por aparelho faria a
+        dona conferir duas metades e ter que somar de cabeça.
+
+        Só entram lojas com maquininha de conta ligada — sem a conta do Mercado
+        Pago não há o que consultar do outro lado.
+      */}
+      {[
+        ...new Set(
+          (terminals.data ?? [])
+            .filter((t) => t.conta?.configurada && t.status === "ACTIVE")
+            .map((t) => t.storeId),
+        ),
+      ].map((storeId) => (
+        <div key={storeId} className="mb-5">
+          <ConciliacaoMaquininha storeId={storeId} />
+        </div>
+      ))}
 
       {adding && (
         <form

@@ -368,6 +368,58 @@ export function IntegrationsPage() {
       setError(caught instanceof ApiError ? caught.message : "Não foi possível sincronizar."),
   });
 
+  /**
+   * O caminho de volta: os pedidos do site baixando o estoque da loja.
+   *
+   * Separado de "Enviar estoque" porque são sentidos diferentes e falham por
+   * motivos diferentes. Num botão só, a dona não saberia qual metade quebrou
+   * quando aparecesse um erro — e a metade que baixa estoque é a que não pode
+   * ficar sem rodar: sem ela, a peça vendida pela internet continua à venda no
+   * balcão.
+   */
+  const buscarPedidos = useMutation({
+    mutationFn: () =>
+      apiFetch<{
+        pedidosLidos: number;
+        pedidosNovos: number;
+        pecasBaixadas: number;
+        semEstoque: Array<{ pedido: number; peca: string }>;
+        semCadastro: Array<{ pedido: number; peca: string }>;
+      }>("/api/v1/integrations/nuvemshop/sync-orders", { method: "POST" }),
+    onSuccess: (r) => {
+      setError(null);
+
+      if (r.pedidosNovos === 0) {
+        setAviso("Nenhum pedido novo no site.");
+      } else {
+        const partes = [`${r.pedidosNovos} pedido(s) novo(s), ${r.pecasBaixadas} peça(s) baixadas.`];
+
+        // Os problemas vêm por último e por extenso: são eles que pedem ação, e
+        // um número solto ("2 problemas") faria alguém ter que ir procurar onde.
+        if (r.semEstoque.length > 0) {
+          partes.push(
+            `SEM ESTOQUE no Jardim Ângela: ${r.semEstoque
+              .map((x) => `pedido ${x.pedido} (${x.peca})`)
+              .join(", ")}. A peça não foi baixada — confira antes de despachar.`,
+          );
+        }
+        if (r.semCadastro.length > 0) {
+          partes.push(
+            `SEM CADASTRO aqui: ${r.semCadastro
+              .map((x) => `pedido ${x.pedido} (${x.peca})`)
+              .join(", ")}. O código do site não existe no sistema.`,
+          );
+        }
+
+        setAviso(partes.join(" "));
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ["integrations"] });
+    },
+    onError: (caught) =>
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível buscar os pedidos."),
+  });
+
   return (
     <PageShell
       eyebrow="Sistema"
@@ -504,6 +556,18 @@ export function IntegrationsPage() {
                         >
                           <RefreshCw className="h-5 w-5" aria-hidden />
                           {sincronizar.isPending ? "Enviando..." : "Enviar estoque"}
+                        </Button>
+                      )}
+
+                      {integracao.provider === "NUVEMSHOP" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={buscarPedidos.isPending}
+                          onClick={() => buscarPedidos.mutate()}
+                        >
+                          <RefreshCw className="h-5 w-5" aria-hidden />
+                          {buscarPedidos.isPending ? "Buscando..." : "Buscar pedidos do site"}
                         </Button>
                       )}
 
