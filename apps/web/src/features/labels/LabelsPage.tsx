@@ -16,6 +16,7 @@ import {
   explicarFalha,
 } from "@/features/printing/printer";
 import { montarEtiquetasTspl } from "@/lib/tspl";
+import { imprimirPeloAjudante, situacaoDoAjudante } from "@/lib/ajudante-de-impressao";
 import { LabelSheet } from "./LabelSheet";
 import { LabelEditor } from "./LabelEditor";
 import { LabelQuickPrint } from "./LabelQuickPrint";
@@ -224,11 +225,24 @@ function comFormatoDoRolo(payload: LabelPayload, modelos: Template[]): LabelPayl
  * aparelho; aí quem chamou cai no navegador, que continua valendo para o PC.
  */
 async function imprimirDiretoNaEtiqueta(etiquetas: LabelToPrint[]): Promise<boolean> {
-  const escolhida = await lerImpressoraDeEtiqueta();
-  if (!escolhida) return false;
-
   const primeira = etiquetas[0]?.payload.layout;
   if (!primeira) return false;
+
+  /**
+   * Dois caminhos diretos, e nenhum deles passa pelo diálogo do navegador.
+   *
+   * No tablet é o plugin do aplicativo, que abre a conexão ele mesmo. No
+   * computador é o ajudante, um programa pequeno rodando ali que faz a ponte —
+   * porque o navegador não pode abrir porta de rede, e o diálogo de impressão é
+   * justamente o que queremos evitar.
+   *
+   * A ordem importa: o tablet tem o plugin e não tem ajudante; o computador tem
+   * o ajudante e não tem plugin. Quem existir atende.
+   */
+  const noAparelho = await lerImpressoraDeEtiqueta();
+  const ajudante = noAparelho ? null : await situacaoDoAjudante();
+
+  if (!noAparelho && !ajudante) return false;
 
   const rolo = {
     larguraMm: primeira.widthMm,
@@ -254,7 +268,14 @@ async function imprimirDiretoNaEtiqueta(etiquetas: LabelToPrint[]): Promise<bool
     })),
   );
 
-  await imprimirBytesNaEtiqueta(montarEtiquetasTspl(conteudos, rolo));
+  const tspl = montarEtiquetasTspl(conteudos, rolo);
+
+  if (noAparelho) {
+    await imprimirBytesNaEtiqueta(tspl);
+  } else {
+    await imprimirPeloAjudante(tspl);
+  }
+
   return true;
 }
 

@@ -49,3 +49,6 @@ Thumbs.db
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# O endereço da impressora é de cada máquina, não do projeto.
+ajudante-de-impressao/impressora.json
