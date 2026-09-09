@@ -19,7 +19,13 @@ import {
 const idParamSchema = z.object({ id: z.string().uuid() });
 
 const createTemplateSchema = z.object({
-  code: z.string().min(1).max(20),
+  /**
+   * Opcional: o sistema gera quando não vem.
+   *
+   * Pedir o código a quem cadastra transfere uma decisão que a pessoa não tem
+   * como tomar bem — ela não sabe o que já existe nem que padrão a empresa usa.
+   */
+  code: z.string().max(20).optional(),
   name: z.string().min(2).max(80),
   /** Em milímetros. Etiqueta de joia costuma ficar entre 10 e 60 mm. */
   widthMm: z.number().min(5).max(200),

@@ -474,6 +474,7 @@ export function LabelsPage() {
         method: "POST",
         body: {
           ...form,
+          ...(form.code.trim() ? {} : { code: undefined }),
           widthMm: Number(form.widthMm),
           heightMm: Number(form.heightMm),
           gapXMm: Number(form.gapXMm),
@@ -742,10 +743,9 @@ export function LabelsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Código"
-              required
               value={form.code}
-              onChange={(event) => setForm({ ...form, code: event.target.value.toUpperCase() })}
-              hint="Ex.: JOIA, PINGENTE."
+              onChange={(event) => setForm({ ...form, code: event.target.value })}
+              hint="Em branco, o sistema cria um sozinho. Preencha só se quiser um código seu."
             />
             <Field
               label="Nome"

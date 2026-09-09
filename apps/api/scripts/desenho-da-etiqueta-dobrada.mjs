@@ -41,9 +41,6 @@ function conexaoGuardada() {
 const prisma = new PrismaClient({ datasources: { db: { url: conexaoGuardada() } } });
 const aplicar = process.argv.includes("--aplicar");
 
-/** A folga junto ao vinco, igual à que o gerador usa ao imprimir. */
-const FOLGA_DO_VINCO = 3;
-
 function utilDe(modelo) {
   return Number(modelo.printableWidthMm) > 0
     ? Number(modelo.printableWidthMm)

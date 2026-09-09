@@ -134,9 +134,36 @@ export async function setDefaultTemplate(params: {
   return atualizado;
 }
 
+/**
+ * O próximo código de modelo de etiqueta.
+ *
+ * Existe porque pedir o código a quem cadastra transfere para a pessoa uma
+ * decisão que ela não tem como tomar bem: ela não sabe quais códigos já existem
+ * nem que padrão a empresa usa, e está no meio de outra tarefa. O resultado
+ * aparece no banco — os primeiros modelos ficaram com "001", "005", "222222" e
+ * "tesq1", que não significam nada e vão atrapalhar quem procurar por eles
+ * daqui a seis meses.
+ *
+ * Procura o maior número JÁ USADO em vez de contar quantos existem: com modelo
+ * removido no meio, a contagem devolveria um código que já foi de outro.
+ */
+async function proximoCodigoDeModelo(companyId: string): Promise<string> {
+  const usados = await prisma.labelTemplate.findMany({
+    where: { companyId, code: { startsWith: "ET" } },
+    select: { code: true },
+  });
+
+  const maior = usados.reduce((maximo, modelo) => {
+    const numero = Number(modelo.code.slice(2));
+    return Number.isFinite(numero) && numero > maximo ? numero : maximo;
+  }, 0);
+
+  return `ET${String(maior + 1).padStart(4, "0")}`;
+}
+
 export async function createTemplate(params: {
   input: {
-    code: string;
+    code?: string | undefined;
     name: string;
     widthMm: number;
     heightMm: number;
@@ -158,8 +185,10 @@ export async function createTemplate(params: {
 }) {
   const { input, request } = params;
 
+  const code = input.code?.trim() || (await proximoCodigoDeModelo(request.user.companyId));
+
   const taken = await prisma.labelTemplate.findFirst({
-    where: { companyId: request.user.companyId, code: input.code, deletedAt: null },
+    where: { companyId: request.user.companyId, code, deletedAt: null },
     select: { id: true },
   });
   if (taken) {
@@ -177,7 +206,7 @@ export async function createTemplate(params: {
     return tx.labelTemplate.create({
       data: {
         companyId: request.user.companyId,
-        code: input.code,
+        code,
         name: input.name,
         widthMm: input.widthMm,
         heightMm: input.heightMm,
