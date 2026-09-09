@@ -8,6 +8,8 @@ export interface LabelPayload {
   sku: string | null;
   price: string | null;
   size: string | null;
+  /** Prata, dourado, ródio: o que o cliente vê e a vendedora procura. */
+  finish?: string | null;
   weightGrams: string | null;
   barcode: string | null;
   layout: {

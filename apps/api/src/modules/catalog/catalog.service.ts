@@ -226,6 +226,7 @@ export async function createProduct(params: {
     categoryId?: string | undefined;
     sizeGradeId?: string | undefined;
     material?: string | undefined;
+    finish?: string | undefined;
     weightGrams?: number | undefined;
     costPrice: number;
     salePrice: number;
@@ -305,6 +306,7 @@ export async function createProduct(params: {
         categoryId: input.categoryId ?? null,
         sizeGradeId: input.sizeGradeId ?? null,
         material: input.material ?? "PRATA_925",
+        ...(input.finish ? { finish: input.finish } : {}),
         weightGrams: input.weightGrams ?? null,
         costPrice: input.costPrice,
         salePrice: input.salePrice,
@@ -355,6 +357,7 @@ export async function updateProduct(params: {
     description?: string | undefined;
     categoryId?: string | undefined;
     material?: string | undefined;
+    finish?: string | undefined;
     weightGrams?: number | undefined;
     costPrice?: number | undefined;
     salePrice?: number | undefined;
@@ -387,6 +390,7 @@ export async function updateProduct(params: {
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
       ...(input.material !== undefined ? { material: input.material } : {}),
+      ...(input.finish !== undefined ? { finish: input.finish } : {}),
       ...(input.weightGrams !== undefined ? { weightGrams: input.weightGrams } : {}),
       ...(input.costPrice !== undefined ? { costPrice: input.costPrice } : {}),
       ...(input.salePrice !== undefined ? { salePrice: input.salePrice } : {}),

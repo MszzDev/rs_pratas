@@ -18,6 +18,8 @@ export const CAMPOS_DA_ETIQUETA = [
   "SKU",
   "PRECO",
   "TAMANHO",
+  /** O acabamento: prata, dourado, ródio. É o que o cliente vê na vitrine. */
+  "ACABAMENTO",
   "PESO",
   "CODIGO_BARRAS",
   /** Texto que o dono escreve: nome da loja, "prata 925", um telefone. */

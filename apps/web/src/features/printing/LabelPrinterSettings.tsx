@@ -128,6 +128,7 @@ export function LabelPrinterSettings() {
             sku: `TESTE-${n}`,
             preco: "0,00",
             tamanho: null,
+            acabamento: null,
             codigoDeBarras: `TESTE${n}`,
           })),
           ROLO_DE_TESTE,

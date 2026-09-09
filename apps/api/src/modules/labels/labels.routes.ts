@@ -4,6 +4,7 @@ import { labelElementsSchema } from "@rs-pratas/shared";
 import { requirePermission } from "../../core/rbac/require-permission.hook.js";
 import {
   buildBatchFromStock,
+  opcoesDoLote,
   cancelPrintJob,
   createTemplate,
   queueLabelBatch,
@@ -130,10 +131,27 @@ export async function labelRoutes(app: FastifyInstance) {
           storeId: z.string().uuid(),
           categoryId: z.string().uuid().optional(),
           onlyWithStock: z.coerce.boolean().optional(),
+          finish: z.string().max(40).optional(),
+          material: z.string().max(40).optional(),
+          size: z.string().max(20).optional(),
         })
         .parse(request.query);
 
       return buildBatchFromStock({ request, ...query });
+    },
+  );
+
+  /**
+   * O que existe no estoque desta loja, para a tela oferecer so o que da
+   * resultado - em vez de uma lista de todos os acabamentos possiveis, que faria
+   * a pessoa escolher um e receber nada.
+   */
+  app.get(
+    "/print-jobs/batch-options",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request) => {
+      const query = z.object({ storeId: z.string().uuid() }).parse(request.query);
+      return opcoesDoLote({ request, storeId: query.storeId });
     },
   );
 

@@ -9,6 +9,7 @@ import { apiFetch, ApiError } from "@/lib/api-client";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { ProductPhoto } from "@/components/ui/product-photo";
 import { useAuth } from "../auth/auth-context";
+import { ACABAMENTOS } from "@rs-pratas/shared";
 
 interface Variation {
   id: string;
@@ -22,6 +23,7 @@ interface Product {
   sku: string;
   name: string;
   material: string;
+  finish: string | null;
   weightGrams: string | null;
   costPrice: string | null;
   salePrice: string | null;
@@ -85,6 +87,7 @@ export function ProductsPage() {
     categoryId: "",
     sizeGradeId: "",
     weightGrams: "",
+    finish: "",
     costPrice: "",
     salePrice: "",
   });
@@ -169,6 +172,7 @@ export function ProductsPage() {
           salePrice: Number(form.salePrice),
           ...(form.categoryId ? { categoryId: form.categoryId } : {}),
           ...(form.weightGrams ? { weightGrams: Number(form.weightGrams) } : {}),
+          ...(form.finish ? { finish: form.finish } : {}),
         },
       }),
     onSuccess: () => {
@@ -247,6 +251,7 @@ export function ProductsPage() {
           ...(form.categoryId ? { categoryId: form.categoryId } : {}),
           ...(form.sizeGradeId ? { sizeGradeId: form.sizeGradeId } : {}),
           ...(form.weightGrams ? { weightGrams: Number(form.weightGrams) } : {}),
+          ...(form.finish ? { finish: form.finish } : {}),
           ...(selectedSizes.length > 0 ? { sizes: selectedSizes } : {}),
         },
       }),
@@ -259,6 +264,7 @@ export function ProductsPage() {
         categoryId: "",
         sizeGradeId: "",
         weightGrams: "",
+      finish: "",
         costPrice: "",
         salePrice: "",
       });
@@ -280,6 +286,7 @@ export function ProductsPage() {
       categoryId: "",
       sizeGradeId: "",
       weightGrams: "",
+      finish: "",
       costPrice: "",
       salePrice: "",
     });
@@ -297,6 +304,7 @@ export function ProductsPage() {
       categoryId: "",
       sizeGradeId: "",
       weightGrams: product.weightGrams ?? "",
+      finish: product.finish ?? "",
       costPrice: product.costPrice ?? "",
       salePrice: product.salePrice ?? "",
     });
@@ -403,6 +411,46 @@ export function ProductsPage() {
               onChange={(event) => setForm({ ...form, weightGrams: event.target.value })}
               hint="Prata é vendida por peso — vale registrar."
             />
+
+            {/*
+              O acabamento é diferente do material.
+
+              Uma peça pode ser prata 925 **e** banhada a ouro — e é o banho que
+              o cliente vê na vitrine e a vendedora usa para achar a peça na
+              gaveta. Sem ele, "anel dourado tamanho 18" não é uma busca que o
+              sistema saiba responder.
+
+              Lista com escrita livre: joalheria inventa acabamento novo com
+              frequência, e travar numa lista fixa obrigaria a mexer no sistema
+              para cadastrar uma peça. A lista evita a maior parte dos erros de
+              digitação, que são o que quebra o filtro depois — "Dourado" e
+              "dourado" viram dois acabamentos na hora de agrupar a gaveta.
+            */}
+            <div>
+              <label
+                className="mb-1 block text-sm font-medium text-text-primary"
+                htmlFor="acabamento-da-peca"
+              >
+                Acabamento
+              </label>
+              <input
+                id="acabamento-da-peca"
+                list="acabamentos-conhecidos"
+                value={form.finish}
+                onChange={(event) => setForm({ ...form, finish: event.target.value })}
+                placeholder="Prata, Dourado, Ródio…"
+                className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
+              />
+              <datalist id="acabamentos-conhecidos">
+                {ACABAMENTOS.map((valor) => (
+                  <option key={valor} value={valor} />
+                ))}
+              </datalist>
+              <p className="mt-1 text-sm text-text-secondary">
+                O banho da peça, que é o que se vê. Serve para filtrar a gaveta na hora de
+                etiquetar.
+              </p>
+            </div>
 
             <Field
               label="Custo (R$)"

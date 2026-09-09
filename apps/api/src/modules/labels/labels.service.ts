@@ -320,6 +320,7 @@ export async function queueProductLabels(params: {
         sku,
         price,
         size: variation?.size ?? null,
+        finish: product.finish,
         weightGrams: variation?.weightGrams ?? product.weightGrams,
       }),
     },
@@ -364,6 +365,8 @@ function buildLabelPayload(params: {
   sku: string;
   price: Prisma.Decimal;
   size: string | null;
+  /** Prata, dourado, ródio: o que o cliente vê e a vendedora procura. */
+  finish: string | null;
   weightGrams: Prisma.Decimal | null;
 }) {
   const { template } = params;
@@ -395,6 +398,7 @@ function buildLabelPayload(params: {
     sku: mostrar(template.showSku) ? params.sku : null,
     price: mostrar(template.showPrice) ? params.price.toFixed(2) : null,
     size: mostrar(template.showSize) ? params.size : null,
+    finish: params.finish,
     weightGrams: mostrar(template.showWeight) ? (params.weightGrams?.toFixed(3) ?? null) : null,
     barcode: mostrar(template.showBarcode) ? barcodeFor(params.sku) : null,
     layout: {
@@ -510,8 +514,19 @@ export async function buildBatchFromStock(params: {
   storeId: string;
   categoryId?: string | undefined;
   onlyWithStock?: boolean | undefined;
+  /**
+   * Os filtros que a gaveta pede.
+   *
+   * Quem etiqueta trabalha por gaveta, e a gaveta e organizada por acabamento e
+   * tamanho: "os aneis dourados 18", "as pulseiras de rodio". Sem esses
+   * filtros, a unica saida e trazer as 300 pecas da loja e ir desmarcando a
+   * mao, que e onde se erra e se desiste.
+   */
+  finish?: string | undefined;
+  material?: string | undefined;
+  size?: string | undefined;
 }) {
-  const { request, storeId, categoryId, onlyWithStock } = params;
+  const { request, storeId, categoryId, onlyWithStock, finish, material, size } = params;
   await assertStoreAccess(request, storeId);
 
   const items = await prisma.stockItem.findMany({
@@ -519,14 +534,48 @@ export async function buildBatchFromStock(params: {
       storeId,
       companyId: request.user.companyId,
       ...(onlyWithStock === false ? {} : { quantity: { gt: 0 } }),
-      ...(categoryId ? { product: { categoryId } } : {}),
-      product: { deletedAt: null, isActive: true, ...(categoryId ? { categoryId } : {}) },
+      product: {
+        deletedAt: null,
+        isActive: true,
+        ...(categoryId ? { categoryId } : {}),
+        ...(finish ? { finish } : {}),
+        ...(material ? { material } : {}),
+      },
+      /**
+       * O tamanho vive na VARIACAO, nao no produto.
+       *
+       * Peca sem variacao nao tem tamanho, e filtrar por tamanho tem que
+       * exclui-la: senao "aneis 18" traria tambem os que nao tem numeracao, e
+       * quem for etiquetar a gaveta levaria peca que nao e dali.
+       */
+      ...(size ? { variation: { size } } : {}),
     },
     include: {
-      product: { select: { name: true, sku: true, salePrice: true, imageChecksum: true, imageExternalUrl: true } },
+      product: {
+        select: {
+          name: true,
+          sku: true,
+          salePrice: true,
+          material: true,
+          finish: true,
+          imageChecksum: true,
+          imageExternalUrl: true,
+        },
+      },
       variation: { select: { sku: true, size: true } },
     },
-    orderBy: { product: { name: "asc" } },
+    /**
+     * Agrupado como a gaveta: acabamento, depois tamanho, depois nome.
+     *
+     * Sai da impressora na ordem em que as pecas estao na bandeja, entao quem
+     * cola pega a pilha e vai seguindo, sem procurar cada etiqueta. Ordenar so
+     * por nome obrigava a garimpar.
+     */
+    orderBy: [
+      { product: { finish: "asc" } },
+      { variation: { size: "asc" } },
+      { product: { name: "asc" } },
+    ],
     take: 300,
   });
 
@@ -536,12 +585,61 @@ export async function buildBatchFromStock(params: {
     sku: item.variation?.sku ?? item.product.sku,
     name: item.product.name,
     size: item.variation?.size ?? null,
+    finish: item.product.finish,
+    material: item.product.material,
     /** Sugere uma etiqueta por peça em estoque — o funcionário ajusta. */
     copies: item.quantity,
     salePrice: item.product.salePrice,
     imageChecksum: item.product.imageChecksum,
     imageExternalUrl: item.product.imageExternalUrl,
   }));
+}
+
+/**
+ * Os acabamentos e tamanhos que EXISTEM no estoque desta loja.
+ *
+ * A tela oferece so o que da resultado. Uma lista com todos os acabamentos
+ * possiveis faria a pessoa escolher "ouro rose", receber nada, e concluir que o
+ * filtro esta quebrado - quando o certo e que a loja nao tem peca assim.
+ */
+export async function opcoesDoLote(params: { request: FastifyRequest; storeId: string }) {
+  const { request, storeId } = params;
+  await assertStoreAccess(request, storeId);
+
+  const items = await prisma.stockItem.findMany({
+    where: {
+      storeId,
+      companyId: request.user.companyId,
+      quantity: { gt: 0 },
+      product: { deletedAt: null, isActive: true },
+    },
+    select: {
+      product: { select: { finish: true, material: true } },
+      variation: { select: { size: true } },
+    },
+  });
+
+  const acabamentos = new Set<string>();
+  const materiais = new Set<string>();
+  const tamanhos = new Set<string>();
+
+  for (const item of items) {
+    if (item.product.finish) acabamentos.add(item.product.finish);
+    if (item.product.material) materiais.add(item.product.material);
+    if (item.variation?.size) tamanhos.add(item.variation.size);
+  }
+
+  return {
+    acabamentos: [...acabamentos].sort(),
+    materiais: [...materiais].sort(),
+    // Tamanho de anel e numero: ordenar como texto poria o 10 antes do 9.
+    tamanhos: [...tamanhos].sort((a, b) => {
+      const na = Number(a);
+      const nb = Number(b);
+      if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+      return a.localeCompare(b, "pt-BR");
+    }),
+  };
 }
 
 /** Enfileira o comprovante de uma venda. */

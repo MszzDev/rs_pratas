@@ -76,6 +76,8 @@ export interface ConteudoDaEtiqueta {
   sku: string | null;
   preco: string | null;
   tamanho: string | null;
+  /** Prata, dourado, ródio: o que o cliente vê e a vendedora procura. */
+  acabamento: string | null;
   codigoDeBarras: string | null;
 }
 
@@ -339,6 +341,8 @@ function valorDoCampo(elemento: LabelElement, etiqueta: ConteudoDaEtiqueta): str
       return etiqueta.preco ? `R$ ${etiqueta.preco}` : null;
     case "TAMANHO":
       return etiqueta.tamanho ? `Tam. ${etiqueta.tamanho}` : null;
+    case "ACABAMENTO":
+      return etiqueta.acabamento;
     case "PESO":
       return null;
     case "TEXTO":

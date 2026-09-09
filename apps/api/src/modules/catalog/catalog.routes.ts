@@ -51,6 +51,8 @@ const createProductSchema = z.object({
   categoryId: z.string().uuid().optional(),
   sizeGradeId: z.string().uuid().optional(),
   material: z.string().max(40).optional(),
+  /** Prata, dourado, ródio. Diferente do material: é o banho que se vê. */
+  finish: z.string().max(40).optional(),
   weightGrams: z.number().min(0).max(100000).optional(),
   costPrice: moneySchema,
   salePrice: moneySchema,
@@ -62,6 +64,8 @@ const updateProductSchema = z.object({
   description: z.string().max(2000).optional(),
   categoryId: z.string().uuid().optional(),
   material: z.string().max(40).optional(),
+  /** Prata, dourado, ródio. Diferente do material: é o banho que se vê. */
+  finish: z.string().max(40).optional(),
   weightGrams: z.number().min(0).max(100000).optional(),
   costPrice: moneySchema.optional(),
   salePrice: moneySchema.optional(),

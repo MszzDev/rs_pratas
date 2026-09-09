@@ -72,6 +72,8 @@ interface BatchRow {
   sku: string;
   name: string;
   size: string | null;
+  finish: string | null;
+  material: string | null;
   copies: number;
   salePrice: string | null;
   imageChecksum: string | null;
@@ -264,6 +266,7 @@ async function imprimirDiretoNaEtiqueta(etiquetas: LabelToPrint[]): Promise<bool
       sku: etiqueta.payload.sku,
       preco: etiqueta.payload.price,
       tamanho: etiqueta.payload.size,
+      acabamento: etiqueta.payload.finish ?? null,
       codigoDeBarras: etiqueta.payload.barcode,
     })),
   );
@@ -426,6 +429,15 @@ export function LabelsPage() {
    * resolver um caso do dia.
    */
   const [modeloDoLote, setModeloDoLote] = useState("");
+
+  /**
+   * Os filtros da gaveta.
+   *
+   * Quem etiqueta trabalha por gaveta, e a gaveta é organizada por acabamento e
+   * tamanho — "os anéis dourados 18". Sem filtro, a única saída é trazer as 300
+   * peças da loja e ir desmarcando à mão, que é onde se erra e se desiste.
+   */
+  const [filtro, setFiltro] = useState({ finish: "", material: "", size: "" });
   const [batchOpen, setBatchOpen] = useState(false);
   const [batch, setBatch] = useState<Record<string, number>>({});
   const [aviso, setAviso] = useState<string | null>(null);
@@ -461,6 +473,22 @@ export function LabelsPage() {
 
 
 
+  /**
+   * O que existe no estoque desta loja.
+   *
+   * A tela oferece só o que dá resultado: uma lista com todos os acabamentos
+   * possíveis faria a pessoa escolher "ouro rosé", receber nada, e concluir que
+   * o filtro está quebrado — quando o certo é que a loja não tem peça assim.
+   */
+  const opcoesDoLote = useQuery({
+    queryKey: ["batch-options", storeId],
+    enabled: storeId !== "",
+    queryFn: () =>
+      apiFetch<{ acabamentos: string[]; materiais: string[]; tamanhos: string[] }>(
+        `/api/v1/print-jobs/batch-options?storeId=${storeId}`,
+      ),
+  });
+
   const templates = useQuery({
     queryKey: ["label-templates"],
     queryFn: () => apiFetch<Template[]>("/api/v1/label-templates"),
@@ -480,9 +508,16 @@ export function LabelsPage() {
    * decisão.
    */
   const batchSuggestion = useQuery({
-    queryKey: ["batch-suggestion", storeId],
+    queryKey: ["batch-suggestion", storeId, filtro.finish, filtro.material, filtro.size],
     queryFn: () =>
-      apiFetch<BatchRow[]>(`/api/v1/print-jobs/batch-suggestion?storeId=${storeId}`),
+      apiFetch<BatchRow[]>(
+        `/api/v1/print-jobs/batch-suggestion?${new URLSearchParams({
+          storeId,
+          ...(filtro.finish ? { finish: filtro.finish } : {}),
+          ...(filtro.material ? { material: filtro.material } : {}),
+          ...(filtro.size ? { size: filtro.size } : {}),
+        }).toString()}`,
+      ),
     enabled: batchOpen && storeId !== "",
   });
 
@@ -899,6 +934,91 @@ export function LabelsPage() {
           </p>
 
           {!storeId && <Alert tone="info">Escolha a loja no filtro abaixo primeiro.</Alert>}
+
+          {/*
+            Os filtros da gaveta.
+
+            Só aparecem quando há o que filtrar: numa loja em que todas as peças
+            são prata, oferecer "acabamento" é um campo a mais para ler e ignorar.
+          */}
+          {storeId !== "" &&
+            ((opcoesDoLote.data?.acabamentos.length ?? 0) > 1 ||
+              (opcoesDoLote.data?.tamanhos.length ?? 0) > 0 ||
+              (opcoesDoLote.data?.materiais.length ?? 0) > 1) && (
+              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                {(opcoesDoLote.data?.acabamentos.length ?? 0) > 1 && (
+                  <div>
+                    <label
+                      className="mb-1 block text-sm font-medium text-text-primary"
+                      htmlFor="filtro-acabamento"
+                    >
+                      Acabamento
+                    </label>
+                    <select
+                      id="filtro-acabamento"
+                      value={filtro.finish}
+                      onChange={(evento) => setFiltro({ ...filtro, finish: evento.target.value })}
+                      className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
+                    >
+                      <option value="">Todos</option>
+                      {(opcoesDoLote.data?.acabamentos ?? []).map((valor) => (
+                        <option key={valor} value={valor}>
+                          {valor}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {(opcoesDoLote.data?.tamanhos.length ?? 0) > 0 && (
+                  <div>
+                    <label
+                      className="mb-1 block text-sm font-medium text-text-primary"
+                      htmlFor="filtro-tamanho"
+                    >
+                      Tamanho
+                    </label>
+                    <select
+                      id="filtro-tamanho"
+                      value={filtro.size}
+                      onChange={(evento) => setFiltro({ ...filtro, size: evento.target.value })}
+                      className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
+                    >
+                      <option value="">Todos</option>
+                      {(opcoesDoLote.data?.tamanhos ?? []).map((valor) => (
+                        <option key={valor} value={valor}>
+                          {valor}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {(opcoesDoLote.data?.materiais.length ?? 0) > 1 && (
+                  <div>
+                    <label
+                      className="mb-1 block text-sm font-medium text-text-primary"
+                      htmlFor="filtro-material"
+                    >
+                      Material
+                    </label>
+                    <select
+                      id="filtro-material"
+                      value={filtro.material}
+                      onChange={(evento) => setFiltro({ ...filtro, material: evento.target.value })}
+                      className="min-h-[48px] w-full rounded-md border border-border bg-surface px-3 text-text-primary"
+                    >
+                      <option value="">Todos</option>
+                      {(opcoesDoLote.data?.materiais ?? []).map((valor) => (
+                        <option key={valor} value={valor}>
+                          {valor}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
 
           {(templates.data?.length ?? 0) > 0 && (
             <div className="mb-4 max-w-sm">

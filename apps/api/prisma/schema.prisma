@@ -1105,6 +1105,19 @@ model Product {
   /// Teor do metal. Prata 925 é o padrão da rede; o campo existe porque
   /// folheado e ouro entram no mostruário e não podem ser vendidos como prata.
   material    String   @default("PRATA_925")
+
+  /// O acabamento da peça: prata, dourado, ródio, ouro rosé.
+  ///
+  /// Diferente do material. Uma peça pode ser prata 925 **e** banhada a ouro —
+  /// e é o banho que o cliente vê na vitrine e a vendedora usa para achar a
+  /// peça na gaveta. Sem isso, "anel dourado tamanho 18" não é uma busca que o
+  /// sistema saiba responder, e a etiqueta não tem como dizer o que a peça é.
+  ///
+  /// Texto e não enum: joalheria inventa acabamento novo com frequência
+  /// ("ouro velho", "ródio negro"), e cada um exigiria migração. A tela oferece
+  /// os conhecidos numa lista, o que evita a maior parte dos erros de digitação
+  /// sem travar o cadastro de algo novo.
+  finish      String?
   /// Peso em gramas. Decimal, não float: prata é vendida por peso e um erro de
   /// arredondamento aqui vira diferença de dinheiro.
   weightGrams Decimal? @db.Decimal(10, 3)
