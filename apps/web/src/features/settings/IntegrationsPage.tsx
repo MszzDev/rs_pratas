@@ -514,7 +514,7 @@ export function IntegrationsPage() {
           </h2>
 
           <p className="mt-1 text-sm text-text-secondary">
-            {previaDoImport.variantesNoSite} peça(s) com código no site.{" "}
+            {previaDoImport.variantesNoSite} peça(s) no site.{" "}
             {previaDoImport.jaIguais} já com o saldo certo aqui.{" "}
             <strong className="text-text-primary">
               {previaDoImport.diferencas.length} para acertar.

@@ -91,23 +91,39 @@ export async function importarEstoqueDaNuvemshop(params: {
       quantity: true,
       productId: true,
       variationId: true,
-      product: { select: { sku: true, name: true } },
+      product: { select: { sku: true, name: true, externalId: true } },
       variation: { select: { sku: true } },
     },
   });
 
-  const porSku = new Map<string, (typeof nossoEstoque)[number]>();
   /**
-   * Códigos que aparecem em mais de uma linha de estoque.
+   * A peça é reencontrada pelo identificador da variação no site, e só depois
+   * pelo código.
+   *
+   * A loja virtual não preenche SKU: a importação de produtos já lida com isso
+   * gerando um código `NS-<id da variação>` e guardando o `externalId`. Procurar
+   * só por SKU, então, não acharia nada — o código que existe aqui foi
+   * inventado aqui, e não existe do outro lado.
+   */
+  const porExterno = new Map<string, (typeof nossoEstoque)[number]>();
+  const porSku = new Map<string, (typeof nossoEstoque)[number]>();
+
+  /**
+   * Chaves que apontam para mais de uma linha de estoque.
    *
    * Acontece quando uma variação ficou sem código próprio e herdou o do
-   * produto. O site tem um número só para esse código, e não há como saber a
+   * produto. O site tem um número só para essa chave, e não há como saber a
    * qual das linhas ele pertence — gravar na primeira que apareceu seria
    * inventar uma resposta. Fica de fora, e a lista diz quais são.
    */
   const repetidos = new Set<string>();
 
   for (const item of nossoEstoque) {
+    if (item.product.externalId) {
+      if (porExterno.has(item.product.externalId)) repetidos.add(item.product.externalId);
+      porExterno.set(item.product.externalId, item);
+    }
+
     const sku = item.variation?.sku ?? item.product.sku;
     if (porSku.has(sku)) repetidos.add(sku);
     porSku.set(sku, item);
@@ -132,10 +148,13 @@ export async function importarEstoqueDaNuvemshop(params: {
 
     for (const produto of produtos) {
       for (const variante of produto.variants) {
-        if (!variante.sku) continue;
-        // Guardado num const: dentro do callback da transacao o TypeScript
-        // perde a garantia de que a propriedade continua preenchida.
-        const sku = variante.sku;
+        /**
+         * O identificador da variação no site é a chave principal, e ele sempre
+         * existe. O SKU é a segunda tentativa, para a peça que foi cadastrada
+         * aqui primeiro e depois ganhou par lá.
+         */
+        const chave = String(variante.id);
+        const skuNoSite = variante.sku?.trim() || null;
 
         resultado.variantesNoSite += 1;
 
@@ -149,12 +168,17 @@ export async function importarEstoqueDaNuvemshop(params: {
 
         const noSite = Math.max(0, Number(variante.stock));
 
-        if (repetidos.has(sku)) {
+        const nosso = porExterno.get(chave) ?? (skuNoSite ? porSku.get(skuNoSite) : undefined);
+
+        // O código que aparece na tela é o daqui quando a peça existe, e o do
+        // site quando não existe — nos dois casos, o que a pessoa consegue
+        // procurar.
+        const sku = nosso?.variation?.sku ?? nosso?.product.sku ?? skuNoSite ?? `NS-${chave}`;
+
+        if (repetidos.has(chave) || (skuNoSite !== null && repetidos.has(skuNoSite))) {
           resultado.codigosRepetidos.push(sku);
           continue;
         }
-
-        const nosso = porSku.get(sku);
 
         if (!nosso) {
           resultado.semCadastro.push({
@@ -201,7 +225,7 @@ export async function importarEstoqueDaNuvemshop(params: {
             userId: request.user.sub,
             reason: `Quantidade trazida da loja online (tinha ${nosso.quantity}, site diz ${noSite})`,
             referenceType: "NUVEMSHOP_IMPORT",
-            referenceId: sku,
+            referenceId: chave,
           });
         });
 
