@@ -115,7 +115,7 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
   const [elementos, setElementos] = useState<LabelElement[]>(
     modelo.elements && modelo.elements.length > 0
       ? modelo.elements
-      : desenhoPadrao(modelo.widthMm, modelo.heightMm),
+      : desenhoPadrao(modelo.widthMm, modelo.heightMm, modelo.isDoubleSided),
   );
   const [selecionado, setSelecionado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -276,7 +276,7 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
                 <>
                   {" · "}
                   <span className="font-normal">
-                    um lado — o outro sai igual, girado ao dobrar
+                    os dois lados — a metade da direita sai girada ao dobrar
                   </span>
                 </>
               )}
@@ -397,6 +397,33 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
                     larguraMm={modelo.widthMm}
                     alturaMm={modelo.heightMm}
                   />
+
+                  {/*
+                    A linha do vinco, no meio.
+
+                    Sem ela não há como saber onde um lado termina e o outro
+                    começa, e o desenho sai com o preço partido pela dobra —
+                    coisa que só aparece depois de imprimir e dobrar, com o
+                    rolo já gasto.
+
+                    Não é um elemento do desenho: é uma referência da tela, e
+                    não sai impressa.
+                  */}
+                  {modelo.isDoubleSided && (
+                    <div
+                      aria-hidden
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        bottom: 0,
+                        left: `${modelo.widthMm / 2}mm`,
+                        width: "0.2mm",
+                        background:
+                          "repeating-linear-gradient(to bottom, #c026d3 0 0.6mm, transparent 0.6mm 1.2mm)",
+                        pointerEvents: "none",
+                      }}
+                    />
+                  )}
 
                   {/* As alças de arrasto ficam por cima do desenho. */}
                   {elementos.map((elemento) => (
@@ -623,7 +650,7 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
               variant="ghost"
               onClick={() => {
                 setSalvo(false);
-                setElementos(desenhoPadrao(modelo.widthMm, modelo.heightMm));
+                setElementos(desenhoPadrao(modelo.widthMm, modelo.heightMm, modelo.isDoubleSided));
                 setSelecionado(null);
               }}
             >

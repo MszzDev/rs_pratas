@@ -83,13 +83,89 @@ export type LabelElement = z.infer<typeof labelElementSchema>;
 export const labelElementsSchema = z.array(labelElementSchema).max(30);
 
 /**
+ * O desenho de uma etiqueta que dobra: informação de um lado, código do outro.
+ *
+ * Repetir o mesmo nos dois lados seria o óbvio, e é pior. Numa etiqueta de joia
+ * cada lado tem cerca de 22 mm, e ali o código de barras disputando espaço com
+ * o texto sai estreito demais para o leitor pegar. Código que não lê é pior que
+ * código nenhum: a vendedora tenta, falha, e digita à mão de qualquer jeito —
+ * só que depois de segurar a fila.
+ *
+ * Dando um lado inteiro ao código, ele ganha a largura que precisa. E o lado da
+ * informação fica com nome, código e preço sem aperto.
+ *
+ * A metade da direita é girada pelo sistema na hora de imprimir, porque ao
+ * dobrar ela vira de cabeça para baixo.
+ */
+function desenhoDobrado(larguraMm: number, alturaMm: number): LabelElement[] {
+  const metade = larguraMm / 2;
+
+  /** A mesma folga que o gerador respeita ao imprimir. */
+  const folgaDoVinco = 3;
+  const margem = 1;
+  const largura = Math.max(4, metade - folgaDoVinco - margem);
+
+  return [
+    {
+      id: "nome",
+      campo: "NOME",
+      xMm: margem,
+      yMm: 0.8,
+      larguraMm: largura,
+      tamanhoMm: 2,
+      negrito: true,
+      alinhamento: "center",
+    },
+    {
+      id: "sku",
+      campo: "SKU",
+      xMm: margem,
+      yMm: 3.6,
+      larguraMm: largura,
+      tamanhoMm: 1.6,
+      negrito: false,
+      alinhamento: "center",
+    },
+    {
+      // O preço é o que o cliente procura na vitrine: maior que o resto.
+      id: "preco",
+      campo: "PRECO",
+      xMm: margem,
+      yMm: Math.max(6, alturaMm - 4.2),
+      larguraMm: largura,
+      tamanhoMm: 2.8,
+      negrito: true,
+      alinhamento: "center",
+    },
+    {
+      id: "barras",
+      campo: "CODIGO_BARRAS",
+      xMm: metade + folgaDoVinco,
+      yMm: 1.5,
+      larguraMm: largura,
+      alturaMm: Math.max(5, alturaMm - 5),
+      tamanhoMm: 1.4,
+      negrito: false,
+      alinhamento: "center",
+    },
+  ];
+}
+
+/**
  * O desenho padrão, para quem abre o editor pela primeira vez.
  *
  * Reproduz o formato empilhado que existia antes: nome em cima, código e
  * tamanho na linha seguinte, barras no meio, preço embaixo. Assim o dono
  * começa a mexer no que já conhece, em vez de encarar uma folha em branco.
  */
-export function desenhoPadrao(larguraMm: number, alturaMm: number): LabelElement[] {
+export function desenhoPadrao(
+  larguraMm: number,
+  alturaMm: number,
+  dupla = false,
+): LabelElement[] {
+  // Etiqueta que dobra tem dois lados, e o desenho cobre os dois de uma vez.
+  if (dupla) return desenhoDobrado(larguraMm, alturaMm);
+
   const margem = Math.min(1.5, larguraMm * 0.06);
   const largura = larguraMm - margem * 2;
 

@@ -141,32 +141,46 @@ function desenharLinha(etiquetas: ConteudoDaEtiqueta[], rolo: RoloDeEtiqueta): I
     const metade = Math.floor(util / 2);
 
     /**
-     * Uma faixa livre de cada lado do vinco.
+     * O desenho cobre os DOIS lados, e não um repetido.
      *
-     * O vinco não cai sempre no mesmo milímetro: varia de rolo para rolo e com
-     * a mão de quem dobra. Letra em cima da dobra fica rachada e o código de
-     * barras deixa de ser lido — e o pior é que só se descobre depois de
-     * pendurar a peça, com o rolo já gasto.
+     * É o dono quem decide o que vai em cada metade — informação de um lado e
+     * código de barras do outro, por exemplo, que dá ao código a largura
+     * inteira de um lado em vez de espremê-lo ao lado do texto.
      *
-     * Três milímetros de folga custam pouco espaço e resolvem a variação toda.
+     * Por isso o desenho é montado uma vez, do tamanho da área útil, e só
+     * depois cortado ao meio. Desenhar metade por metade obrigaria a saber, no
+     * gerador, o que é "de cada lado" — uma decisão que é do editor.
      */
-    const folgaDaDobra = Math.round(3 * PONTOS_POR_MM);
-    const larguraDeUmLado = metade - folgaDaDobra;
+    const rascunho = document.createElement("canvas");
+    rascunho.width = util;
+    rascunho.height = alturaPt;
 
-    desenharUmLado(ctx, etiqueta, inicioDaEtiqueta, larguraDeUmLado, alturaPt, rolo);
+    const rctx = rascunho.getContext("2d");
+    if (rctx) {
+      rctx.fillStyle = "#ffffff";
+      rctx.fillRect(0, 0, util, alturaPt);
+      rctx.fillStyle = "#000000";
+      rctx.textBaseline = "top";
 
-    /**
-     * A segunda metade sai GIRADA 180 graus.
-     *
-     * Ao dobrar, ela vira de cabeça para baixo. Sem girar, um dos dois lados
-     * da peça pendurada aparece invertido — e é justamente o lado que o
-     * cliente vê primeiro ao pegar a peça na vitrine.
-     */
-    ctx.save();
-    ctx.translate(inicioDaEtiqueta + metade * 2, alturaPt);
-    ctx.rotate(Math.PI);
-    desenharUmLado(ctx, etiqueta, 0, larguraDeUmLado, alturaPt, rolo);
-    ctx.restore();
+      desenharUmLado(rctx, etiqueta, 0, util, alturaPt, rolo);
+
+      // A metade da esquerda, como está.
+      ctx.drawImage(rascunho, 0, 0, metade, alturaPt, inicioDaEtiqueta, 0, metade, alturaPt);
+
+      /**
+       * A da direita sai GIRADA 180 graus.
+       *
+       * Ao dobrar, ela vira de cabeça para baixo. Sem girar, um dos dois lados
+       * da peça pendurada aparece invertido — e é justamente o lado que o
+       * cliente vê primeiro ao pegar a peça na vitrine.
+       */
+      const restante = util - metade;
+      ctx.save();
+      ctx.translate(inicioDaEtiqueta + util, alturaPt);
+      ctx.rotate(Math.PI);
+      ctx.drawImage(rascunho, metade, 0, restante, alturaPt, 0, 0, restante, alturaPt);
+      ctx.restore();
+    }
 
     // O vinco, pontilhado: sem a marca, quem monta dobra no olho e as duas
     // metades saem desencontradas.

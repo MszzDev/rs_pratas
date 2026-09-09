@@ -44,26 +44,40 @@ const aplicar = process.argv.includes("--aplicar");
 /** A folga junto ao vinco, igual à que o gerador usa ao imprimir. */
 const FOLGA_DO_VINCO = 3;
 
-function ladoDe(modelo) {
-  const util = Number(modelo.printableWidthMm) > 0
+function utilDe(modelo) {
+  return Number(modelo.printableWidthMm) > 0
     ? Number(modelo.printableWidthMm)
     : Number(modelo.widthMm);
-
-  return Math.max(6, util / 2 - FOLGA_DO_VINCO);
 }
 
-/** Nome em cima, código no meio, preço embaixo e maior. */
-function desenhoDeUmLado(larguraMm, alturaMm) {
+/**
+ * Informação de um lado, código de barras do outro.
+ *
+ * Foi escolha do dono, e é melhor que repetir o mesmo dos dois lados: o código
+ * ganha a largura inteira de uma metade em vez de disputar espaço com o texto.
+ * Numa etiqueta de 22 mm por lado, essa diferença é o que separa um código que
+ * o leitor pega de um que ele não pega — e código que não lê é pior que código
+ * nenhum, porque a vendedora tenta, falha, e digita à mão depois de segurar a
+ * fila.
+ *
+ * O desenho cobre os DOIS lados de uma vez: o sistema corta ao meio e gira a
+ * metade da direita, porque ao dobrar ela vira de cabeça para baixo.
+ */
+function desenhoDosDoisLados(utilMm, alturaMm) {
+  const metade = utilMm / 2;
   const margem = 1;
-  const largura = Math.max(4, larguraMm - margem * 2);
+
+  // Cada lado tem a metade, menos a folga do vinco de um dos lados.
+  const larguraDeUmLado = metade - FOLGA_DO_VINCO - margem;
 
   return [
+    // --- Lado esquerdo: o que a pessoa lê.
     {
       id: "nome",
       campo: "NOME",
       xMm: margem,
       yMm: 0.8,
-      larguraMm: largura,
+      larguraMm: larguraDeUmLado,
       tamanhoMm: 2,
       negrito: true,
       alinhamento: "center",
@@ -73,7 +87,7 @@ function desenhoDeUmLado(larguraMm, alturaMm) {
       campo: "SKU",
       xMm: margem,
       yMm: 3.6,
-      larguraMm: largura,
+      larguraMm: larguraDeUmLado,
       tamanhoMm: 1.6,
       negrito: false,
       alinhamento: "center",
@@ -84,9 +98,22 @@ function desenhoDeUmLado(larguraMm, alturaMm) {
       campo: "PRECO",
       xMm: margem,
       yMm: Math.max(6, alturaMm - 4.2),
-      larguraMm: largura,
+      larguraMm: larguraDeUmLado,
       tamanhoMm: 2.8,
       negrito: true,
+      alinhamento: "center",
+    },
+
+    // --- Lado direito: o código, com a largura toda para ele.
+    {
+      id: "barras",
+      campo: "CODIGO_BARRAS",
+      xMm: metade + FOLGA_DO_VINCO,
+      yMm: 1.5,
+      larguraMm: larguraDeUmLado,
+      alturaMm: Math.max(5, alturaMm - 5),
+      tamanhoMm: 1.4,
+      negrito: false,
       alinhamento: "center",
     },
   ];
@@ -112,17 +139,17 @@ if (modelos.length === 0) {
 }
 
 for (const m of modelos) {
-  const lado = ladoDe(m);
-  const novo = desenhoDeUmLado(lado, Number(m.heightMm));
+  const util = utilDe(m);
+  const novo = desenhoDosDoisLados(util, Number(m.heightMm));
 
   const atuais = Array.isArray(m.elements) ? m.elements : [];
   const maiorAtual = atuais.reduce((maior, e) => Math.max(maior, Number(e.larguraMm ?? 0)), 0);
 
   console.log(`\n${m.code} "${m.name}"`);
   console.log(`  etiqueta: ${m.widthMm} x ${m.heightMm} mm, área útil ${m.printableWidthMm} mm`);
-  console.log(`  cada lado: ${lado.toFixed(1)} x ${m.heightMm} mm`);
+  console.log(`  área útil: ${util.toFixed(1)} mm, cada lado com ${(util / 2).toFixed(1)}`);
   console.log(`  desenho atual: ${atuais.length} elemento(s), o mais largo com ${maiorAtual} mm`);
-  console.log(`  desenho novo:  ${novo.length} elementos (nome, código, preço), cabendo em ${lado.toFixed(1)} mm`);
+  console.log(`  desenho novo:  informação à esquerda, código de barras à direita`);
 
   if (aplicar) {
     await prisma.labelTemplate.update({ where: { id: m.id }, data: { elements: novo } });

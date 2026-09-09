@@ -358,10 +358,17 @@ function larguraDeDesenho(modelo: Template): number {
     ? Number(modelo.printableWidthMm)
     : Number(modelo.widthMm);
 
-  if (!modelo.isDoubleSided) return util;
-
-  const FOLGA_DO_VINCO = 3;
-  return Math.max(6, util / 2 - FOLGA_DO_VINCO);
+  /**
+   * Na etiqueta dobrada o desenho cobre os DOIS lados, lado a lado.
+   *
+   * É o dono quem decide o que vai em cada metade — informação de um lado e
+   * código de barras do outro, por exemplo, que dá ao código a largura inteira
+   * de um lado em vez de espremê-lo ao lado do texto. O sistema só gira a
+   * metade da direita ao imprimir, porque ao dobrar ela vira.
+   *
+   * A metade fica marcada na tela pela linha do vinco.
+   */
+  return util;
 }
 
 /** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
