@@ -448,9 +448,12 @@ export function IntegrationsPage() {
 
   const importarEstoque = useMutation({
     mutationFn: (aplicar: boolean) =>
+      // O corpo vai como objeto: quem serializa e o apiFetch. Passar uma string
+      // ja pronta aqui faria ela ser serializada de novo, e o servidor receberia
+      // texto onde espera objeto.
       apiFetch<ImportacaoDeEstoque>("/api/v1/integrations/nuvemshop/import-stock", {
         method: "POST",
-        body: JSON.stringify({ aplicar }),
+        body: { aplicar },
       }),
     onSuccess: (r) => {
       setError(null);
