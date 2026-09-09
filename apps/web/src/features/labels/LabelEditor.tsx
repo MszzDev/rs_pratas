@@ -272,6 +272,14 @@ export function LabelEditor({ modelo, onClose }: { modelo: Modelo; onClose: () =
             <h2 className="font-semibold text-text-primary">Desenho da etiqueta</h2>
             <p className="text-sm text-text-secondary">
               {modelo.name} · {modelo.widthMm} × {modelo.heightMm} mm
+              {modelo.isDoubleSided && (
+                <>
+                  {" · "}
+                  <span className="font-normal">
+                    um lado — o outro sai igual, girado ao dobrar
+                  </span>
+                </>
+              )}
             </p>
           </div>
 

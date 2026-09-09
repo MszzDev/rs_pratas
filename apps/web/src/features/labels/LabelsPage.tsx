@@ -334,6 +334,36 @@ function ConfiguracaoDoDriver({
   );
 }
 
+/**
+ * O espaço que a pessoa realmente tem para desenhar.
+ *
+ * Não é o tamanho da etiqueta, e confundir os dois estraga o desenho de um
+ * jeito que só aparece no papel:
+ *
+ * - **A área útil** pode ser menor que a etiqueta. No rolo de joia, dos 90 mm
+ *   só os primeiros 50 recebem informação; os 30 finais são o rabo que enrola
+ *   na argola e some ao pendurar a peça.
+ * - **A etiqueta dobrada** mostra o mesmo conteúdo dos dois lados, e cada lado
+ *   tem METADE da área útil. Quem desenha, desenha um lado — o sistema repete
+ *   no outro, girado.
+ * - **A folga do vinco** tira mais 3 mm de cada lado, porque a dobra não cai
+ *   sempre no mesmo milímetro e letra em cima dela sai rachada.
+ *
+ * Sem esta conta, o editor oferecia os 90 mm inteiros: a dona desenhava
+ * elementos de 87 mm de largura, salvava, e o sistema espremia tudo em 22 —
+ * ou seja, o que ela via na tela não tinha relação com o que saía.
+ */
+function larguraDeDesenho(modelo: Template): number {
+  const util = Number(modelo.printableWidthMm) > 0
+    ? Number(modelo.printableWidthMm)
+    : Number(modelo.widthMm);
+
+  if (!modelo.isDoubleSided) return util;
+
+  const FOLGA_DO_VINCO = 3;
+  return Math.max(6, util / 2 - FOLGA_DO_VINCO);
+}
+
 /** Produto sem tamanho e produto com tamanho são linhas distintas do lote. */
 const keyOf = (row: { productId: string; variationId: string | null }) =>
   `${row.productId}:${row.variationId ?? ""}`;
@@ -637,7 +667,7 @@ export function LabelsPage() {
           modelo={{
             id: desenhando.id,
             name: desenhando.name,
-            widthMm: Number(desenhando.widthMm),
+            widthMm: larguraDeDesenho(desenhando),
             heightMm: Number(desenhando.heightMm),
             isDoubleSided: desenhando.isDoubleSided,
             elements: desenhando.elements,
