@@ -224,82 +224,116 @@ function Label({ payload }: { payload: LabelPayload }) {
   const style = {
     width: `${layout.widthMm}mm`,
     height: `${layout.heightMm}mm`,
-    // A calibração desloca a impressão inteira: rolo desalinhado é o problema
-    // mais comum de impressora térmica de balcão.
     fontSize: "2.1mm",
   };
 
   /**
-   * Desenho montado pelo dono, quando existe.
+   * Quanto da etiqueta recebe informação.
    *
-   * O mesmo componente que o editor mostra na tela — se fossem dois, eles
-   * divergiriam na primeira mudança, e a promessa do editor é justamente que o
-   * que se vê é o que sai.
+   * Na etiqueta de joia não é ela inteira: dos 90 mm, os 30 finais são o rabo
+   * que enrola na argola e some ao pendurar a peça. Desenhar ali é desenhar no
+   * que ninguém vai ler.
    */
-  if (layout.elements && layout.elements.length > 0) {
-    const desenho = (
+  const utilMm =
+    layout.printableWidthMm && layout.printableWidthMm > 0
+      ? layout.printableWidthMm
+      : layout.widthMm;
+
+  /**
+   * O desenho, ou o formato empilhado de sempre.
+   *
+   * O desenho usa o mesmo componente que o editor mostra na tela — se fossem
+   * dois, divergiriam na primeira mudança, e a promessa do editor é justamente
+   * que o que se vê é o que sai.
+   */
+  const conteudo =
+    layout.elements && layout.elements.length > 0 ? (
       <EtiquetaDesenhada
         elementos={layout.elements}
         dados={payload}
-        larguraMm={layout.widthMm}
+        larguraMm={utilMm}
         alturaMm={layout.heightMm}
       />
+    ) : (
+      <div className="print-label-half">
+        {payload.productName && <span className="print-label-name">{payload.productName}</span>}
+
+        <span className="print-label-line">
+          {payload.sku && <span className="print-label-sku">{payload.sku}</span>}
+          {payload.size && <span className="print-label-size">Tam. {payload.size}</span>}
+        </span>
+
+        {payload.barcode && <Barcode value={payload.barcode} heightMm={layout.heightMm * 0.32} />}
+
+        <span className="print-label-line">
+          {payload.price && (
+            <span className="print-label-price">
+              R$ {Number(payload.price).toFixed(2).replace(".", ",")}
+            </span>
+          )}
+          {payload.weightGrams && (
+            <span className="print-label-weight">{payload.weightGrams} g</span>
+          )}
+        </span>
+      </div>
     );
 
+  if (!layout.isDoubleSided) {
     return (
-      <div
-        className="print-label"
-      >
-        {desenho}
-        {layout.isDoubleSided && (
-          <>
-            <span className="print-label-fold" />
-            {desenho}
-          </>
-        )}
+      <div className="print-label" style={style}>
+        <div style={{ width: `${utilMm}mm`, height: "100%" }}>{conteudo}</div>
       </div>
     );
   }
 
-  const conteudo = (
-    <>
-      {payload.productName && <span className="print-label-name">{payload.productName}</span>}
+  /**
+   * A etiqueta que dobra: o desenho cobre os DOIS lados, e o da direita sai
+   * girado.
+   *
+   * O dono decide o que vai em cada metade — informação de um lado e código de
+   * barras do outro, por exemplo, que dá ao código a largura inteira de um lado
+   * em vez de espremê-lo ao lado do texto.
+   *
+   * O giro não é enfeite: ao dobrar, a metade da direita vira de cabeça para
+   * baixo. Sem ele, um dos dois lados da peça pendurada aparece invertido — e é
+   * justamente o lado que o cliente vê primeiro ao pegar a peça na vitrine.
+   *
+   * Cada metade é uma janela sobre o MESMO desenho, deslocado: é o que garante
+   * que a tela do editor e o papel mostrem a mesma coisa, em vez de dois
+   * desenhos que precisam ser mantidos iguais na mão.
+   */
+  const metadeMm = utilMm / 2;
 
-      <span className="print-label-line">
-        {payload.sku && <span className="print-label-sku">{payload.sku}</span>}
-        {payload.size && <span className="print-label-size">Tam. {payload.size}</span>}
-      </span>
-
-      {payload.barcode && <Barcode value={payload.barcode} heightMm={layout.heightMm * 0.32} />}
-
-      <span className="print-label-line">
-        {payload.price && (
-          <span className="print-label-price">
-            R$ {Number(payload.price).toFixed(2).replace(".", ",")}
-          </span>
-        )}
-        {payload.weightGrams && (
-          <span className="print-label-weight">{payload.weightGrams} g</span>
-        )}
-      </span>
-    </>
+  const janela = (deslocamentoMm: number) => (
+    <div
+      style={{
+        position: "relative",
+        width: `${metadeMm}mm`,
+        height: "100%",
+        overflow: "hidden",
+        flex: "0 0 auto",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: `${-deslocamentoMm}mm`,
+          width: `${utilMm}mm`,
+          height: "100%",
+        }}
+      >
+        {conteudo}
+      </div>
+    </div>
   );
 
   return (
     <div className="print-label" style={style}>
-      <div className="print-label-half">{conteudo}</div>
-
-      {/*
-        Etiqueta de joia é dobrada ao meio e colada na argola: as duas metades
-        precisam ter o mesmo conteúdo, porque só uma fica visível dependendo de
-        como a peça é pendurada.
-      */}
-      {layout.isDoubleSided && (
-        <>
-          <span className="print-label-fold" />
-          <div className="print-label-half">{conteudo}</div>
-        </>
-      )}
+      {janela(0)}
+      <div style={{ transform: "rotate(180deg)", height: "100%", display: "flex" }}>
+        {janela(metadeMm)}
+      </div>
     </div>
   );
 }
