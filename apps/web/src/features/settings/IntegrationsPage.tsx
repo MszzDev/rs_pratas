@@ -466,7 +466,7 @@ export function IntegrationsPage() {
 
       setPreviaDoImport(null);
       setAviso(
-        `${r.ajustadas} peça(s) tiveram o saldo trazido do site para o ${r.loja}.` +
+        `${r.ajustadas} peça(s) tiveram o saldo trazido do site para ${r.loja}.` +
           (r.semCadastro.length > 0
             ? ` ${r.semCadastro.length} código(s) existem no site e não existem aqui — use "Trazer produtos" antes.`
             : ""),
@@ -510,7 +510,11 @@ export function IntegrationsPage() {
       {previaDoImport && (
         <div className="mb-5 rounded-lg border border-border bg-surface p-4">
           <h2 className="text-lg font-semibold text-text-primary">
-            O que vai mudar no estoque do {previaDoImport.loja}
+            {/*
+              Sem "do" antes do nome: as lojas se chamam "Loja Jardim Angela", e
+              o resultado saia "no estoque do Loja Jardim Angela".
+            */}
+            O que vai mudar no estoque — {previaDoImport.loja}
           </h2>
 
           <p className="mt-1 text-sm text-text-secondary">
