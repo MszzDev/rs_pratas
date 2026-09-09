@@ -5,11 +5,21 @@ import { audit } from "../../core/audit.service.js";
 import { badRequest, conflict, notFound } from "../../core/errors.js";
 import { assertStoreAccess } from "../../core/rbac/require-role.hook.js";
 
-/** Movimentos que somam ao saldo. Os demais subtraem. */
+/**
+ * Movimentos que somam ao saldo. Os demais subtraem.
+ *
+ * `AJUSTE` e `INVENTARIO` entram aqui porque quem chama sempre os usa para
+ * diferenca POSITIVA - o acerto para baixo vira `PERDA` ou `SAIDA`, que sao os
+ * nomes honestos do que aconteceu. Enquanto faltavam nesta lista, corrigir um
+ * saldo para cima subtraia: com o estoque em zero, "ajustar para 7" respondia
+ * "so ha 0 em estoque" e nao havia jeito de acertar a peca pela tela.
+ */
 const INBOUND: StockMovementType[] = [
   "ENTRADA",
   "TRANSFERENCIA_ENTRADA",
   "DEVOLUCAO",
+  "AJUSTE",
+  "INVENTARIO",
 ];
 
 /**

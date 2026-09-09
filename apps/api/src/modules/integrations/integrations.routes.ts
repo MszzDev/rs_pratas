@@ -14,6 +14,7 @@ import {
   testIntegration,
 } from "./integrations.service.js";
 import { baixarPedidosDaNuvemshop } from "./nuvemshop-orders.service.js";
+import { importarEstoqueDaNuvemshop } from "./nuvemshop-importar-estoque.service.js";
 import {
   importCustomersFromNuvemshop,
   importProductsFromNuvemshop,
@@ -107,6 +108,30 @@ export async function integrationRoutes(app: FastifyInstance) {
     "/integrations/nuvemshop/sync-orders",
     { preHandler: [app.requireAuth, requirePermission("INTEGRATION_NUVEMSHOP")] },
     async (request) => baixarPedidosDaNuvemshop({ request }),
+  );
+
+  /**
+   * O sentido contrário, e só uma vez: trazer para o sistema as quantidades
+   * que já existem no site.
+   *
+   * Na estreia o estoque entrou zerado enquanto a loja online, mantida à mão,
+   * tinha os números certos. Nesse estado, publicar zeraria a vitrine, e contar
+   * as peças na mão refaria um trabalho que já está pronto do outro lado.
+   *
+   * `aplicar=false` (o padrão) só compara e devolve o que mudaria. Escrever
+   * estoque de 668 peças sem a pessoa ver a lista antes é o tipo de acerto que
+   * ninguém consegue desfazer depois.
+   */
+  app.post(
+    "/integrations/nuvemshop/import-stock",
+    { preHandler: [app.requireAuth, requirePermission("INTEGRATION_NUVEMSHOP")] },
+    async (request) => {
+      const body = z
+        .object({ aplicar: z.boolean().default(false) })
+        .parse(request.body ?? {});
+
+      return importarEstoqueDaNuvemshop({ request, aplicar: body.aplicar });
+    },
   );
 
   app.get(

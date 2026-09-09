@@ -184,6 +184,18 @@ function WebhookAddresses() {
 const formatDateTime = (iso: string | null) =>
   iso === null ? "—" : new Date(iso).toLocaleString("pt-BR");
 
+/** O que a prévia do import de estoque devolve, antes de gravar qualquer coisa. */
+interface ImportacaoDeEstoque {
+  simulacao: boolean;
+  loja: string;
+  variantesNoSite: number;
+  jaIguais: number;
+  diferencas: Array<{ sku: string; peca: string; aqui: number; noSite: number }>;
+  semCadastro: Array<{ sku: string; peca: string; noSite: number }>;
+  codigosRepetidos: string[];
+  ajustadas: number;
+}
+
 export function IntegrationsPage() {
   const confirmar = useConfirm();
   const queryClient = useQueryClient();
@@ -420,6 +432,51 @@ export function IntegrationsPage() {
       setError(caught instanceof ApiError ? caught.message : "Não foi possível buscar os pedidos."),
   });
 
+  /**
+   * O sentido contrário, e só uma vez: trazer do site as quantidades que já
+   * existem lá.
+   *
+   * Na estreia o estoque entrou zerado enquanto a loja online, mantida à mão,
+   * tinha os números certos. Nesse estado "Enviar estoque" zeraria a vitrine, e
+   * contar as peças na mão refaria dias de trabalho que já estão prontos do
+   * outro lado.
+   *
+   * Sempre começa pela prévia. Escrever o saldo de centenas de peças sem a
+   * pessoa ver a lista antes é o tipo de acerto que ninguém desfaz depois.
+   */
+  const [previaDoImport, setPreviaDoImport] = useState<ImportacaoDeEstoque | null>(null);
+
+  const importarEstoque = useMutation({
+    mutationFn: (aplicar: boolean) =>
+      apiFetch<ImportacaoDeEstoque>("/api/v1/integrations/nuvemshop/import-stock", {
+        method: "POST",
+        body: JSON.stringify({ aplicar }),
+      }),
+    onSuccess: (r) => {
+      setError(null);
+
+      if (r.simulacao) {
+        setPreviaDoImport(r);
+        setAviso(null);
+        return;
+      }
+
+      setPreviaDoImport(null);
+      setAviso(
+        `${r.ajustadas} peça(s) tiveram o saldo trazido do site para o ${r.loja}.` +
+          (r.semCadastro.length > 0
+            ? ` ${r.semCadastro.length} código(s) existem no site e não existem aqui — use "Trazer produtos" antes.`
+            : ""),
+      );
+
+      void queryClient.invalidateQueries({ queryKey: ["integrations"] });
+    },
+    onError: (caught) => {
+      setPreviaDoImport(null);
+      setError(caught instanceof ApiError ? caught.message : "Não foi possível ler o site.");
+    },
+  });
+
   return (
     <PageShell
       eyebrow="Sistema"
@@ -435,6 +492,89 @@ export function IntegrationsPage() {
       {aviso && (
         <div className="mb-5">
           <Alert tone="success">{aviso}</Alert>
+        </div>
+      )}
+
+      {/*
+        A prévia do estoque vindo do site.
+
+        Mostra a lista ANTES de gravar porque o import escreve o saldo de
+        centenas de peças de uma vez, e depois não há como voltar atrás — o
+        número antigo era zero e o certo estava só no site. Vendo a lista, a
+        dona reconhece as peças e percebe na hora se o que apareceu não faz
+        sentido.
+      */}
+      {previaDoImport && (
+        <div className="mb-5 rounded-lg border border-border bg-surface p-4">
+          <h2 className="text-lg font-semibold text-text-primary">
+            O que vai mudar no estoque do {previaDoImport.loja}
+          </h2>
+
+          <p className="mt-1 text-sm text-text-secondary">
+            {previaDoImport.variantesNoSite} peça(s) com código no site.{" "}
+            {previaDoImport.jaIguais} já com o saldo certo aqui.{" "}
+            <strong className="text-text-primary">
+              {previaDoImport.diferencas.length} para acertar.
+            </strong>
+          </p>
+
+          {previaDoImport.semCadastro.length > 0 && (
+            <p className="mt-2 text-sm text-text-secondary">
+              {previaDoImport.semCadastro.length} código(s) existem no site e não existem aqui.
+              Ficam de fora — traga os produtos primeiro se quiser incluí-los.
+            </p>
+          )}
+
+          {previaDoImport.codigosRepetidos.length > 0 && (
+            <p className="mt-2 text-sm text-text-secondary">
+              {previaDoImport.codigosRepetidos.length} código(s) aparecem em mais de uma linha de
+              estoque aqui — o site tem um número só e não dá para saber de qual linha é. Ficam de
+              fora: {previaDoImport.codigosRepetidos.slice(0, 8).join(", ")}
+              {previaDoImport.codigosRepetidos.length > 8 ? "..." : ""}
+            </p>
+          )}
+
+          {previaDoImport.diferencas.length > 0 && (
+            <div className="mt-3 max-h-72 overflow-y-auto rounded-md border border-border">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-background-secondary text-left text-text-secondary">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Peça</th>
+                    <th className="px-3 py-2 font-medium">Código</th>
+                    <th className="px-3 py-2 text-right font-medium">Aqui</th>
+                    <th className="px-3 py-2 text-right font-medium">No site</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previaDoImport.diferencas.map((linha) => (
+                    <tr key={linha.sku} className="border-t border-border">
+                      <td className="px-3 py-2 text-text-primary">{linha.peca}</td>
+                      <td className="px-3 py-2 text-text-secondary">{linha.sku}</td>
+                      <td className="px-3 py-2 text-right text-text-secondary">{linha.aqui}</td>
+                      <td className="px-3 py-2 text-right font-medium text-text-primary">
+                        {linha.noSite}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button
+              type="button"
+              disabled={importarEstoque.isPending || previaDoImport.diferencas.length === 0}
+              onClick={() => importarEstoque.mutate(true)}
+            >
+              {importarEstoque.isPending
+                ? "Gravando..."
+                : `Gravar ${previaDoImport.diferencas.length} saldo(s)`}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setPreviaDoImport(null)}>
+              Cancelar
+            </Button>
+          </div>
         </div>
       )}
 
@@ -568,6 +708,18 @@ export function IntegrationsPage() {
                         >
                           <RefreshCw className="h-5 w-5" aria-hidden />
                           {buscarPedidos.isPending ? "Buscando..." : "Buscar pedidos do site"}
+                        </Button>
+                      )}
+
+                      {integracao.provider === "NUVEMSHOP" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={importarEstoque.isPending}
+                          onClick={() => importarEstoque.mutate(false)}
+                        >
+                          <Download className="h-5 w-5" aria-hidden />
+                          {importarEstoque.isPending ? "Conferindo..." : "Trazer estoque do site"}
                         </Button>
                       )}
 
