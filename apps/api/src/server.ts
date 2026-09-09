@@ -4,6 +4,7 @@ import { buildApp } from "./app.js";
 import { env } from "./config/env.js";
 import { prisma } from "./db/prisma.js";
 import { redis } from "./db/redis.js";
+import { iniciarRotinaDaNuvemshop } from "./modules/integrations/rotina-da-nuvemshop.js";
 
 const app = await buildApp();
 
@@ -64,3 +65,12 @@ if (env.RUN_MIGRATIONS_ON_BOOT) {
     app.log.error({ error }, "falha ao preparar o banco");
   }
 }
+
+/**
+ * A conversa com a loja virtual, sozinha.
+ *
+ * Fica por último de propósito: depois do `listen` e depois da migração. A
+ * rotina consulta as integrações, e num banco recém-criado essas tabelas só
+ * existem quando a migração termina.
+ */
+iniciarRotinaDaNuvemshop(app.log);

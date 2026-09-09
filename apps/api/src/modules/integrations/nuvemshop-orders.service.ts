@@ -1,4 +1,4 @@
-import type { FastifyRequest } from "fastify";
+import type { Ator } from "../../core/ator.js";
 import { prisma } from "../../db/prisma.js";
 import { badRequest } from "../../core/errors.js";
 import { audit } from "../../core/audit.service.js";
@@ -52,12 +52,12 @@ export interface ResultadoDaSincronia {
  * de novo depois de uma falha de rede não pode tirar a peça duas vezes.
  */
 export async function baixarPedidosDaNuvemshop(params: {
-  request: FastifyRequest;
+  ator: Ator;
 }): Promise<ResultadoDaSincronia> {
-  const { request } = params;
+  const { ator } = params;
 
   const integration = await prisma.integration.findUnique({
-    where: { companyId_provider: { companyId: request.user.companyId, provider: "NUVEMSHOP" } },
+    where: { companyId_provider: { companyId: ator.companyId, provider: "NUVEMSHOP" } },
   });
 
   if (!integration || integration.status !== "CONECTADA") {
@@ -112,7 +112,7 @@ export async function baixarPedidosDaNuvemshop(params: {
       evento = await prisma.integrationEvent.create({
         data: {
           integrationId: integration.id,
-          companyId: request.user.companyId,
+          companyId: ator.companyId,
           externalId: String(pedido.id),
           topic: "order/paid",
           payload: pedido as unknown as object,
@@ -134,7 +134,7 @@ export async function baixarPedidosDaNuvemshop(params: {
         continue;
       }
 
-      const peca = await acharPelaSku(request.user.companyId, item.sku);
+      const peca = await acharPelaSku(ator.companyId, item.sku);
 
       if (!peca) {
         resultado.semCadastro.push({ pedido: pedido.number, sku: item.sku, peca: item.name });
@@ -145,13 +145,13 @@ export async function baixarPedidosDaNuvemshop(params: {
       try {
         await prisma.$transaction(async (tx) => {
           await applyMovement(tx, {
-            companyId: request.user.companyId,
+            companyId: ator.companyId,
             storeId: integration.storeId!,
             productId: peca.productId,
             variationId: peca.variationId,
             type: "VENDA",
             quantity: item.quantity,
-            userId: request.user.sub,
+            userId: ator.userId ?? undefined,
             reason: `Pedido ${pedido.number} da loja online`,
             referenceType: "NUVEMSHOP_ORDER",
             referenceId: String(pedido.id),
@@ -191,12 +191,12 @@ export async function baixarPedidosDaNuvemshop(params: {
     data: { lastOrderSyncAt: new Date() },
   });
 
-  await audit(request, {
+  await audit(ator.request, {
     action: "SETTING_UPDATE",
     result: "SUCCESS",
-    userId: request.user.sub,
-    companyId: request.user.companyId,
-    userRoleSnapshot: request.user.role,
+    userId: ator.userId,
+    companyId: ator.companyId,
+    userRoleSnapshot: ator.role,
     entityType: "Integration",
     entityId: integration.id,
     reason: "pedidos da loja online baixados do estoque",

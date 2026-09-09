@@ -1,5 +1,6 @@
 import type { IntegrationProvider } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
+import type { Ator } from "../../core/ator.js";
 import { prisma } from "../../db/prisma.js";
 import { audit } from "../../core/audit.service.js";
 import { badRequest, notFound } from "../../core/errors.js";
@@ -249,12 +250,9 @@ export async function testIntegration(params: {
  * função devolve a lista do que NÃO casou — sem isso o dono acharia que
  * sincronizou tudo enquanto metade do catálogo ficou de fora, em silêncio.
  */
-export async function syncStockToNuvemshop(params: { request: FastifyRequest }) {
-  const { request } = params;
-  const { integration, credentials } = await exigirConectada(
-    request.user.companyId,
-    "NUVEMSHOP",
-  );
+export async function syncStockToNuvemshop(params: { ator: Ator }) {
+  const { ator } = params;
+  const { integration, credentials } = await exigirConectada(ator.companyId, "NUVEMSHOP");
 
   if (!integration.storeId) {
     throw badRequest(
@@ -326,12 +324,12 @@ export async function syncStockToNuvemshop(params: { request: FastifyRequest }) 
     data: { lastSyncAt: new Date(), lastError: null },
   });
 
-  await audit(request, {
+  await audit(ator.request, {
     action: "SETTING_UPDATE",
     result: "SUCCESS",
-    userId: request.user.sub,
-    companyId: request.user.companyId,
-    userRoleSnapshot: request.user.role,
+    userId: ator.userId,
+    companyId: ator.companyId,
+    userRoleSnapshot: ator.role,
     entityType: "Integration",
     entityId: integration.id,
     reason: "estoque sincronizado com a Nuvemshop",

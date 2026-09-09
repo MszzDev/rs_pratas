@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { atorDaRequisicao } from "../../core/ator.js";
 import type { FastifyInstance } from "fastify";
 import { assertPermission, requirePermission } from "../../core/rbac/require-permission.hook.js";
 import { prisma } from "../../db/prisma.js";
@@ -93,7 +94,7 @@ export async function integrationRoutes(app: FastifyInstance) {
   app.post(
     "/integrations/nuvemshop/sync-stock",
     { preHandler: [app.requireAuth, requirePermission("INTEGRATION_NUVEMSHOP")] },
-    async (request) => syncStockToNuvemshop({ request }),
+    async (request) => syncStockToNuvemshop({ ator: atorDaRequisicao(request) }),
   );
 
   /**
@@ -107,7 +108,7 @@ export async function integrationRoutes(app: FastifyInstance) {
   app.post(
     "/integrations/nuvemshop/sync-orders",
     { preHandler: [app.requireAuth, requirePermission("INTEGRATION_NUVEMSHOP")] },
-    async (request) => baixarPedidosDaNuvemshop({ request }),
+    async (request) => baixarPedidosDaNuvemshop({ ator: atorDaRequisicao(request) }),
   );
 
   /**
@@ -130,7 +131,10 @@ export async function integrationRoutes(app: FastifyInstance) {
         .object({ aplicar: z.boolean().default(false) })
         .parse(request.body ?? {});
 
-      return importarEstoqueDaNuvemshop({ request, aplicar: body.aplicar });
+      return importarEstoqueDaNuvemshop({
+        ator: atorDaRequisicao(request),
+        aplicar: body.aplicar,
+      });
     },
   );
 

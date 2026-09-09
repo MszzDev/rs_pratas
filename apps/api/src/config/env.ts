@@ -20,6 +20,18 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((valor) => valor === "true"),
+  /**
+   * De quantos em quantos minutos o sistema conversa com a loja virtual
+   * sozinho: busca os pedidos novos e publica o estoque.
+   *
+   * Quinze minutos é o intervalo em que uma peça vendida na internet ainda não
+   * foi para o balcão — tempo de a vendedora não vender de novo o que já saiu.
+   * Mais curto gastaria chamadas da API sem ninguém perceber a diferença; mais
+   * longo abre uma janela para a peça ser vendida duas vezes.
+   *
+   * Zero desliga a rotina e deixa tudo nos botões, como era antes.
+   */
+  NUVEMSHOP_SYNC_MINUTES: z.coerce.number().int().min(0).max(1440).default(15),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 
   DATABASE_URL: z.string().url(),

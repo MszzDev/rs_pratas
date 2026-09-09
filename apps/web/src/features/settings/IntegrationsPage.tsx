@@ -65,7 +65,8 @@ const SERVICOS: Record<
 > = {
   NUVEMSHOP: {
     nome: "Nuvemshop",
-    descricao: "A loja virtual. O estoque daqui alimenta o site, e os pedidos de lá chegam aqui.",
+    descricao:
+      "A loja virtual. A cada 15 minutos o sistema busca os pedidos de lá e publica o estoque daqui, sozinho. Os botões abaixo servem para não esperar a próxima vez.",
     tone: "bg-ocean-soft text-ocean-dark",
     campos: [
       {

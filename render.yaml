@@ -82,6 +82,17 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
 
+      # De quantos em quantos minutos o sistema conversa com a loja virtual
+      # sozinho: busca os pedidos novos e publica o estoque. Zero desliga e
+      # devolve tudo para os botões.
+      #
+      # Vale saber: no plano gratuito o serviço hiberna depois de ~15 min
+      # parado, e temporizador nenhum roda em processo dormindo. A rotina roda
+      # um ciclo logo que acorda, então o pedido da madrugada entra quando a
+      # primeira pessoa abre o sistema — e não fica perdido.
+      - key: NUVEMSHOP_SYNC_MINUTES
+        value: "15"
+
       # ------------------------------------------------------------ e-mail
       #
       # Sem estas três, o sistema funciona e NÃO envia nada: comprovante,

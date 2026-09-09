@@ -1,4 +1,4 @@
-import type { FastifyRequest } from "fastify";
+import type { Ator } from "../../core/ator.js";
 import { prisma } from "../../db/prisma.js";
 import { badRequest } from "../../core/errors.js";
 import { audit } from "../../core/audit.service.js";
@@ -53,13 +53,13 @@ export interface ResultadoDaImportacao {
 }
 
 export async function importarEstoqueDaNuvemshop(params: {
-  request: FastifyRequest;
+  ator: Ator;
   aplicar: boolean;
 }): Promise<ResultadoDaImportacao> {
-  const { request, aplicar } = params;
+  const { ator, aplicar } = params;
 
   const integration = await prisma.integration.findUnique({
-    where: { companyId_provider: { companyId: request.user.companyId, provider: "NUVEMSHOP" } },
+    where: { companyId_provider: { companyId: ator.companyId, provider: "NUVEMSHOP" } },
   });
 
   if (!integration || integration.status !== "CONECTADA") {
@@ -207,7 +207,7 @@ export async function importarEstoqueDaNuvemshop(params: {
 
         await prisma.$transaction(async (tx) => {
           await applyMovement(tx, {
-            companyId: request.user.companyId,
+            companyId: ator.companyId,
             storeId: integration.storeId!,
             productId: nosso.productId,
             variationId: nosso.variationId,
@@ -222,7 +222,7 @@ export async function importarEstoqueDaNuvemshop(params: {
              */
             type: diferenca > 0 ? "AJUSTE" : "SAIDA",
             quantity: Math.abs(diferenca),
-            userId: request.user.sub,
+            userId: ator.userId ?? undefined,
             reason: `Quantidade trazida da loja online (tinha ${nosso.quantity}, site diz ${noSite})`,
             referenceType: "NUVEMSHOP_IMPORT",
             referenceId: chave,
@@ -240,13 +240,13 @@ export async function importarEstoqueDaNuvemshop(params: {
   }
 
   if (aplicar) {
-    await audit(request, {
+    await audit(ator.request, {
       action: "SETTING_UPDATE",
       result: "SUCCESS",
-      userId: request.user.sub,
-      companyId: request.user.companyId,
+      userId: ator.userId,
+      companyId: ator.companyId,
       storeId: integration.storeId,
-      userRoleSnapshot: request.user.role,
+      userRoleSnapshot: ator.role,
       entityType: "Integration",
       entityId: integration.id,
       reason: "quantidades trazidas da loja online para o estoque",
