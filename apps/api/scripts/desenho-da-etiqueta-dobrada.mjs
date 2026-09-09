@@ -67,30 +67,26 @@ function desenhoDosDoisLados(utilMm, alturaMm) {
   const metade = utilMm / 2;
 
   /**
-   * Margens simétricas e generosas em cada lado.
+   * O conteúdo encosta na DOBRA, e não fica centrado em cada metade.
    *
-   * Primeiro tentamos usar o espaço todo: o código com 21 mm num lado de 25
-   * sobrava 4 mm no total, e qualquer desvio o fazia atravessar o vinco. Código
-   * partido pela dobra não é lido, e isso só aparece depois de pendurar a peça.
+   * Foi assim que o dono acertou no papel, depois de várias tentativas minhas
+   * centrando cada lado. E faz sentido: a passagem pelo navegador e pelo driver
+   * introduz um pequeno desvio, e ele empurra as duas metades para longe uma da
+   * outra. Encostando na dobra, o desvio come a margem externa — que é vazia —
+   * em vez de jogar o código por cima do vinco.
    *
-   * Dois terços do lado, centrado, deixam 4 mm de cada borda — folga que
-   * absorve o desvio da impressão e a mão de quem dobra.
+   * Fica então: margem larga nas bordas de fora, e 1 mm de cada lado do vinco.
    */
-  /* Pouco mais da metade do lado, e não dois terços.
-   
-     Com 0,68 o código ficava a 1 mm do vinco depois do desvio da impressão, e
-     "quase encostando" numa etiqueta que vai ser dobrada à mão é o mesmo que
-     encostando. Com 0,60 sobram 5 mm de cada borda, e a diferença de leitura
-     do código é nenhuma. */
   const largura = Math.max(4, Math.round(metade * 0.6));
-  const margem = (metade - largura) / 2;
+  const folgaDoVinco = 1;
+  const inicioDaInformacao = Math.max(0, metade - folgaDoVinco - largura);
 
   return [
     {
       id: "nome",
       campo: "NOME",
-      xMm: margem,
-      yMm: 0.8,
+      xMm: inicioDaInformacao,
+      yMm: 0.6,
       larguraMm: largura,
       tamanhoMm: 2,
       negrito: true,
@@ -99,28 +95,30 @@ function desenhoDosDoisLados(utilMm, alturaMm) {
     {
       id: "sku",
       campo: "SKU",
-      xMm: margem,
-      yMm: 3.6,
+      xMm: inicioDaInformacao,
+      yMm: 4,
       larguraMm: largura,
       tamanhoMm: 1.6,
       negrito: false,
       alinhamento: "center",
     },
     {
+      // O preço é o que o cliente procura na vitrine: maior que o resto.
       id: "preco",
       campo: "PRECO",
-      xMm: margem,
-      yMm: Math.max(6, alturaMm - 4.2),
+      xMm: inicioDaInformacao,
+      yMm: Math.max(5, alturaMm - 5.1),
       larguraMm: largura,
       tamanhoMm: 2.8,
       negrito: true,
       alinhamento: "center",
     },
     {
+      // Do outro lado do vinco, com a mesma folga.
       id: "barras",
       campo: "CODIGO_BARRAS",
-      xMm: metade + margem,
-      yMm: 1.5,
+      xMm: metade + folgaDoVinco,
+      yMm: 2.3,
       larguraMm: largura,
       alturaMm: Math.max(5, alturaMm - 5),
       tamanhoMm: 1.4,

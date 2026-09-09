@@ -101,33 +101,26 @@ function desenhoDobrado(larguraMm: number, alturaMm: number): LabelElement[] {
   const metade = larguraMm / 2;
 
   /**
-   * Cada lado ganha margens simétricas e generosas.
+   * O conteúdo encosta na DOBRA, e não fica centrado em cada metade.
    *
-   * A tentação é usar o espaço todo, e foi o que fizemos primeiro: o código de
-   * barras com 21 mm num lado de 25 sobrava só 4 mm no total, e qualquer desvio
-   * de renderização ou de onde o papel foi dobrado o fazia atravessar o vinco.
-   * Código partido pela dobra não é lido, e isso só aparece depois de pendurar
-   * a peça.
+   * Foi assim que o dono acertou no papel, depois de várias tentativas minhas
+   * centrando cada lado. E faz sentido: a passagem pelo navegador e pelo driver
+   * introduz um pequeno desvio, e ele empurra as duas metades para longe uma da
+   * outra. Encostando na dobra, o desvio come a margem externa — que é vazia —
+   * em vez de jogar o código por cima do vinco.
    *
-   * Com o conteúdo ocupando dois terços do lado e centrado, sobram 4 mm de cada
-   * borda — folga que absorve tanto o desvio da impressão quanto a mão de quem
-   * dobra, sem custar legibilidade que faça diferença.
+   * Fica então: margem larga nas bordas de fora, e 1 mm de cada lado do vinco.
    */
-  /* Pouco mais da metade do lado, e não dois terços.
-   
-     Com 0,68 o código ficava a 1 mm do vinco depois do desvio da impressão, e
-     "quase encostando" numa etiqueta que vai ser dobrada à mão é o mesmo que
-     encostando. Com 0,60 sobram 5 mm de cada borda, e a diferença de leitura
-     do código é nenhuma. */
   const largura = Math.max(4, Math.round(metade * 0.6));
-  const margem = (metade - largura) / 2;
+  const folgaDoVinco = 1;
+  const inicioDaInformacao = Math.max(0, metade - folgaDoVinco - largura);
 
   return [
     {
       id: "nome",
       campo: "NOME",
-      xMm: margem,
-      yMm: 0.8,
+      xMm: inicioDaInformacao,
+      yMm: 0.6,
       larguraMm: largura,
       tamanhoMm: 2,
       negrito: true,
@@ -136,8 +129,8 @@ function desenhoDobrado(larguraMm: number, alturaMm: number): LabelElement[] {
     {
       id: "sku",
       campo: "SKU",
-      xMm: margem,
-      yMm: 3.6,
+      xMm: inicioDaInformacao,
+      yMm: 4,
       larguraMm: largura,
       tamanhoMm: 1.6,
       negrito: false,
@@ -147,19 +140,19 @@ function desenhoDobrado(larguraMm: number, alturaMm: number): LabelElement[] {
       // O preço é o que o cliente procura na vitrine: maior que o resto.
       id: "preco",
       campo: "PRECO",
-      xMm: margem,
-      yMm: Math.max(6, alturaMm - 4.2),
+      xMm: inicioDaInformacao,
+      yMm: Math.max(5, alturaMm - 5.1),
       larguraMm: largura,
       tamanhoMm: 2.8,
       negrito: true,
       alinhamento: "center",
     },
     {
-      // Centrado no lado direito, com a mesma folga do esquerdo.
+      // Do outro lado do vinco, com a mesma folga.
       id: "barras",
       campo: "CODIGO_BARRAS",
-      xMm: metade + margem,
-      yMm: 1.5,
+      xMm: metade + folgaDoVinco,
+      yMm: 2.3,
       larguraMm: largura,
       alturaMm: Math.max(5, alturaMm - 5),
       tamanhoMm: 1.4,
