@@ -65,19 +65,27 @@ function utilDe(modelo) {
  */
 function desenhoDosDoisLados(utilMm, alturaMm) {
   const metade = utilMm / 2;
-  const margem = 1;
 
-  // Cada lado tem a metade, menos a folga do vinco de um dos lados.
-  const larguraDeUmLado = metade - FOLGA_DO_VINCO - margem;
+  /**
+   * Margens simétricas e generosas em cada lado.
+   *
+   * Primeiro tentamos usar o espaço todo: o código com 21 mm num lado de 25
+   * sobrava 4 mm no total, e qualquer desvio o fazia atravessar o vinco. Código
+   * partido pela dobra não é lido, e isso só aparece depois de pendurar a peça.
+   *
+   * Dois terços do lado, centrado, deixam 4 mm de cada borda — folga que
+   * absorve o desvio da impressão e a mão de quem dobra.
+   */
+  const largura = Math.max(4, Math.round(metade * 0.68));
+  const margem = (metade - largura) / 2;
 
   return [
-    // --- Lado esquerdo: o que a pessoa lê.
     {
       id: "nome",
       campo: "NOME",
       xMm: margem,
       yMm: 0.8,
-      larguraMm: larguraDeUmLado,
+      larguraMm: largura,
       tamanhoMm: 2,
       negrito: true,
       alinhamento: "center",
@@ -87,30 +95,27 @@ function desenhoDosDoisLados(utilMm, alturaMm) {
       campo: "SKU",
       xMm: margem,
       yMm: 3.6,
-      larguraMm: larguraDeUmLado,
+      larguraMm: largura,
       tamanhoMm: 1.6,
       negrito: false,
       alinhamento: "center",
     },
     {
-      // O preço é o que o cliente procura na vitrine: maior que o resto.
       id: "preco",
       campo: "PRECO",
       xMm: margem,
       yMm: Math.max(6, alturaMm - 4.2),
-      larguraMm: larguraDeUmLado,
+      larguraMm: largura,
       tamanhoMm: 2.8,
       negrito: true,
       alinhamento: "center",
     },
-
-    // --- Lado direito: o código, com a largura toda para ele.
     {
       id: "barras",
       campo: "CODIGO_BARRAS",
-      xMm: metade + FOLGA_DO_VINCO,
+      xMm: metade + margem,
       yMm: 1.5,
-      larguraMm: larguraDeUmLado,
+      larguraMm: largura,
       alturaMm: Math.max(5, alturaMm - 5),
       tamanhoMm: 1.4,
       negrito: false,

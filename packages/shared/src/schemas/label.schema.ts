@@ -100,10 +100,21 @@ export const labelElementsSchema = z.array(labelElementSchema).max(30);
 function desenhoDobrado(larguraMm: number, alturaMm: number): LabelElement[] {
   const metade = larguraMm / 2;
 
-  /** A mesma folga que o gerador respeita ao imprimir. */
-  const folgaDoVinco = 3;
-  const margem = 1;
-  const largura = Math.max(4, metade - folgaDoVinco - margem);
+  /**
+   * Cada lado ganha margens simétricas e generosas.
+   *
+   * A tentação é usar o espaço todo, e foi o que fizemos primeiro: o código de
+   * barras com 21 mm num lado de 25 sobrava só 4 mm no total, e qualquer desvio
+   * de renderização ou de onde o papel foi dobrado o fazia atravessar o vinco.
+   * Código partido pela dobra não é lido, e isso só aparece depois de pendurar
+   * a peça.
+   *
+   * Com o conteúdo ocupando dois terços do lado e centrado, sobram 4 mm de cada
+   * borda — folga que absorve tanto o desvio da impressão quanto a mão de quem
+   * dobra, sem custar legibilidade que faça diferença.
+   */
+  const largura = Math.max(4, Math.round(metade * 0.68));
+  const margem = (metade - largura) / 2;
 
   return [
     {
@@ -138,9 +149,10 @@ function desenhoDobrado(larguraMm: number, alturaMm: number): LabelElement[] {
       alinhamento: "center",
     },
     {
+      // Centrado no lado direito, com a mesma folga do esquerdo.
       id: "barras",
       campo: "CODIGO_BARRAS",
-      xMm: metade + folgaDoVinco,
+      xMm: metade + margem,
       yMm: 1.5,
       larguraMm: largura,
       alturaMm: Math.max(5, alturaMm - 5),
