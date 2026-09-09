@@ -41,6 +41,7 @@ interface Template {
   gapYMm: string;
   columnsPerRow: number;
   rollWidthMm: string;
+  printableWidthMm: string;
   isDoubleSided: boolean;
   showProductName: boolean;
   showSku: boolean;
@@ -103,6 +104,7 @@ const TAMANHOS_PRONTOS: Array<{
   folgaMm: number;
   intervaloMm: number;
   bobinaMm: number;
+  areaUtilMm: number;
   para: string;
   dupla: boolean;
 }> = [
@@ -114,6 +116,7 @@ const TAMANHOS_PRONTOS: Array<{
     folgaMm: 1.2,
     intervaloMm: 3.1,
     bobinaMm: 104,
+    areaUtilMm: 0,
     para: "o rolo da loja, três colunas",
     dupla: false,
   },
@@ -127,6 +130,7 @@ const TAMANHOS_PRONTOS: Array<{
     folgaMm: 1.2,
     intervaloMm: 3.1,
     bobinaMm: 0,
+    areaUtilMm: 0,
     para: "mesma etiqueta, rolo de duas colunas",
     dupla: false,
   },
@@ -137,6 +141,7 @@ const TAMANHOS_PRONTOS: Array<{
     folgaMm: 0,
     intervaloMm: 3.1,
     bobinaMm: 0,
+    areaUtilMm: 0,
     para: "mesma etiqueta, rolo de coluna única",
     dupla: false,
   },
@@ -148,6 +153,9 @@ const TAMANHOS_PRONTOS: Array<{
     folgaMm: 0,
     intervaloMm: 3,
     bobinaMm: 0,
+    // Medido no papel: dos 90 mm, só os primeiros 50 recebem informação. Os
+    // 30 finais são o rabo que enrola na argola e some ao pendurar a peça.
+    areaUtilMm: 50,
     para: "joia, dobrada na argola",
     dupla: true,
   },
@@ -158,6 +166,7 @@ const TAMANHOS_PRONTOS: Array<{
     folgaMm: 0,
     intervaloMm: 3,
     bobinaMm: 0,
+    areaUtilMm: 0,
     para: "peça na caixa ou no mostruário",
     dupla: false,
   },
@@ -196,6 +205,7 @@ function comFormatoDoRolo(payload: LabelPayload, modelos: Template[]): LabelPayl
       gapXMm: Number(modelo.gapXMm),
       gapYMm: Number(modelo.gapYMm),
       rollWidthMm: Number(modelo.rollWidthMm),
+      printableWidthMm: Number(modelo.printableWidthMm),
     },
   };
 }
@@ -230,6 +240,7 @@ async function imprimirDiretoNaEtiqueta(etiquetas: LabelToPrint[]): Promise<bool
     dupla: primeira.isDoubleSided,
     // O desenho manda: se o dono posicionou o tamanho da peça, o tamanho sai.
     elementos: primeira.elements ?? null,
+    areaUtilMm: primeira.printableWidthMm ?? 0,
   };
 
   // Uma cópia é uma etiqueta de verdade no papel, não um número num comando.
@@ -379,6 +390,7 @@ export function LabelsPage() {
     gapYMm: "0",
     columnsPerRow: 1,
     rollWidthMm: "0",
+    printableWidthMm: "0",
     isDoubleSided: true,
     showProductName: true,
     showSku: true,
@@ -430,6 +442,7 @@ export function LabelsPage() {
           gapXMm: Number(form.gapXMm),
           gapYMm: Number(form.gapYMm),
           rollWidthMm: Number(form.rollWidthMm),
+          printableWidthMm: Number(form.printableWidthMm),
         },
       }),
     onSuccess: () => {
@@ -669,6 +682,7 @@ export function LabelsPage() {
                         gapXMm: String(tamanho.folgaMm),
                         gapYMm: String(tamanho.intervaloMm),
                         rollWidthMm: String(tamanho.bobinaMm),
+                        printableWidthMm: String(tamanho.areaUtilMm),
                         isDoubleSided: tamanho.dupla,
                       })
                     }
@@ -751,6 +765,15 @@ export function LabelsPage() {
               value={form.rollWidthMm}
               onChange={(event) => setForm({ ...form, rollWidthMm: event.target.value })}
               hint="A bobina inteira, com a borda dos dois lados. Tem que ser IGUAL ao papel configurado no driver da impressora, senão o navegador encolhe tudo. Zero calcula pelas colunas."
+            />
+            <Field
+              label="Área que recebe texto (mm)"
+              type="number"
+              step="0.5"
+              min={0}
+              value={form.printableWidthMm}
+              onChange={(event) => setForm({ ...form, printableWidthMm: event.target.value })}
+              hint="Quando parte da etiqueta não serve para escrever — o rabo que enrola na argola, por exemplo. Zero usa a etiqueta inteira."
             />
             <Field
               label="Intervalo entre linhas (mm)"

@@ -59,6 +59,16 @@ export interface RoloDeEtiqueta {
    * Nulo usa o formato empilhado de sempre.
    */
   elementos: LabelElement[] | null;
+  /**
+   * Quanto da etiqueta serve para escrever, quando não é ela inteira.
+   *
+   * Etiqueta de joia tem um "rabo" estreito que enrola na argola: dos 90 mm do
+   * rolo da loja, só os primeiros 50 recebem informação. Escrever nos 30
+   * finais é escrever no que ninguém vai ler, porque some ao pendurar a peça.
+   *
+   * Zero significa "a etiqueta inteira serve".
+   */
+  areaUtilMm?: number;
 }
 
 export interface ConteudoDaEtiqueta {
@@ -119,14 +129,47 @@ function desenharLinha(etiquetas: ConteudoDaEtiqueta[], rolo: RoloDeEtiqueta): I
       return;
     }
 
-    /* A dobra fica no meio: cada metade recebe o mesmo conteúdo, e uma linha
-       pontilhada marca onde vincar. Sem a marca, quem monta a etiqueta dobra
-       no olho e as duas metades saem desencontradas. */
-    const metade = Math.floor(larguraEtiquetaPt / 2);
+    /* A dobra fica no meio da ÁREA ÚTIL, não da etiqueta.
+     
+       Na etiqueta de joia os dois não coincidem: os 90 mm incluem o rabo que
+       enrola na argola, e dobrar no meio dos 90 colocaria o vinco dentro do
+       rabo em vez de entre os dois lados que o cliente lê. */
+    const util = rolo.areaUtilMm && rolo.areaUtilMm > 0
+      ? Math.round(rolo.areaUtilMm * PONTOS_POR_MM)
+      : larguraEtiquetaPt;
 
-    desenharUmLado(ctx, etiqueta, inicioDaEtiqueta, metade, alturaPt, rolo);
-    desenharUmLado(ctx, etiqueta, inicioDaEtiqueta + metade, metade, alturaPt, rolo);
+    const metade = Math.floor(util / 2);
 
+    /**
+     * Uma faixa livre de cada lado do vinco.
+     *
+     * O vinco não cai sempre no mesmo milímetro: varia de rolo para rolo e com
+     * a mão de quem dobra. Letra em cima da dobra fica rachada e o código de
+     * barras deixa de ser lido — e o pior é que só se descobre depois de
+     * pendurar a peça, com o rolo já gasto.
+     *
+     * Três milímetros de folga custam pouco espaço e resolvem a variação toda.
+     */
+    const folgaDaDobra = Math.round(3 * PONTOS_POR_MM);
+    const larguraDeUmLado = metade - folgaDaDobra;
+
+    desenharUmLado(ctx, etiqueta, inicioDaEtiqueta, larguraDeUmLado, alturaPt, rolo);
+
+    /**
+     * A segunda metade sai GIRADA 180 graus.
+     *
+     * Ao dobrar, ela vira de cabeça para baixo. Sem girar, um dos dois lados
+     * da peça pendurada aparece invertido — e é justamente o lado que o
+     * cliente vê primeiro ao pegar a peça na vitrine.
+     */
+    ctx.save();
+    ctx.translate(inicioDaEtiqueta + metade * 2, alturaPt);
+    ctx.rotate(Math.PI);
+    desenharUmLado(ctx, etiqueta, 0, larguraDeUmLado, alturaPt, rolo);
+    ctx.restore();
+
+    // O vinco, pontilhado: sem a marca, quem monta dobra no olho e as duas
+    // metades saem desencontradas.
     const dobra = inicioDaEtiqueta + metade;
     for (let y = 2; y < alturaPt - 2; y += 6) {
       ctx.fillRect(dobra, y, 1, 3);

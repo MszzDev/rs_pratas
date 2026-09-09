@@ -1849,6 +1849,16 @@ model LabelTemplate {
   /// Zero significa "calcule pelas colunas", que é o certo quando não há borda.
   rollWidthMm Decimal @default(0) @db.Decimal(6, 2)
 
+  /// Quanto da etiqueta serve para escrever, quando não é ela inteira.
+  ///
+  /// Etiqueta de joia tem um "rabo" estreito que enrola na argola: nos 90 mm
+  /// do rolo da loja, só os primeiros 50 recebem informação, e os 30 finais
+  /// desaparecem quando a peça é pendurada. Escrever ali é escrever no que
+  /// ninguém vai ler.
+  ///
+  /// Zero significa "a etiqueta inteira serve", que é o caso comum.
+  printableWidthMm Decimal @default(0) @db.Decimal(6, 2)
+
   /// Etiqueta de joia costuma ser dupla: dobra ao meio e as duas metades
   /// ficam coladas na argola. A segunda metade repete o código.
   isDoubleSided Boolean @default(true)

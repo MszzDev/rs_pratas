@@ -20,6 +20,8 @@ export interface LabelPayload {
     columnsPerRow?: number;
     /** A largura TOTAL da bobina, com a borda dos dois lados. */
     rollWidthMm?: number;
+    /** A parte da etiqueta que recebe informação. Zero = ela inteira. */
+    printableWidthMm?: number;
     isDoubleSided: boolean;
     /** O desenho montado no editor. Nulo usa o formato empilhado de sempre. */
     elements?: LabelElement[] | null;

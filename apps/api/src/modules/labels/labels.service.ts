@@ -144,6 +144,7 @@ export async function createTemplate(params: {
     gapYMm?: number | undefined;
     columnsPerRow?: number | undefined;
     rollWidthMm?: number | undefined;
+    printableWidthMm?: number | undefined;
     isDoubleSided?: boolean | undefined;
     showProductName?: boolean | undefined;
     showSku?: boolean | undefined;
@@ -184,6 +185,7 @@ export async function createTemplate(params: {
         gapYMm: input.gapYMm ?? 0,
         columnsPerRow: input.columnsPerRow ?? 1,
         rollWidthMm: input.rollWidthMm ?? 0,
+        printableWidthMm: input.printableWidthMm ?? 0,
         isDoubleSided: input.isDoubleSided ?? true,
         showProductName: input.showProductName ?? true,
         showSku: input.showSku ?? true,
@@ -325,6 +327,7 @@ function buildLabelPayload(params: {
     gapYMm: Prisma.Decimal;
     columnsPerRow: number;
     rollWidthMm: Prisma.Decimal;
+    printableWidthMm: Prisma.Decimal;
     /** O desenho montado no editor, ou nulo para o formato empilhado. */
     elements: Prisma.JsonValue | null;
   };
@@ -376,6 +379,7 @@ function buildLabelPayload(params: {
       gapYMm: Number(template.gapYMm),
       columnsPerRow: template.columnsPerRow,
       rollWidthMm: Number(template.rollWidthMm),
+      printableWidthMm: Number(template.printableWidthMm),
       isDoubleSided: template.isDoubleSided,
       /**
        * O desenho que o dono montou, quando existe.
