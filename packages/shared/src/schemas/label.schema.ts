@@ -113,7 +113,13 @@ function desenhoDobrado(larguraMm: number, alturaMm: number): LabelElement[] {
    * borda — folga que absorve tanto o desvio da impressão quanto a mão de quem
    * dobra, sem custar legibilidade que faça diferença.
    */
-  const largura = Math.max(4, Math.round(metade * 0.68));
+  /* Pouco mais da metade do lado, e não dois terços.
+   
+     Com 0,68 o código ficava a 1 mm do vinco depois do desvio da impressão, e
+     "quase encostando" numa etiqueta que vai ser dobrada à mão é o mesmo que
+     encostando. Com 0,60 sobram 5 mm de cada borda, e a diferença de leitura
+     do código é nenhuma. */
+  const largura = Math.max(4, Math.round(metade * 0.6));
   const margem = (metade - largura) / 2;
 
   return [
