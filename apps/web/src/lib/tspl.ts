@@ -213,15 +213,29 @@ function desenharUmLado(
   const util = largura - margemPt * 2;
   const centro = x0 + util / 2;
 
-  /* Etiqueta dupla é estreita e baixa: o texto precisa encolher junto, senão
-     não sobra altura para o código de barras. */
-  const escala = rolo.dupla ? 0.72 : 1;
+  /**
+   * O DESENHO sai em tamanho real, sempre.
+   *
+   * Havia aqui uma redução para 72% na etiqueta dupla, de quando cada metade
+   * recebia metade do espaço e o texto precisava encolher junto. Depois o
+   * desenho passou a cobrir os dois lados de uma vez, com as posições já
+   * medidas em milímetros — e a redução deixou de fazer sentido, mas ficou.
+   *
+   * O efeito foi o pior possível de diagnosticar: o mesmo modelo saía certo no
+   * computador, que não passa por aqui, e menor e deslocado no tablet. Parecia
+   * problema do modelo, e não era.
+   *
+   * A redução continua valendo para o formato empilhado, que não conhece as
+   * medidas do rolo e realmente precisa caber em menos espaço.
+   */
   const alturaEtiquetaMm = alturaPt / PONTOS_POR_MM;
 
   if (rolo.elementos && rolo.elementos.length > 0) {
-    desenharPeloDesenho(ctx, etiqueta, rolo.elementos, inicio, largura, escala);
+    desenharPeloDesenho(ctx, etiqueta, rolo.elementos, inicio, largura, 1);
     return;
   }
+
+  const escala = rolo.dupla ? 0.72 : 1;
 
   {
     let y = Math.round(1 * PONTOS_POR_MM);

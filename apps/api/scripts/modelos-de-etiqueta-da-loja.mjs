@@ -161,13 +161,20 @@ const MODELOS = [
   },
 ];
 
+/**
+ * Inclui os REMOVIDOS de propósito.
+ *
+ * O código é único por empresa mesmo depois de removido, então criar por cima
+ * de um modelo que alguém apagou na tela esbarra na trava do banco. Olhando os
+ * dois, dá para ressuscitar em vez de duplicar — e o histórico das etiquetas
+ * que saíram por ele continua ligado ao mesmo registro.
+ */
 const existentes = await prisma.labelTemplate.findMany({
-  where: { deletedAt: null },
-  select: { id: true, code: true, name: true },
+  select: { id: true, code: true, name: true, deletedAt: true },
 });
 
 const codigosNovos = MODELOS.map((m) => m.code);
-const aRemover = existentes.filter((e) => !codigosNovos.includes(e.code));
+const aRemover = existentes.filter((e) => !codigosNovos.includes(e.code) && !e.deletedAt);
 
 console.log("=== MODELOS QUE FICAM ===\n");
 for (const m of MODELOS) {
@@ -211,7 +218,11 @@ for (const m of MODELOS) {
   const existente = existentes.find((e) => e.code === m.code);
 
   if (existente) {
-    await prisma.labelTemplate.update({ where: { id: existente.id }, data: m });
+    // `deletedAt: null` ressuscita o que tinha sido removido na tela.
+    await prisma.labelTemplate.update({
+      where: { id: existente.id },
+      data: { ...m, deletedAt: null, isActive: true },
+    });
   } else {
     await prisma.labelTemplate.create({
       data: { ...m, companyId: autor.companyId, createdById: autor.id },
