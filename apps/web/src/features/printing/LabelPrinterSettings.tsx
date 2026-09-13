@@ -15,6 +15,7 @@ import {
   type Ligacao,
   type ImpressoraEscolhida,
 } from "./printer";
+import { Capacitor } from "@capacitor/core";
 
 /**
  * Escolher a impressora de ETIQUETA deste aparelho.
@@ -54,10 +55,20 @@ const ROLO_DE_TESTE = {
 };
 
 export function LabelPrinterSettings() {
-  const [ligacao, setLigacao] = useState<Ligacao>("BLUETOOTH");
+  /**
+   * Este aparelho consegue falar com a impressora, ou depende do servidor?
+   *
+   * Só o aplicativo instalado (Capacitor) tem o plugin que abre conexão com a
+   * impressora. No navegador — e o iPad da dona é navegador, porque instala
+   * pelo Safari — nada disso existe, e a tela precisa pedir outra coisa.
+   */
+  const pelaInternet = !Capacitor.isNativePlatform();
+
+  const [ligacao, setLigacao] = useState<Ligacao>(pelaInternet ? "REDE" : "BLUETOOTH");
   const [encontradas, setEncontradas] = useState<ImpressoraEscolhida[]>([]);
   const [escolhida, setEscolhida] = useState<ImpressoraEscolhida | null>(null);
   const [ip, setIp] = useState("");
+  const [porta, setPorta] = useState("9100");
 
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -70,7 +81,10 @@ export function LabelPrinterSettings() {
       setEscolhida(guardada);
       if (guardada) {
         setLigacao(guardada.ligacao);
-        if (guardada.ligacao === "REDE") setIp(guardada.endereco);
+        if (guardada.ligacao === "REDE") {
+          setIp(guardada.endereco);
+          setPorta(String(guardada.porta ?? 9100));
+        }
       }
     })();
   }, []);
@@ -106,11 +120,17 @@ export function LabelPrinterSettings() {
       return;
     }
 
+    const numeroDaPorta = Number(porta.trim());
+    if (!Number.isInteger(numeroDaPorta) || numeroDaPorta < 1 || numeroDaPorta > 65535) {
+      setErro("A porta precisa ser um número entre 1 e 65535.");
+      return;
+    }
+
     await usar({
       nome: `Etiqueta em ${endereco}`,
       endereco,
       ligacao: "REDE",
-      porta: 9100,
+      porta: numeroDaPorta,
       colunas: 0,
     });
   }
@@ -200,16 +220,60 @@ export function LabelPrinterSettings() {
 
       {ligacao === "REDE" ? (
         <div className="mt-4 max-w-sm">
-          <Field
-            label="Endereço IP da impressora"
-            value={ip}
-            onChange={(evento) => setIp(evento.target.value)}
-            hint="O número que aparece no autoteste dela. A porta 9100 é o padrão."
-          />
+          {/*
+            Fora do aplicativo nativo, o endereço pedido é OUTRO.
+
+            No tablet da loja o aparelho fala direto com a impressora e o
+            endereço é o dela na rede interna. Aqui quem disca é o servidor, de
+            fora, e o endereço interno não existe do lado de lá — pedir "o IP da
+            impressora" nesta tela faria a pessoa digitar 192.168.x e receber um
+            erro que não explica nada.
+          */}
+          {pelaInternet ? (
+            <>
+              <p className="mb-3 text-sm text-text-secondary">
+                Este aparelho não fala direto com a impressora — nenhum navegador fala. Quem
+                entrega é o servidor, então o endereço aqui é o da sua{" "}
+                <strong>internet vista de fora</strong>, com a porta que o roteador encaminha
+                para a impressora.
+              </p>
+              <Field
+                label="Endereço da internet da casa"
+                value={ip}
+                onChange={(evento) => setIp(evento.target.value)}
+                hint="O IP público, ou o nome de DDNS do roteador."
+              />
+              <div className="mt-3">
+                <Field
+                  label="Porta encaminhada"
+                  value={porta}
+                  onChange={(evento) => setPorta(evento.target.value)}
+                  hint="A porta externa configurada no roteador, não a 9100 interna."
+                />
+              </div>
+            </>
+          ) : (
+            <Field
+              label="Endereço IP da impressora"
+              value={ip}
+              onChange={(evento) => setIp(evento.target.value)}
+              hint="O número que aparece no autoteste dela. A porta 9100 é o padrão."
+            />
+          )}
           <Button type="button" className="mt-3" onClick={() => void usarRede()}>
             Usar esta
           </Button>
         </div>
+      ) : pelaInternet ? (
+        /*
+          Bluetooth e USB dependem do plugin nativo, que não existe no navegador.
+          Oferecer o botão de procurar aqui só produz "não achei nada" para
+          sempre, e faz parecer que a impressora sumiu.
+        */
+        <p className="mt-4 max-w-sm text-sm text-text-secondary">
+          Bluetooth e USB só funcionam no aplicativo instalado nos tablets. Neste aparelho, o
+          caminho é <strong>Rede</strong>.
+        </p>
       ) : (
         <div className="mt-4">
           <Button type="button" variant="outline" disabled={procurando} onClick={() => void procurar()}>

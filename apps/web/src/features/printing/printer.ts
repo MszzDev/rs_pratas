@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { Comprovante } from "@/lib/escpos";
+import { apiFetch } from "@/lib/api-client";
 
 /**
  * A impressora deste tablet.
@@ -218,6 +219,22 @@ export async function imprimirBytes(conteudo: string): Promise<void> {
   // A escolha da porta é a ÚNICA diferença entre os três caminhos. Os bytes
   // são os mesmos, porque a linguagem da impressora é a mesma.
   if (escolhida.ligacao === "REDE") {
+    /**
+     * Fora do aplicativo nativo, quem entrega é o SERVIDOR.
+     *
+     * O iPad da dona instala pelo Safari e é só a página web: não existe plugin
+     * nativo nele. E não adianta a página tentar falar com a impressora
+     * sozinha — imprimir em TSPL exige abrir uma conexão TCP crua na porta
+     * 9100, e navegador nenhum faz isso, em nenhum sistema.
+     *
+     * Então a página monta a etiqueta, que é o que ela sabe fazer, e o servidor
+     * abre a conexão no lugar dela.
+     */
+    if (!Capacitor.isNativePlatform()) {
+      await imprimirPelaInternet(escolhida.endereco, escolhida.porta ?? 9100, conteudo);
+      return;
+    }
+
     await Impressora.imprimirNaRede({
       ip: escolhida.endereco,
       conteudo,
@@ -241,6 +258,21 @@ export async function imprimirBytes(conteudo: string): Promise<void> {
  * viaja aqui é TSPL, e não ESC/POS — mas o plugin não sabe a diferença: ele
  * despeja os bytes na porta e quem interpreta é a impressora.
  */
+/**
+ * Pede ao servidor que entregue os bytes na impressora.
+ *
+ * O endereço viaja junto em vez de ficar guardado no servidor: a escolha da
+ * impressora é do APARELHO, como já é para Bluetooth e USB, e o IP de uma casa
+ * muda quando a operadora quer. Guardar lá obrigaria a mexer no sistema a cada
+ * troca.
+ */
+async function imprimirPelaInternet(host: string, porta: number, conteudo: string): Promise<void> {
+  await apiFetch("/api/v1/print-jobs/remote", {
+    method: "POST",
+    body: { host, porta, conteudo },
+  });
+}
+
 export async function imprimirBytesNaEtiqueta(conteudo: string): Promise<void> {
   const escolhida = await lerImpressoraDeEtiqueta();
 

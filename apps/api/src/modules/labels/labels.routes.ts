@@ -16,6 +16,8 @@ import {
   saveTemplateElements,
   setDefaultTemplate,
 } from "./labels.service.js";
+import { imprimirPelaInternet } from "./impressora-pela-internet.service.js";
+import { atorDaRequisicao } from "../../core/ator.js";
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 
@@ -216,6 +218,32 @@ export async function labelRoutes(app: FastifyInstance) {
         .parse(request.body);
 
       return reportPrintResult({ jobId: id, ...input, request });
+    },
+  );
+
+  /**
+   * O servidor entrega a etiqueta na impressora da casa.
+   *
+   * Existe para o iPad, que é PWA do Safari: ele monta a etiqueta mas não tem
+   * como enviá-la, porque navegador nenhum abre conexão TCP crua — e a
+   * impressora só fala isso. Aqui o servidor faz o envio no lugar dele.
+   */
+  app.post(
+    "/print-jobs/remote",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request) => {
+      const body = z
+        .object({
+          host: z.string().min(3).max(253),
+          // Fora das portas de sistema: impressora doméstica exposta na
+          // internet não deve morar numa porta conhecida, e porta baixa aqui
+          // seria sinal de engano, não de configuração.
+          porta: z.number().int().min(1024).max(65535),
+          conteudo: z.string().min(1),
+        })
+        .parse(request.body);
+
+      return imprimirPelaInternet({ ator: atorDaRequisicao(request), ...body });
     },
   );
 
