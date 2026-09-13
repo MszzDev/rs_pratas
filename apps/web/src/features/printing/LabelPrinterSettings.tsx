@@ -11,7 +11,7 @@ import {
   lerImpressoraDeEtiqueta,
   listarImpressoras,
   listarImpressorasUsb,
-  temImpressora,
+  temImpressoraDeEtiqueta,
   type Ligacao,
   type ImpressoraEscolhida,
 } from "./printer";
@@ -210,7 +210,7 @@ export function LabelPrinterSettings() {
     }
   }
 
-  if (!temImpressora()) return null;
+  if (!temImpressoraDeEtiqueta()) return null;
 
   return (
     <section className="rounded-lg border border-border bg-surface p-4">

@@ -64,8 +64,33 @@ export interface ImpressoraEscolhida {
   colunas: number;
 }
 
+/**
+ * Este aparelho consegue falar com a impressora de COMPROVANTE?
+ *
+ * Só o aplicativo instalado. O comprovante sai numa impressora de balcão ligada
+ * por Bluetooth ou cabo, e nada disso existe dentro de um navegador.
+ */
 export function temImpressora(): boolean {
   return Capacitor.isNativePlatform();
+}
+
+/**
+ * E a de ETIQUETA?
+ *
+ * Sempre — e é por isso que precisa ser outra pergunta.
+ *
+ * As duas responderam a mesma coisa por muito tempo, o que fazia sentido
+ * enquanto imprimir dependia do aparelho falar com a impressora. Só que a
+ * etiqueta ganhou um segundo caminho: fora do aplicativo, quem entrega os bytes
+ * é o servidor.
+ *
+ * Enquanto a resposta era uma só, a seção inteira de impressora de etiqueta
+ * sumia no iPad da dona — que é navegador, porque instala pelo Safari. Ela
+ * procurava a configuração e não achava, e não havia nada na tela explicando
+ * por quê.
+ */
+export function temImpressoraDeEtiqueta(): boolean {
+  return true;
 }
 
 export async function lerImpressoraEscolhida(): Promise<ImpressoraEscolhida | null> {
@@ -106,7 +131,7 @@ export async function guardarImpressora(escolhida: ImpressoraEscolhida | null): 
 }
 
 export async function lerImpressoraDeEtiqueta(): Promise<ImpressoraEscolhida | null> {
-  if (!temImpressora()) return null;
+  if (!temImpressoraDeEtiqueta()) return null;
 
   const { value } = await Preferences.get({ key: CHAVE_ETIQUETA });
   if (!value) return null;

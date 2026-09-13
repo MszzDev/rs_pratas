@@ -17,6 +17,7 @@ import {
 } from "@/features/printing/printer";
 import { montarEtiquetasTspl } from "@/lib/tspl";
 import { imprimirPeloAjudante, situacaoDoAjudante } from "@/lib/ajudante-de-impressao";
+import { temImpressora } from "@/features/printing/printer";
 import { LabelSheet } from "./LabelSheet";
 import { LabelEditor } from "./LabelEditor";
 import { LabelQuickPrint } from "./LabelQuickPrint";
@@ -231,20 +232,31 @@ async function imprimirDiretoNaEtiqueta(etiquetas: LabelToPrint[]): Promise<bool
   if (!primeira) return false;
 
   /**
-   * Dois caminhos diretos, e nenhum deles passa pelo diálogo do navegador.
+   * Três caminhos diretos, e nenhum deles passa pelo diálogo do navegador.
    *
    * No tablet é o plugin do aplicativo, que abre a conexão ele mesmo. No
-   * computador é o ajudante, um programa pequeno rodando ali que faz a ponte —
-   * porque o navegador não pode abrir porta de rede, e o diálogo de impressão é
-   * justamente o que queremos evitar.
+   * computador é o ajudante, um programa pequeno rodando ali que faz a ponte.
+   * No iPad não existe nenhum dos dois, e quem entrega é o servidor — porque
+   * navegador nenhum abre porta de rede, em sistema nenhum.
    *
-   * A ordem importa: o tablet tem o plugin e não tem ajudante; o computador tem
-   * o ajudante e não tem plugin. Quem existir atende.
+   * ## A ordem
+   *
+   * No aplicativo instalado, o plugin primeiro: ele fala com a impressora da
+   * própria loja, pela rede interna, e não depende de nada lá fora.
+   *
+   * No navegador, o ajudante ANTES da impressora guardada. Os dois funcionam no
+   * computador da casa, mas o ajudante entrega pela rede local enquanto a
+   * impressora guardada sai pela internet e volta — atravessando o roteador
+   * duas vezes para chegar num aparelho que está na mesma sala. Além de mais
+   * lento, isso faria o computador parar de imprimir sempre que a internet
+   * caísse, com a impressora ligada ao lado.
    */
-  const noAparelho = await lerImpressoraDeEtiqueta();
+  const noAplicativo = temImpressora();
+  const noAparelho = noAplicativo ? await lerImpressoraDeEtiqueta() : null;
   const ajudante = noAparelho ? null : await situacaoDoAjudante();
+  const peloServidor = noAparelho || ajudante ? null : await lerImpressoraDeEtiqueta();
 
-  if (!noAparelho && !ajudante) return false;
+  if (!noAparelho && !ajudante && !peloServidor) return false;
 
   const rolo = {
     larguraMm: primeira.widthMm,
@@ -273,7 +285,7 @@ async function imprimirDiretoNaEtiqueta(etiquetas: LabelToPrint[]): Promise<bool
 
   const tspl = montarEtiquetasTspl(conteudos, rolo);
 
-  if (noAparelho) {
+  if (noAparelho || peloServidor) {
     await imprimirBytesNaEtiqueta(tspl);
   } else {
     await imprimirPeloAjudante(tspl);
