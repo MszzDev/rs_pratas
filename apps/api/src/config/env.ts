@@ -145,8 +145,25 @@ const envSchema = z.object({
    * de pareamento) e ainda envenena o IP gravado na auditoria.
    *
    * Só ligue quando a API estiver de fato atrás de um proxy que sobrescreve o
-   * cabeçalho. Aceita `true`/`false` ou o número de saltos confiáveis, que é a
-   * forma mais segura: com "1", apenas o proxy imediato é considerado.
+   * cabeçalho. Aceita quatro formas:
+   *
+   * - `false` — não confia em ninguém. O IP é o da conexão.
+   * - `true` — confia na cadeia inteira. **Inseguro atrás de proxy público:**
+   *   qualquer pessoa forja o próprio IP mandando o cabeçalho à mão.
+   * - um número — quantos saltos contar a partir do fim.
+   * - uma lista de faixas confiáveis, que é o certo quando não se sabe quantos
+   *   proxies existem.
+   *
+   * A última forma resolveu o caso real. Com "1" a auditoria passou a gravar
+   * `10.28.162.132`: o Render tem mais de um proxy, e contar um salto parava na
+   * rede interna dele em vez de chegar em quem chamou. Contar dois seria
+   * adivinhar um número que a hospedagem pode mudar sem avisar.
+   *
+   * Dizendo `uniquelocal,loopback`, o Fastify descarta todo salto de rede
+   * privada e para no primeiro endereço público da cadeia — que é o aparelho de
+   * verdade. Continua seguro: um cliente que forje o cabeçalho só consegue
+   * inserir endereços ANTES dos saltos confiáveis, e esses são justamente os
+   * descartados.
    */
   TRUST_PROXY: z
     .string()
@@ -154,8 +171,14 @@ const envSchema = z.object({
     .transform((value) => {
       if (value === "true") return true;
       if (value === "false") return false;
+
       const hops = Number(value);
-      return Number.isInteger(hops) && hops > 0 ? hops : false;
+      if (Number.isInteger(hops) && hops > 0) return hops;
+
+      // Lista de faixas ou palavras conhecidas do `proxy-addr` — "loopback",
+      // "linklocal", "uniquelocal", ou endereços e sub-redes separados por
+      // vírgula. Repassado ao Fastify como veio.
+      return value.trim().length > 0 ? value.trim() : false;
     }),
 
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
