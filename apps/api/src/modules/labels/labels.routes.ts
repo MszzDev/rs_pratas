@@ -250,7 +250,25 @@ export async function labelRoutes(app: FastifyInstance) {
         endereco.startsWith("192.168.") ||
         endereco.startsWith("::1");
 
-      return { endereco, escondido };
+      /**
+       * Quando o endereco vem escondido, a cadeia crua vai junto.
+       *
+       * Sem ela, descobrir POR QUE virou adivinhacao: pode ser a configuracao de
+       * proxy errada, pode ser a hospedagem mandando o IP num cabecalho
+       * diferente, pode ser cadeia de um salto so. Cada uma tem conserto
+       * diferente, e nenhuma da para distinguir olhando "10.24.193.138".
+       *
+       * So no caso escondido: quando esta certo, nao ha o que diagnosticar.
+       */
+      const cadeia = escondido
+        ? {
+            encaminhado: request.headers["x-forwarded-for"] ?? null,
+            real: request.headers["x-real-ip"] ?? null,
+            daConexao: request.socket.remoteAddress ?? null,
+          }
+        : undefined;
+
+      return { endereco, escondido, ...(cadeia ? { cadeia } : {}) };
     },
   );
 

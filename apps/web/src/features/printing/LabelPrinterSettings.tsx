@@ -105,14 +105,25 @@ export function LabelPrinterSettings() {
     setDetectando(true);
 
     try {
-      const visto = await apiFetch<{ endereco: string; escondido: boolean }>(
-        "/api/v1/print-jobs/meu-endereco",
-      );
+      const visto = await apiFetch<{
+        endereco: string;
+        escondido: boolean;
+        cadeia?: { encaminhado: string | null; real: string | null; daConexao: string | null };
+      }>("/api/v1/print-jobs/meu-endereco");
 
       if (visto.escondido) {
+        // A cadeia crua entra na mensagem porque é ela que diz qual é o
+        // conserto — sem isso sobra "não funcionou", que não ajuda ninguém.
+        const detalhe = visto.cadeia
+          ? ` (encaminhado: ${visto.cadeia.encaminhado ?? "nenhum"}; real: ${
+              visto.cadeia.real ?? "nenhum"
+            }; conexão: ${visto.cadeia.daConexao ?? "nenhum"})`
+          : "";
+
         setErro(
           "O servidor não está enxergando de onde você fala — ele vê " +
-            `${visto.endereco}. Isso é configuração da hospedagem, não sua. Digite o endereço à mão por enquanto.`,
+            `${visto.endereco}${detalhe}. Isso é configuração da hospedagem, não sua. ` +
+            "Digite o endereço à mão por enquanto.",
         );
         return;
       }
