@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download, Share, SquarePlus, X } from "lucide-react";
 import {
+  ENDERECO_DO_APK,
   formaDeInstalar,
   instalar,
   observarInstalacao,
@@ -47,7 +48,11 @@ export function InstallButton() {
   if (forma === "nenhuma") return null;
 
   const rotulo =
-    forma === "outro-navegador" ? "Como instalar no iPad" : "Instalar aplicativo";
+    forma === "outro-navegador"
+      ? "Como instalar no iPad"
+      : forma === "aplicativo-android"
+        ? "Baixar o aplicativo"
+        : "Instalar aplicativo";
 
   return (
     <>
@@ -66,10 +71,107 @@ export function InstallButton() {
         {rotulo}
       </button>
 
-      {ensinando && (
-        <ComoInstalarNaApple forma={forma} aoFechar={() => setEnsinando(false)} />
-      )}
+      {ensinando &&
+        (forma === "aplicativo-android" ? (
+          <ComoInstalarNoAndroid aoFechar={() => setEnsinando(false)} />
+        ) : (
+          <ComoInstalarNaApple forma={forma} aoFechar={() => setEnsinando(false)} />
+        ))}
     </>
+  );
+}
+
+/**
+ * O passo a passo do Android.
+ *
+ * Existe uma versão do sistema que o Chrome instala sozinho, e ela NÃO serve
+ * aqui: só o aplicativo tem a parte nativa que fala com a impressora. Quem
+ * instalasse pelo navegador ficaria com um sistema que parece completo e falha
+ * justamente na hora de imprimir.
+ *
+ * O aviso de "fonte desconhecida" é o ponto onde as pessoas desistem — não é
+ * erro, é o Android perguntando se confia em quem não veio da Play Store. Está
+ * escrito aqui porque, sem isso, a instalação parece ter sido bloqueada.
+ */
+function ComoInstalarNoAndroid({ aoFechar }: { aoFechar: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="titulo-instalar-android"
+      onClick={aoFechar}
+    >
+      <div
+        className="w-full max-w-md rounded-lg bg-surface p-5 shadow-lg"
+        onClick={(evento) => evento.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h2 id="titulo-instalar-android" className="font-semibold text-text-primary">
+            Instalar no Android
+          </h2>
+          <button
+            type="button"
+            onClick={aoFechar}
+            aria-label="Fechar"
+            className="rounded-md p-1 text-text-secondary hover:bg-background-secondary"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
+
+        <p className="mt-3 text-sm text-text-secondary">
+          Este é o aplicativo de verdade, e não o atalho do navegador. Só ele consegue falar com a{" "}
+          <strong>impressora de etiqueta</strong> e com a de comprovante.
+        </p>
+
+        <ol className="mt-4 space-y-4 text-sm text-text-secondary">
+          <li className="flex gap-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background-secondary font-semibold text-text-primary">
+              1
+            </span>
+            <span>
+              Toque em <strong>Baixar agora</strong>, aqui embaixo.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background-secondary font-semibold text-text-primary">
+              2
+            </span>
+            <span>
+              O Android vai avisar que o arquivo <strong>pode ser prejudicial</strong>. É o aviso
+              padrão para aplicativo que não veio da Play Store. Toque em{" "}
+              <strong>Baixar mesmo assim</strong>.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background-secondary font-semibold text-text-primary">
+              3
+            </span>
+            <span>
+              Abra o arquivo baixado. Se aparecer <strong>"fontes desconhecidas"</strong> ou{" "}
+              <strong>"instalar apps desconhecidos"</strong>, toque em <strong>Configurações</strong>{" "}
+              e autorize o navegador. Depois volte e instale.
+            </span>
+          </li>
+        </ol>
+
+        <a
+          href={ENDERECO_DO_APK}
+          download="rs-pratas.apk"
+          onClick={aoFechar}
+          className="mt-5 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-md bg-rose-primary px-4 font-medium text-rose-contraste"
+        >
+          <Download className="h-5 w-5" aria-hidden />
+          Baixar agora
+        </a>
+
+        <p className="mt-3 text-sm text-text-secondary">
+          Depois de instalado, ele se atualiza sozinho — não precisa baixar de novo a cada
+          mudança.
+        </p>
+      </div>
+    </div>
   );
 }
 

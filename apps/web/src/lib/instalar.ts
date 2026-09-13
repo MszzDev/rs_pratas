@@ -126,6 +126,8 @@ export function ehSafari(): boolean {
 /**
  * Como este aparelho instala o sistema.
  *
+ * - `aplicativo-android`: existe o aplicativo de verdade para este aparelho, e
+ *   ele é melhor que a versão instalada pelo navegador.
  * - `automatica`: o navegador oferece, e o botão abre a caixa dele.
  * - `manual`: o aparelho instala, mas só pelo menu do próprio navegador — é o
  *   caso do iPhone e do iPad, e aí o botão precisa **ensinar** em vez de
@@ -133,10 +135,44 @@ export function ehSafari(): boolean {
  * - `outro-navegador`: instala, mas não neste navegador.
  * - `nenhuma`: já está instalado, ou o navegador não sabe instalar.
  */
-export type FormaDeInstalar = "automatica" | "manual" | "outro-navegador" | "nenhuma";
+export type FormaDeInstalar =
+  | "aplicativo-android"
+  | "automatica"
+  | "manual"
+  | "outro-navegador"
+  | "nenhuma";
+
+/** Onde o site guarda o aplicativo de Android. */
+export const ENDERECO_DO_APK = "/rs-pratas.apk";
+
+/**
+ * É um Android de verdade, e não o aplicativo já instalado?
+ *
+ * O APK carrega as telas do próprio site, então lá dentro o `userAgent` também
+ * diz "Android" — oferecer a instalação ali seria oferecer o que já está
+ * aberto. O `rodandoInstalado()` de quem chama é o que separa os dois.
+ */
+export function ehAndroid(): boolean {
+  return /Android/.test(navigator.userAgent);
+}
 
 export function formaDeInstalar(conviteDisponivel: boolean): FormaDeInstalar {
   if (rodandoInstalado()) return "nenhuma";
+
+  /**
+   * No Android o aplicativo vem ANTES da instalação pelo navegador.
+   *
+   * Os dois instalam, mas não entregam a mesma coisa: só o aplicativo tem a
+   * parte nativa — falar com a impressora de etiqueta e com a de comprovante,
+   * o modo quiosque, a identidade do aparelho. A versão do navegador fica
+   * bonita e não imprime.
+   *
+   * Quem instalasse pelo convite do Chrome acabaria com um sistema que parece
+   * completo e falha justamente na hora de imprimir, sem nada explicando por
+   * quê.
+   */
+  if (ehAndroid()) return "aplicativo-android";
+
   if (conviteDisponivel) return "automatica";
 
   if (ehAppleDeToque()) {
