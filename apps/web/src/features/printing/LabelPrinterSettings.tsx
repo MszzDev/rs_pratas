@@ -16,6 +16,7 @@ import {
   type ImpressoraEscolhida,
 } from "./printer";
 import { Capacitor } from "@capacitor/core";
+import { apiFetch } from "@/lib/api-client";
 
 /**
  * Escolher a impressora de ETIQUETA deste aparelho.
@@ -69,6 +70,7 @@ export function LabelPrinterSettings() {
   const [escolhida, setEscolhida] = useState<ImpressoraEscolhida | null>(null);
   const [ip, setIp] = useState("");
   const [porta, setPorta] = useState("9100");
+  const [detectando, setDetectando] = useState(false);
 
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -88,6 +90,41 @@ export function LabelPrinterSettings() {
       }
     })();
   }, []);
+
+  /**
+   * Descobre sozinho o endereço da casa.
+   *
+   * Quem configura a impressora está, por definição, na casa onde ela mora —
+   * então o endereço que o servidor enxerga agora é exatamente o que ele vai
+   * discar depois. Pedir para a pessoa achar o próprio IP público num site e
+   * copiar à mão era a parte mais frágil de tudo isto.
+   */
+  async function detectarEndereco() {
+    setErro(null);
+    setAviso(null);
+    setDetectando(true);
+
+    try {
+      const visto = await apiFetch<{ endereco: string; escondido: boolean }>(
+        "/api/v1/print-jobs/meu-endereco",
+      );
+
+      if (visto.escondido) {
+        setErro(
+          "O servidor não está enxergando de onde você fala — ele vê " +
+            `${visto.endereco}. Isso é configuração da hospedagem, não sua. Digite o endereço à mão por enquanto.`,
+        );
+        return;
+      }
+
+      setIp(visto.endereco);
+      setAviso(`Endereço desta internet: ${visto.endereco}. Confira a porta e toque em "Usar esta".`);
+    } catch {
+      setErro("Não consegui descobrir o endereço agora.");
+    } finally {
+      setDetectando(false);
+    }
+  }
 
   async function procurar() {
     setErro(null);
@@ -243,6 +280,16 @@ export function LabelPrinterSettings() {
                 onChange={(evento) => setIp(evento.target.value)}
                 hint="O IP público, ou o nome de DDNS do roteador."
               />
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-2"
+                disabled={detectando}
+                onClick={() => void detectarEndereco()}
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden />
+                {detectando ? "Descobrindo…" : "Descobrir sozinho"}
+              </Button>
               <div className="mt-3">
                 <Field
                   label="Porta encaminhada"

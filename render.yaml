@@ -82,6 +82,19 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
 
+      # Quantos proxies existem na frente da API. O Render poe UM.
+      #
+      # Sem isto, o Fastify enxerga a conexao do proxy e nao a de quem chamou:
+      # a auditoria gravava 127.0.0.1 em TODOS os registros desde a estreia, o
+      # limite por IP valia para o predio inteiro, e o sistema nao tinha como
+      # descobrir de onde a dona esta imprimindo.
+      #
+      # O numero 1, e nao "true": com "true" o Fastify confia na cadeia inteira
+      # de X-Forwarded-For, e qualquer pessoa forja o proprio IP mandando o
+      # cabecalho. Com 1 ele pega o ultimo salto, que foi o proxy quem escreveu.
+      - key: TRUST_PROXY
+        value: "1"
+
       # De quantos em quantos minutos o sistema conversa com a loja virtual
       # sozinho: busca os pedidos novos e publica o estoque. Zero desliga e
       # devolve tudo para os botões.

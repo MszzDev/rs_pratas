@@ -222,6 +222,39 @@ export async function labelRoutes(app: FastifyInstance) {
   );
 
   /**
+   * De onde este aparelho esta falando, visto de fora.
+   *
+   * Serve para a tela preencher sozinha o endereco da casa: quem configura a
+   * impressora esta, por definicao, na casa onde ela mora, e o endereco que o
+   * servidor enxerga nesse momento e exatamente o que ele vai discar depois.
+   *
+   * Evita a parte mais chata e mais fragil da configuracao — pedir para a
+   * pessoa descobrir o proprio IP publico num site qualquer e copiar a mao.
+   */
+  app.get(
+    "/print-jobs/meu-endereco",
+    { preHandler: [app.requireAuth, requirePermission("LABEL_PRINT")] },
+    async (request) => {
+      const endereco = request.ip;
+
+      /**
+       * Endereco privado aqui quer dizer que o proxy esta escondendo a origem,
+       * e nao que a pessoa esta numa rede estranha. Dizer isso em vez de
+       * devolver 127.0.0.1 calado evita a tela gravar um endereco que nunca
+       * vai funcionar.
+       */
+      const primeiro = Number(endereco.split(".")[0]);
+      const escondido =
+        primeiro === 127 ||
+        primeiro === 10 ||
+        endereco.startsWith("192.168.") ||
+        endereco.startsWith("::1");
+
+      return { endereco, escondido };
+    },
+  );
+
+  /**
    * O servidor entrega a etiqueta na impressora da casa.
    *
    * Existe para o iPad, que é PWA do Safari: ele monta a etiqueta mas não tem
