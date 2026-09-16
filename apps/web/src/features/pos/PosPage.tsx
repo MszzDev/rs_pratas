@@ -200,6 +200,69 @@ export function PosPage() {
     );
   }
 
+  /**
+   * O cadastro que o telefone digitado encontrou.
+   *
+   * Quem chega ao balcão pela segunda vez diz o número, não o nome completo. Se
+   * a tela ignora isso e a vendedora digita o nome de novo, nasce um segundo
+   * cadastro — e o histórico da cliente passa a viver partido em dois, o que
+   * não é histórico de ninguém. Pior: a compra some do cadastro que ela usou na
+   * primeira vez, que é onde alguém vai procurar na hora da troca.
+   */
+  const [clienteEncontrado, setClienteEncontrado] = useState<{
+    id: string;
+    name: string;
+    email: string | null;
+  } | null>(null);
+
+  /**
+   * Procura enquanto se digita, mas só depois que o número faz sentido.
+   *
+   * Dez dígitos é telefone com DDD. Buscar antes disso devolveria meia loja a
+   * cada tecla, e a lista mudando embaixo da mão atrapalha mais do que ajuda.
+   *
+   * A espera de meio segundo é o tempo de terminar de digitar: sem ela, um
+   * número de onze dígitos vira onze consultas, das quais só a última interessa.
+   */
+  const digitosDoTelefone = customerPhone.replace(/\D/g, "");
+
+  useEffect(() => {
+    if (customer || digitosDoTelefone.length < 10) {
+      setClienteEncontrado(null);
+      return;
+    }
+
+    let cancelado = false;
+    const espera = setTimeout(() => {
+      void apiFetch<Array<{ id: string; name: string; email: string | null; phone: string }>>(
+        `/api/v1/customers?search=${encodeURIComponent(digitosDoTelefone)}`,
+      )
+        .then((achados) => {
+          if (cancelado) return;
+
+          /**
+           * Só preenche quando a resposta é uma só.
+           *
+           * Dois cadastros com o mesmo número existem — mãe e filha dividindo o
+           * celular da casa. Escolher um deles pela vendedora seria adivinhar,
+           * e adivinhar errado põe a compra no nome de outra pessoa.
+           */
+          const exatos = achados.filter((c) => c.phone.replace(/\D/g, "") === digitosDoTelefone);
+          setClienteEncontrado(exatos.length === 1 ? exatos[0]! : null);
+        })
+        .catch(() => {
+          // Busca que falha não pode atrapalhar a venda: a vendedora continua
+          // digitando o nome à mão, como sempre fez.
+          if (!cancelado) setClienteEncontrado(null);
+        });
+    }, 500);
+
+    return () => {
+      cancelado = true;
+      clearTimeout(espera);
+    };
+  }, [digitosDoTelefone, customer]);
+
   const quickCustomer = useMutation({
     mutationFn: () =>
       apiFetch<{ id: string; name: string }>("/api/v1/customers/quick", {
@@ -725,8 +788,43 @@ export function PosPage() {
                     inputMode="tel"
                     value={customerPhone}
                     onChange={(event) => setCustomerPhone(event.target.value)}
-                    hint="Com DDD. Se já for cliente, o cadastro é reaproveitado."
+                    hint="Com DDD. Digite o número primeiro — se já for cliente, o cadastro aparece sozinho."
                   />
+
+                  {/*
+                    O cadastro que o número encontrou.
+
+                    Aparece ANTES do nome e do e-mail de propósito: reconhecendo
+                    a cliente aqui, a vendedora não digita mais nada, e some a
+                    chance de nascer um segundo cadastro com o mesmo telefone.
+
+                    Não vincula sozinho. O número pode ter trocado de dono, e
+                    pôr a compra no nome de quem não está ali seria pior que
+                    pedir um toque de confirmação — ainda mais porque é esse
+                    nome que vai no comprovante e na garantia.
+                  */}
+                  {clienteEncontrado && (
+                    <div className="rounded-md border border-rose-primary bg-rose-soft p-3">
+                      <p className="text-sm text-text-primary">
+                        Já é cliente: <strong>{clienteEncontrado.name}</strong>
+                      </p>
+                      <p className="mt-0.5 text-sm text-text-secondary">
+                        {clienteEncontrado.email ?? "sem e-mail cadastrado"}
+                      </p>
+                      <Button
+                        type="button"
+                        className="mt-2"
+                        onClick={() => {
+                          setCustomer({ id: clienteEncontrado.id, name: clienteEncontrado.name });
+                          setCustomerName(clienteEncontrado.name);
+                          setCustomerEmail(clienteEncontrado.email ?? "");
+                          setClienteEncontrado(null);
+                        }}
+                      >
+                        É esta cliente
+                      </Button>
+                    </div>
+                  )}
                   {/*
                     É por aqui que o comprovante e a garantia saem.
 

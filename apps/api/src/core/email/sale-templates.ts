@@ -43,6 +43,22 @@ export function saleReceiptEmail(params: {
   discountAmount?: string | null;
   payments: Array<{ method: string; amount: string; installments?: number | null }>;
   sellerName: string;
+  /**
+   * Quem vendeu, para o comprovante virar documento.
+   *
+   * Sem razão social, CNPJ e contato, o e-mail é um aviso de compra: não serve
+   * para reclamar no Procon nem para contestar no cartão. São opcionais no tipo
+   * porque o cadastro da loja pode estar incompleto, e um comprovante sem
+   * telefone ainda é melhor que nenhum.
+   */
+  legalName?: string | undefined;
+  cnpj?: string | undefined;
+  storePhone?: string | undefined;
+  storeEmail?: string | undefined;
+  /** Uma linha por peça com garantia: o código e até quando vale. */
+  garantias?: Array<{ code: string; productName: string; expiresAt: Date }> | undefined;
+  /** Política de troca da loja, configurada em Configurações. */
+  politicaDeTroca?: string | undefined;
 }): EmailMessage {
   const primeiroNome = params.customerName.split(" ")[0] ?? params.customerName;
 
@@ -65,6 +81,36 @@ export function saleReceiptEmail(params: {
       ? [`  Desconto: -${dinheiro(params.discountAmount)}`]
       : [];
 
+  const garantias = params.garantias ?? [];
+
+  /**
+   * As garantias aparecem no comprovante, além de irem em e-mail próprio.
+   *
+   * O e-mail separado existe para ser achado meses depois, pela busca da caixa
+   * de entrada. Mas na hora da compra a cliente lê um e-mail só, e é aqui que
+   * ela confere se a peça que levou está coberta — sem isso, uma garantia que
+   * chegou em separado parece propaganda e vai para a lixeira.
+   */
+  const linhasDaGarantia = garantias.length
+    ? [
+        "Garantia das peças:",
+        ...garantias.map(
+          (garantia) =>
+            `  ${garantia.productName} — ${garantia.code}, até ${dataCurta(garantia.expiresAt)}`,
+        ),
+        "",
+      ]
+    : [];
+
+  /** Quem vendeu. Só entram as linhas que a loja realmente tem cadastradas. */
+  const identificacao = [
+    ...(params.legalName ? [params.legalName] : []),
+    ...(params.cnpj ? [`CNPJ ${params.cnpj}`] : []),
+    ...(params.storePhone || params.storeEmail
+      ? [[params.storePhone, params.storeEmail].filter(Boolean).join(" · ")]
+      : []),
+  ];
+
   return {
     to: params.to,
     subject: `Seu comprovante da ${params.companyName} — compra ${params.saleCode}`,
@@ -86,15 +132,18 @@ export function saleReceiptEmail(params: {
       "",
       "----------------------------------------",
       "",
+      ...linhasDaGarantia,
       "Guarde este e-mail. Ele é o seu comprovante para troca, garantia ou",
       "qualquer dúvida sobre a compra — o código acima é o que a loja usa para",
       "encontrar tudo.",
       "",
+      ...(params.politicaDeTroca ? [params.politicaDeTroca, ""] : []),
       "Peças de prata escurecem com o tempo pelo contato com o ar; isso não é",
       "defeito e sai com flanela. Evite perfume, cloro e produtos de limpeza",
       "direto na peça.",
       "",
       params.companyName,
+      ...identificacao,
     ].join("\n"),
     html: moldarEmail({
       titulo: `Compra ${params.saleCode}`,
@@ -117,19 +166,47 @@ export function saleReceiptEmail(params: {
           )
           .join(" e ")}.`,
       ],
-      destaques: [
-        ...params.items.map((item) => ({
-          rotulo: `${item.quantity > 1 ? `${item.quantity}x ` : ""}${item.productName}${item.size ? ` (tam. ${item.size})` : ""}`,
-          valor: dinheiro(item.totalPrice),
+      /**
+       * A conta como conta, e não como lista de rótulos.
+       *
+       * Antes cada peça era uma linha de "nome — valor". Numa compra de três
+       * unidades da mesma peça isso esconde o preço combinado: a cliente vê
+       * R$ 267,00 e não tem como conferir se saiu a R$ 89,00 cada, que foi o
+       * que ela ouviu no balcão. Conferir é a única razão de alguém guardar um
+       * comprovante.
+       */
+      compra: {
+        linhas: params.items.map((item) => ({
+          descricao: item.productName,
+          detalhe: [item.productSku, item.size ? `tam. ${item.size}` : null]
+            .filter(Boolean)
+            .join(" · "),
+          quantidade: item.quantity,
+          unitario: dinheiro(item.unitPrice),
+          total: dinheiro(item.totalPrice),
         })),
-        ...(params.discountAmount && Number(params.discountAmount) > 0
-          ? [{ rotulo: "Desconto", valor: `-${dinheiro(params.discountAmount)}` }]
-          : []),
-        { rotulo: "TOTAL", valor: dinheiro(params.totalAmount) },
-      ],
-      rodape:
-        "Guarde este e-mail: é o seu comprovante para troca, garantia ou dúvida sobre a compra. Prata escurece com o tempo pelo contato com o ar — não é defeito e sai com flanela. Evite perfume, cloro e produtos de limpeza direto na peça.",
+        somas: [
+          ...(params.discountAmount && Number(params.discountAmount) > 0
+            ? [{ rotulo: "Desconto", valor: `-${dinheiro(params.discountAmount)}` }]
+            : []),
+          { rotulo: "Total", valor: dinheiro(params.totalAmount), forte: true },
+        ],
+      },
+      // A garantia vira destaque porque é o que a cliente vai procurar depois,
+      // e o código é o que ela precisa ter à mão nesse dia.
+      destaques: garantias.map((garantia) => ({
+        rotulo: `Garantia · ${garantia.productName}`,
+        valor: `${garantia.code} · até ${dataCurta(garantia.expiresAt)}`,
+      })),
+      rodape: [
+        "Guarde este e-mail: é o seu comprovante para troca, garantia ou dúvida sobre a compra.",
+        params.politicaDeTroca ?? "",
+        "Prata escurece com o tempo pelo contato com o ar — não é defeito e sai com flanela. Evite perfume, cloro e produtos de limpeza direto na peça.",
+      ]
+        .filter((parte) => parte.length > 0)
+        .join(" "),
       empresa: params.companyName,
+      identificacao,
     }),
   };
 }

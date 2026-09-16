@@ -35,6 +35,24 @@ export interface BlocoDestacado {
   valor: string;
 }
 
+/** Uma linha da conta: a peça, quanto custou a unidade e quanto deu no total. */
+export interface LinhaDaCompra {
+  descricao: string;
+  /** Tamanho, acabamento, código — o que distingue esta peça de outra igual. */
+  detalhe?: string | undefined;
+  quantidade: number;
+  unitario: string;
+  total: string;
+}
+
+/** O fecho da conta: descontos e o total, na ordem em que devem ser lidos. */
+export interface SomaDaCompra {
+  rotulo: string;
+  valor: string;
+  /** O total. Sai maior e mais escuro, porque é o número que a pessoa procura. */
+  forte?: boolean | undefined;
+}
+
 /**
  * Monta a versão visual a partir das mesmas partes do texto.
  *
@@ -48,6 +66,24 @@ export function moldarEmail(params: {
   saudacao?: string | undefined;
   paragrafos: string[];
   destaques?: BlocoDestacado[] | undefined;
+  /**
+   * A conta, quando o e-mail é um comprovante.
+   *
+   * Diferente de `destaques`, que é uma lista de rótulo e valor: aqui cada peça
+   * mostra quantidade e preço unitário além do total. Numa compra de três
+   * unidades da mesma peça, só o total da linha deixa a cliente sem saber se o
+   * preço combinado foi respeitado — e é essa conferência que faz alguém
+   * guardar um comprovante.
+   */
+  compra?: { linhas: LinhaDaCompra[]; somas: SomaDaCompra[] } | undefined;
+  /**
+   * Quem vendeu, no pé da página: razão social, CNPJ, endereço, contato.
+   *
+   * Comprovante sem isso não serve para reclamar em lugar nenhum — nem no
+   * Procon, nem no cartão. É a diferença entre um aviso de compra e um
+   * documento.
+   */
+  identificacao?: string[] | undefined;
   rodape?: string | undefined;
   empresa: string;
 }): string {
@@ -73,6 +109,43 @@ export function moldarEmail(params: {
         </table>`
     : "";
 
+  const linhasDaCompra = (params.compra?.linhas ?? [])
+    .map(
+      (linha) => `
+            <tr>
+              <td style="padding:10px 0;border-bottom:1px solid #EFEAE7;font-size:14px;color:${TINTA};line-height:1.4;">
+                ${escapar(linha.descricao)}
+                ${linha.detalhe ? `<br><span style="font-size:12px;color:${SUAVE};">${escapar(linha.detalhe)}</span>` : ""}
+                ${linha.quantidade > 1 ? `<br><span style="font-size:12px;color:${SUAVE};">${linha.quantidade} x ${escapar(linha.unitario)}</span>` : ""}
+              </td>
+              <td style="padding:10px 0;border-bottom:1px solid #EFEAE7;text-align:right;vertical-align:top;font-size:14px;color:${TINTA};white-space:nowrap;">${escapar(linha.total)}</td>
+            </tr>`,
+    )
+    .join("");
+
+  const somasDaCompra = (params.compra?.somas ?? [])
+    .map(
+      (soma) => `
+            <tr>
+              <td style="padding:${soma.forte ? "12px 0 0" : "8px 0 0"};font-size:${soma.forte ? "15px" : "13px"};color:${soma.forte ? TINTA : SUAVE};font-weight:${soma.forte ? "bold" : "normal"};">${escapar(soma.rotulo)}</td>
+              <td style="padding:${soma.forte ? "12px 0 0" : "8px 0 0"};text-align:right;font-size:${soma.forte ? "20px" : "13px"};color:${soma.forte ? ROSA : SUAVE};font-weight:${soma.forte ? "bold" : "normal"};white-space:nowrap;">${escapar(soma.valor)}</td>
+            </tr>`,
+    )
+    .join("");
+
+  const caixaDaCompra = params.compra
+    ? `
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:18px 0 4px;">${linhasDaCompra}${somasDaCompra}
+        </table>`
+    : "";
+
+  const blocoDaIdentificacao = (params.identificacao ?? []).length
+    ? `
+        <p style="margin:12px 0 0;font-size:11px;line-height:1.7;color:${SUAVE};">
+          ${(params.identificacao ?? []).map((linha) => escapar(linha)).join("<br>")}
+        </p>`
+    : "";
+
   const corpo = params.paragrafos
     .map(
       (texto) =>
@@ -93,7 +166,7 @@ export function moldarEmail(params: {
       <td style="padding:28px;">
         <h1 style="margin:0 0 18px;font-size:19px;color:${TINTA};font-weight:600;">${escapar(params.titulo)}</h1>
         ${params.saudacao ? `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:${TINTA};">${escapar(params.saudacao)}</p>` : ""}
-        ${corpo}${caixaDeDestaque}
+        ${corpo}${caixaDaCompra}${caixaDeDestaque}
       </td>
     </tr>
     <tr>
@@ -101,7 +174,7 @@ export function moldarEmail(params: {
         <p style="margin:0;font-size:12px;line-height:1.6;color:${SUAVE};">
           ${escapar(params.rodape ?? "Mensagem automática — não é preciso responder.")}
         </p>
-        <p style="margin:8px 0 0;font-size:12px;color:${SUAVE};">${escapar(params.empresa)}</p>
+        <p style="margin:8px 0 0;font-size:12px;color:${SUAVE};">${escapar(params.empresa)}</p>${blocoDaIdentificacao}
       </td>
     </tr>
   </table>

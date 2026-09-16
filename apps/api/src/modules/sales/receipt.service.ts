@@ -5,6 +5,7 @@ import { audit } from "../../core/audit.service.js";
 import { badRequest, notFound } from "../../core/errors.js";
 import { sendEmail } from "../../core/email/index.js";
 import { saleReceiptEmail, warrantyEmail } from "../../core/email/sale-templates.js";
+import { emitirGarantiasDaVenda } from "./garantia-da-venda.service.js";
 
 /**
  * Envio do comprovante e da garantia.
@@ -121,7 +122,31 @@ export async function sendSaleReceipt(params: { saleId: string; request: Fastify
 
   const company = await prisma.company.findUniqueOrThrow({
     where: { id: request.user.companyId },
-    select: { tradeName: true },
+    select: { tradeName: true, legalName: true, cnpj: true },
+  });
+
+  /**
+   * O contato de quem vendeu, e o CNPJ.
+   *
+   * O CNPJ da loja vem antes do da empresa: numa rede, quem atendeu foi a loja,
+   * e é o documento dela que aparece na fatura do cartão. Quando a loja não tem
+   * CNPJ próprio, o da empresa responde por ela.
+   */
+  const loja = await prisma.store.findUniqueOrThrow({
+    where: { id: sale.storeId },
+    select: { cnpj: true, phone: true, email: true },
+  });
+
+  /** A política de troca que a loja escreveu, se escreveu alguma. */
+  const rodapeConfigurado = await prisma.appSetting.findFirst({
+    where: { companyId: request.user.companyId, key: "receipt_footer" },
+  });
+  const politicaDeTroca = String(rodapeConfigurado?.value ?? "").trim();
+
+  const garantias = await prisma.warranty.findMany({
+    where: { saleItem: { saleId: sale.id }, voidedAt: null },
+    select: { code: true, expiresAt: true, saleItem: { select: { productName: true } } },
+    orderBy: { code: "asc" },
   });
 
   const enviado = await sendEmail(
@@ -129,6 +154,16 @@ export async function sendSaleReceipt(params: { saleId: string; request: Fastify
       to: sale.customer.email,
       customerName: sale.customer.name,
       companyName: company.tradeName,
+      legalName: company.legalName,
+      cnpj: loja.cnpj ?? company.cnpj,
+      ...(loja.phone ? { storePhone: loja.phone } : {}),
+      ...(loja.email ? { storeEmail: loja.email } : {}),
+      ...(politicaDeTroca ? { politicaDeTroca } : {}),
+      garantias: garantias.map((garantia) => ({
+        code: garantia.code,
+        productName: garantia.saleItem.productName,
+        expiresAt: garantia.expiresAt,
+      })),
       storeName: sale.store.name,
       saleCode: sale.code,
       completedAt: sale.completedAt ?? sale.createdAt,
@@ -295,14 +330,32 @@ export async function enviarComprovanteAutomatico(params: {
       },
     });
 
+    /**
+     * A garantia é emitida ANTES de conferir o e-mail.
+     *
+     * Ela não depende de a cliente ter endereço: é um documento da loja sobre a
+     * peça vendida, e precisa existir mesmo que ninguém receba nada. Emitir só
+     * para quem tem e-mail criaria duas classes de cliente — e a que não tem
+     * e-mail é justamente a que vai voltar ao balcão pedindo a garantia.
+     */
+    await emitirGarantiasDaVenda({ saleId, request });
+
     if (!sale?.customer?.email) return;
 
     await sendSaleReceipt({ saleId, request });
 
-    for (const item of sale.items) {
-      if (item.warranty && !item.warranty.voidedAt) {
-        await sendWarrantyEmail({ warrantyId: item.warranty.id, request });
-      }
+    /**
+     * Relê as garantias: as que acabaram de ser emitidas não existiam quando a
+     * venda foi carregada, e mandar a lista antiga deixaria a cliente sem
+     * exatamente os documentos que este trecho existe para entregar.
+     */
+    const garantias = await prisma.warranty.findMany({
+      where: { saleItem: { saleId }, voidedAt: null },
+      select: { id: true },
+    });
+
+    for (const garantia of garantias) {
+      await sendWarrantyEmail({ warrantyId: garantia.id, request });
     }
   } catch (erro) {
     // Só o log: quem está no balcão não tem o que fazer com esta informação, e

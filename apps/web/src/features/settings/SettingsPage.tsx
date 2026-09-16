@@ -62,7 +62,20 @@ const KNOWN_SETTINGS: Array<{
   {
     key: "receipt_footer",
     label: "Rodapé do comprovante",
-    hint: "Texto impresso no fim de cada comprovante. Ex.: trocas em até 7 dias com a etiqueta.",
+    hint: "Texto impresso no fim de cada comprovante, e também no e-mail. Ex.: trocas em até 7 dias com a etiqueta.",
+    type: "text",
+  },
+  {
+    key: "warranty_months",
+    label: "Garantia das peças",
+    hint: "A garantia é emitida sozinha em cada peça vendida e vai por e-mail junto do comprovante. Em branco usa 3 meses, que é o que a lei já garante. Zero desliga a emissão automática.",
+    type: "number",
+    suffix: "meses",
+  },
+  {
+    key: "warranty_terms",
+    label: "Texto da garantia",
+    hint: "O que a garantia cobre e o que não cobre. Fica congelado em cada garantia emitida — mudar aqui não reescreve o que já foi prometido a quem comprou.",
     type: "text",
   },
 ];
