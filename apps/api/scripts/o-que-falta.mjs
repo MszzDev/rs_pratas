@@ -26,8 +26,19 @@ const lojas = await prisma.store.findMany({
   orderBy: { code: "asc" },
 });
 
-const tablets = await prisma.pOSStation.findMany({
-  where: { deletedAt: null },
+/**
+ * Tablets de verdade, e nao estacoes de caixa.
+ *
+ * Esta consulta ja perguntou por `pOSStation` e o relatorio dizia "tablet OK"
+ * para uma loja que tinha estacao cadastrada e nenhum aparelho. Estacao se cria
+ * em dois cliques; tablet alguem precisa levar ate la e parear. Confundir os
+ * dois fazia a rede parecer mais pronta do que estava.
+ *
+ * So conta o que esta pareado e ativo: cadastro em PENDING e aparelho que
+ * ninguem terminou de instalar.
+ */
+const tablets = await prisma.device.findMany({
+  where: { deletedAt: null, type: "TABLET", status: "ACTIVE", deviceUuid: { not: null } },
   select: { store: { select: { code: true } } },
 });
 const maquininhas = await prisma.paymentTerminal.findMany({

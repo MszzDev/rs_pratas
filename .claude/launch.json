@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "adega-pdv",
+      "runtimeExecutable": "C:/Users/migue/OneDrive/Documentos/adega_pdv/.venv/Scripts/python.exe",
+      "runtimeArgs": ["C:/Users/migue/OneDrive/Documentos/adega_pdv/manage.py", "runserver", "8765"],
+      "port": 8765
     }
   ]
 }
