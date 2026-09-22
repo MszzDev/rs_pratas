@@ -67,18 +67,30 @@ export async function emitirGarantiasDaVenda(params: {
 
   if (!sale) return 0;
 
-  const mesesConfigurados = Number(await valorDaConfiguracao(companyId, "warranty_months"));
-  const meses =
-    Number.isInteger(mesesConfigurados) && mesesConfigurados > 0 ? mesesConfigurados : MESES_PADRAO;
-
   /**
-   * Zero desliga a emissão automática.
+   * "Não configurado" e "configurado como zero" são coisas diferentes.
    *
-   * Uma loja que não quer prometer garantia precisa de um jeito de dizer isso
-   * que não seja "deixe o campo em branco" — branco é indistinguível de
-   * "ninguém configurou ainda", e aí o padrão voltaria a valer.
+   * Zero desliga a emissão: uma loja que não quer prometer garantia precisa de
+   * um jeito de dizer isso. Em branco é o contrário — ninguém escolheu nada, e
+   * vale o padrão.
+   *
+   * Confundir os dois desligou a emissão para todo mundo. `Number(null)` é
+   * ZERO, então uma configuração que nunca foi preenchida caía na regra do
+   * desligamento, e nenhuma venda emitia garantia — com a tela, o e-mail e o
+   * resto do caminho funcionando perfeitamente em volta, o que fazia o defeito
+   * parecer qualquer outra coisa.
+   *
+   * Por isso a decisão é tomada sobre o TEXTO guardado, antes de virar número.
    */
-  if (mesesConfigurados === 0) return 0;
+  const configurado = await valorDaConfiguracao(companyId, "warranty_months");
+
+  let meses = MESES_PADRAO;
+
+  if (configurado !== null) {
+    const escolhido = Number(configurado);
+    if (escolhido === 0) return 0;
+    if (Number.isInteger(escolhido) && escolhido > 0) meses = escolhido;
+  }
 
   const termos = (await valorDaConfiguracao(companyId, "warranty_terms")) ?? TERMOS_PADRAO;
 
